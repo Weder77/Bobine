@@ -7,6 +7,46 @@
 
 namespace {
 
+/// Registry location of the remembered window position / size.
+constexpr const wchar_t kPlacementKey[] = L"Software\\Lumen";
+constexpr const wchar_t kPlacementValue[] = L"WindowPlacement";
+
+/// Reads the last window placement. Returns false when there is none or when
+/// it lies on a monitor that is no longer connected.
+bool LoadPlacement(WINDOWPLACEMENT* placement) {
+  DWORD size = sizeof(WINDOWPLACEMENT);
+  if (RegGetValueW(HKEY_CURRENT_USER, kPlacementKey, kPlacementValue,
+                   RRF_RT_REG_BINARY, nullptr, placement,
+                   &size) != ERROR_SUCCESS ||
+      size != sizeof(WINDOWPLACEMENT) ||
+      placement->length != sizeof(WINDOWPLACEMENT)) {
+    return false;
+  }
+  return MonitorFromRect(&placement->rcNormalPosition,
+                         MONITOR_DEFAULTTONULL) != nullptr;
+}
+
+/// Remembers the window placement, except in the borderless fullscreen mode
+/// used by the video player.
+void SavePlacement(HWND hwnd) {
+  if ((GetWindowLongPtr(hwnd, GWL_STYLE) & WS_CAPTION) != WS_CAPTION) {
+    return;
+  }
+  WINDOWPLACEMENT placement{};
+  placement.length = sizeof(WINDOWPLACEMENT);
+  if (!GetWindowPlacement(hwnd, &placement)) {
+    return;
+  }
+  HKEY key;
+  if (RegCreateKeyExW(HKEY_CURRENT_USER, kPlacementKey, 0, nullptr, 0,
+                      KEY_SET_VALUE, nullptr, &key, nullptr) != ERROR_SUCCESS) {
+    return;
+  }
+  RegSetValueExW(key, kPlacementValue, 0, REG_BINARY,
+                 reinterpret_cast<const BYTE*>(&placement), sizeof(placement));
+  RegCloseKey(key);
+}
+
 /// Window attribute that enables dark mode window decorations.
 ///
 /// Redefined in case the developer's machine has a Windows SDK older than
@@ -146,11 +186,20 @@ bool Win32Window::Create(const std::wstring& title,
 
   UpdateTheme(window);
 
+  // Restore the previous size / position before Flutter sizes its view.
+  WINDOWPLACEMENT placement{};
+  if (LoadPlacement(&placement)) {
+    restore_maximized_ = placement.showCmd == SW_SHOWMAXIMIZED;
+    placement.showCmd = SW_HIDE;  // shown later, once Flutter has a frame
+    SetWindowPlacement(window, &placement);
+  }
+
   return OnCreate();
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  return ShowWindow(window_handle_,
+                    restore_maximized_ ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL);
 }
 
 // static
@@ -180,6 +229,7 @@ Win32Window::MessageHandler(HWND hwnd,
                             LPARAM const lparam) noexcept {
   switch (message) {
     case WM_DESTROY:
+      SavePlacement(hwnd);
       window_handle_ = nullptr;
       Destroy();
       if (quit_on_close_) {

@@ -92,6 +92,9 @@ class Win32Window {
 
   bool quit_on_close_ = false;
 
+  // Whether the restored placement was maximized (see Create / Show).
+  bool restore_maximized_ = false;
+
   // window handle for top level window.
   HWND window_handle_ = nullptr;
 

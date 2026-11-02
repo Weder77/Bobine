@@ -146,7 +146,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
   void _applyFilter() {
     final f = searchKey(_filter);
-    _visible = f.isEmpty ? _channels : _channels.where((c) => searchKey(c.name).contains(f)).toList();
+    _visible = f.isEmpty ? _channels : _channels.where((c) => c.search.contains(f)).toList();
     final cur = _s.player.current.value;
     _selected = cur == null ? -1 : _visible.indexWhere((c) => c.extId == cur.extId);
     if (_selected < 0 && _visible.isNotEmpty) _selected = 0;

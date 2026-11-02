@@ -31,9 +31,14 @@ class XmltvParser {
   void _process() {
     var pos = 0;
     final s = _buf;
+    // Next occurrence of each tag. A tag that is absent from the buffer is not
+    // searched again (re-scanning the whole buffer for "<channel" after every
+    // programme made parsing quadratic on large guides).
+    var p = s.indexOf('<programme');
+    var c = s.indexOf('<channel');
     while (true) {
-      final p = s.indexOf('<programme', pos);
-      final c = s.indexOf('<channel', pos);
+      if (p >= 0 && p < pos) p = s.indexOf('<programme', pos);
+      if (c >= 0 && c < pos) c = s.indexOf('<channel', pos);
       int start;
       bool isProgramme;
       if (p < 0 && c < 0) {

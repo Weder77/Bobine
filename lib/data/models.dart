@@ -134,6 +134,7 @@ class Channel {
     required this.sourceId,
     required this.extId,
     required this.name,
+    this.search = '',
     this.categoryId,
     this.logo,
     this.url,
@@ -145,6 +146,9 @@ class Channel {
   final int sourceId;
   final String extId;
   final String name;
+
+  /// Lower-cased, accent-free name (stored at import, used for filtering).
+  final String search;
   final int? categoryId;
   final String? logo;
   final String? url;
@@ -157,6 +161,7 @@ class Channel {
         sourceId: r['source_id'] as int,
         extId: r['ext_id'] as String,
         name: r['name'] as String,
+        search: (r['search'] as String?) ?? '',
         categoryId: r['category_id'] as int?,
         logo: r['logo'] as String?,
         url: r['url'] as String?,
@@ -172,6 +177,7 @@ class Movie {
     required this.sourceId,
     required this.extId,
     required this.name,
+    this.search = '',
     this.categoryId,
     this.poster,
     this.rating,
@@ -184,6 +190,9 @@ class Movie {
   final int sourceId;
   final String extId;
   final String name;
+
+  /// Lower-cased, accent-free name (stored at import, used for filtering).
+  final String search;
   final int? categoryId;
   final String? poster;
   final double? rating;
@@ -197,6 +206,7 @@ class Movie {
         sourceId: r['source_id'] as int,
         extId: r['ext_id'] as String,
         name: r['name'] as String,
+        search: (r['search'] as String?) ?? '',
         categoryId: r['category_id'] as int?,
         poster: r['poster'] as String?,
         rating: (r['rating'] as num?)?.toDouble(),
@@ -213,6 +223,7 @@ class Series {
     required this.sourceId,
     required this.extId,
     required this.name,
+    this.search = '',
     this.categoryId,
     this.poster,
     this.backdrop,
@@ -226,6 +237,9 @@ class Series {
   final int sourceId;
   final String extId;
   final String name;
+
+  /// Lower-cased, accent-free name (stored at import, used for filtering).
+  final String search;
   final int? categoryId;
   final String? poster;
   final String? backdrop;
@@ -240,6 +254,7 @@ class Series {
         sourceId: r['source_id'] as int,
         extId: r['ext_id'] as String,
         name: r['name'] as String,
+        search: (r['search'] as String?) ?? '',
         categoryId: r['category_id'] as int?,
         poster: r['poster'] as String?,
         backdrop: r['backdrop'] as String?,

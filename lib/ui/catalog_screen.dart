@@ -118,7 +118,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           : _s.repo.series(src.id, categoryId: catId, sort: _sort);
       _items = [
         for (final x in list)
-          _Item(extId: x.extId, name: x.name, key: searchKey(x.name), poster: x.poster,
+          _Item(extId: x.extId, name: x.name, key: x.search, poster: x.poster,
               year: x.year, rating: x.rating, show: x),
       ];
     } else {
@@ -127,7 +127,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           : _s.repo.movies(src.id, categoryId: catId, sort: _sort);
       _items = [
         for (final x in list)
-          _Item(extId: x.extId, name: x.name, key: searchKey(x.name), poster: x.poster,
+          _Item(extId: x.extId, name: x.name, key: x.search, poster: x.poster,
               year: x.year, rating: x.rating, movie: x),
       ];
     }
