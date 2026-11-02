@@ -31,6 +31,28 @@ String foldText(String input) {
 String searchKey(String input) =>
     foldText(input).replaceAll(RegExp(r'\s+'), ' ').trim();
 
+/// Words of a user query, normalised like [searchKey].
+List<String> searchWords(String query) =>
+    searchKey(query).split(' ').where((w) => w.isNotEmpty).toList();
+
+/// True when every word of the query appears in [key] (any order), the same
+/// rule as the global search: "hd tf1" matches "fr: tf1 hd".
+bool matchesWords(String key, List<String> words) {
+  for (final w in words) {
+    if (!key.contains(w)) return false;
+  }
+  return true;
+}
+
+final RegExp _secretQuery = RegExp(r'((?:password|pass|pwd|token)=)[^&\s]+', caseSensitive: false);
+final RegExp _secretPath = RegExp(r'(/(?:live|movie|series|timeshift)/[^/\s]+/)[^/\s]+/', caseSensitive: false);
+
+/// Masks credentials in URLs / messages before they are shown or stored
+/// ("…?username=bob&password=***", "/live/bob/***/123.ts").
+String redactCredentials(String text) => text
+    .replaceAllMapped(_secretQuery, (m) => '${m.group(1)}***')
+    .replaceAllMapped(_secretPath, (m) => '${m.group(1)}***/');
+
 final RegExp _countryPrefix = RegExp(
     r'^\s*(\|?[a-z]{2,3}\|?\s*[:|\-]\s*|\[[a-z]{2,3}\]\s*|\([a-z]{2,3}\)\s*)',
     caseSensitive: false);

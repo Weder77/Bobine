@@ -135,8 +135,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
   }
 
   void _applyFilter() {
-    final f = searchKey(_filter);
-    _visible = f.isEmpty ? _items : _items.where((i) => i.key.contains(f)).toList();
+    final words = searchWords(_filter);
+    _visible = words.isEmpty ? _items : _items.where((i) => matchesWords(i.key, words)).toList();
   }
 
   void _select(String id) {

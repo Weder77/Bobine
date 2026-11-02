@@ -7,6 +7,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core/format.dart';
+import '../core/text.dart';
 import '../core/theme.dart';
 import '../core/window.dart';
 import '../data/models.dart';
@@ -133,7 +134,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }));
     _subs.add(_ps.player.stream.error.listen((e) {
       if (!mounted || !PlayerService.isFatalError(e)) return;
-      if (!_ps.player.state.playing) setState(() => _error = e);
+      if (!_ps.player.state.playing) setState(() => _error = redactCredentials(e));
     }));
     _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
     _subs.add(_ps.player.stream.playing.listen((p) {

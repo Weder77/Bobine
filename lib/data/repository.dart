@@ -288,7 +288,7 @@ class Repository {
   // ----------------------------------------------------------------- search
 
   SearchResults search(int sourceId, String query, {int limit = 60}) {
-    final words = searchKey(query).split(' ').where((w) => w.isNotEmpty).toList();
+    final words = searchWords(query);
     if (words.isEmpty) return const SearchResults([], [], []);
     final clause = List.filled(words.length, "search LIKE ? ESCAPE '\\'").join(' AND ');
     final args = <Object?>[
@@ -424,15 +424,16 @@ class Repository {
   List<Program> programs(int sourceId, String channelKey, DateTime from, DateTime to) {
     final f = from.millisecondsSinceEpoch ~/ 1000;
     final t = to.millisecondsSinceEpoch ~/ 1000;
-    // Start a few hours earlier so the program overlapping [from] is included.
-    return db
+    // The programme already running at [from] (it may have started long
+    // before, e.g. a 24 h block), then everything starting in the window.
+    final running = programAt(sourceId, channelKey, from);
+    final later = db
         .select(
-            'SELECT * FROM epg_programs WHERE source_id = ? AND channel = ? AND start >= ? AND start < ? '
+            'SELECT * FROM epg_programs WHERE source_id = ? AND channel = ? AND start > ? AND start < ? '
             'ORDER BY start',
-            [sourceId, channelKey, f - 6 * 3600, t])
-        .map(Program.fromRow)
-        .where((p) => p.stop.millisecondsSinceEpoch ~/ 1000 > f)
-        .toList();
+            [sourceId, channelKey, f, t])
+        .map(Program.fromRow);
+    return [?running, ...later];
   }
 
   bool hasEpgFor(int sourceId, String channelKey) => db.select(

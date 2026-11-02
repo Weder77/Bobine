@@ -44,6 +44,11 @@ http://srv/plain/stream4.ts
       expect(entries[3].groupTitle, 'Sans catégorie');
     });
 
+    test('untitled entry with an encoded % in its URL does not crash', () {
+      final entries = parse('#EXTM3U\nhttp://host/vod/100%25.ts\n');
+      expect(entries.single.name, '100%.ts');
+    });
+
     test('classifies live, movies and episodes', () {
       M3uEntry e(String name, String url) => M3uEntry(name: name, url: url);
       expect(classifyEntry(e('TF1', 'http://s/live/u/p/1.ts')), M3uKind.live);
@@ -147,6 +152,20 @@ http://srv/plain/stream4.ts
       expect(channelMatchKey('|FR| France 2 FHD'), 'france2');
       expect(channelMatchKey('France 2'), 'france2');
       expect(channelMatchKey('Canal+ Sport (Backup)'), 'canalsport');
+    });
+
+    test('filter words match in any order', () {
+      expect(matchesWords(searchKey('FR: TF1 HD'), searchWords('hd tf1')), isTrue);
+      expect(matchesWords(searchKey('France 2 FHD'), searchWords('france fhd 2')), isTrue);
+      expect(matchesWords(searchKey('France 3'), searchWords('france 2')), isFalse);
+    });
+
+    test('credentials are masked in messages', () {
+      expect(redactCredentials('Adresse invalide : http://h/player_api.php?username=bob&password=s3cr3t&action=x'),
+          'Adresse invalide : http://h/player_api.php?username=bob&password=***&action=x');
+      expect(redactCredentials('Failed to open http://h:8080/live/bob/s3cr3t/123.ts.'),
+          'Failed to open http://h:8080/live/bob/***/123.ts.');
+      expect(redactCredentials('Connexion impossible'), 'Connexion impossible');
     });
 
     test('search key folds accents', () {

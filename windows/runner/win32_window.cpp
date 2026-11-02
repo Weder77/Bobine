@@ -12,7 +12,7 @@ constexpr const wchar_t kPlacementKey[] = L"Software\\Lumen";
 constexpr const wchar_t kPlacementValue[] = L"WindowPlacement";
 
 /// Reads the last window placement. Returns false when there is none or when
-/// it lies on a monitor that is no longer connected.
+/// its title bar would not be reachable on the monitors connected now.
 bool LoadPlacement(WINDOWPLACEMENT* placement) {
   DWORD size = sizeof(WINDOWPLACEMENT);
   if (RegGetValueW(HKEY_CURRENT_USER, kPlacementKey, kPlacementValue,
@@ -22,8 +22,31 @@ bool LoadPlacement(WINDOWPLACEMENT* placement) {
       placement->length != sizeof(WINDOWPLACEMENT)) {
     return false;
   }
-  return MonitorFromRect(&placement->rcNormalPosition,
-                         MONITOR_DEFAULTTONULL) != nullptr;
+  // rcNormalPosition is in workspace coordinates: (0,0) is the top-left of
+  // the primary monitor's work area. Convert to screen coordinates.
+  RECT rect = placement->rcNormalPosition;
+  MONITORINFO primary{};
+  primary.cbSize = sizeof(MONITORINFO);
+  if (GetMonitorInfo(MonitorFromPoint({0, 0}, MONITOR_DEFAULTTOPRIMARY),
+                     &primary)) {
+    OffsetRect(&rect, primary.rcWork.left - primary.rcMonitor.left,
+               primary.rcWork.top - primary.rcMonitor.top);
+  }
+  // The middle of the title bar must lie inside a monitor's work area,
+  // otherwise the window could not be grabbed and moved back.
+  const LONG width = rect.right - rect.left;
+  if (width < 200 || rect.bottom - rect.top < 200) return false;
+  RECT title = {rect.left + width / 4, rect.top, rect.right - width / 4,
+                rect.top + 30};
+  HMONITOR monitor = MonitorFromRect(&title, MONITOR_DEFAULTTONULL);
+  if (monitor == nullptr) return false;
+  MONITORINFO info{};
+  info.cbSize = sizeof(MONITORINFO);
+  if (!GetMonitorInfo(monitor, &info)) return false;
+  RECT visible;
+  return IntersectRect(&visible, &title, &info.rcWork) &&
+         (visible.right - visible.left) >= 100 &&
+         (visible.bottom - visible.top) >= 20;
 }
 
 /// Remembers the window placement, except in the borderless fullscreen mode
@@ -189,8 +212,15 @@ bool Win32Window::Create(const std::wstring& title,
   // Restore the previous size / position before Flutter sizes its view.
   WINDOWPLACEMENT placement{};
   if (LoadPlacement(&placement)) {
-    restore_maximized_ = placement.showCmd == SW_SHOWMAXIMIZED;
+    restore_maximized_ =
+        placement.showCmd == SW_SHOWMAXIMIZED ||
+        (placement.showCmd == SW_SHOWMINIMIZED &&
+         (placement.flags & WPF_RESTORETOMAXIMIZED) != 0);
     placement.showCmd = SW_HIDE;  // shown later, once Flutter has a frame
+    // Applied twice: moving to a monitor with another DPI triggers
+    // WM_DPICHANGED, which rescales the window; the second call (now on the
+    // right monitor) restores the exact saved size.
+    SetWindowPlacement(window, &placement);
     SetWindowPlacement(window, &placement);
   }
 
@@ -227,6 +257,14 @@ Win32Window::MessageHandler(HWND hwnd,
                             UINT const message,
                             WPARAM const wparam,
                             LPARAM const lparam) noexcept {
+  // Remember the placement after each move / resize / maximize and when the
+  // Windows session ends (no WM_DESTROY is delivered on shutdown).
+  if (message == WM_EXITSIZEMOVE ||
+      (message == WM_SIZE && wparam == SIZE_MAXIMIZED) ||
+      (message == WM_ENDSESSION && wparam != FALSE)) {
+    SavePlacement(hwnd);
+  }
+
   switch (message) {
     case WM_DESTROY:
       SavePlacement(hwnd);

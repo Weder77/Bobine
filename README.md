@@ -34,6 +34,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - **Aperçu intégré** : un clic lance la chaîne dans le panneau de droite, *Entrée* ou double-clic passe en plein écran **sans recharger le flux**.
 - **Guide TV** en grille (XMLTV, `.xml` ou `.xml.gz`), virtualisé pour rester fluide avec des milliers de chaînes. L'EPG est associé par `tvg-id` puis par nom de chaîne normalisé (`FR: TF1 HD` ↔ `TF1`).
 - Avec Xtream sans EPG XMLTV : repli automatique sur `get_short_epg`.
+- **Décalage du guide** réglable par source (−12 h à +12 h), pour les fournisseurs qui publient un guide avec un mauvais fuseau horaire.
 - En plein écran : zapping ↑/↓, saisie du numéro de chaîne, liste latérale des chaînes (C).
 - **Pause et retour en arrière sur le direct**, dans la limite du cache arrière.
 - **Reconnexion automatique** si le flux coupe, et relance d'une chaîne bloquée en chargement plus de 20 s.
@@ -68,6 +69,16 @@ Pour que **les sauts de 10 ou 15 s soient instantanés** (`lib/player/player_ser
 
 La barre de progression affiche **les zones déjà en cache** (gris clair), et un badge **« Cache +02:15 »** indique combien de temps est déjà téléchargé devant la lecture.
 
+Mesures (test `test/scale_test.dart`, 100 000 entrées) :
+
+| Étape | Temps |
+|---|---|
+| Import d'une playlist M3U de 100 000 entrées | ~2 s |
+| Import d'un guide XMLTV de 2 000 chaînes (~250 000 programmes) | ~4 s |
+| Afficher les 60 000 films d'un coup | ~0,25 s |
+| Recherche globale | < 20 ms |
+| « En cours » pour 100 chaînes | < 10 ms |
+
 Autres optimisations :
 - **Un seul lecteur pour toute l'application** : pas de recréation du moteur ni de la texture GPU entre deux chaînes, et l'aperçu passe en plein écran sans coupure.
 - **Imports en arrière-plan** (isolates Dart) : une playlist de 100 000 entrées ne bloque jamais l'interface. Le guide XMLTV est lu par un analyseur en flux maison, bien plus rapide qu'un parseur XML générique.
@@ -78,7 +89,19 @@ Autres optimisations :
 
 ## Installation sur Windows
 
-### 1. Prérequis (une seule fois)
+### Option rapide : télécharger l'application déjà compilée
+
+Chaque envoi de code est compilé automatiquement sur un Windows de GitHub (tests compris) :
+
+1. Sur GitHub, ouvre l'onglet **Actions**, puis la dernière exécution **« Build »** réussie (coche verte).
+2. En bas de la page, télécharge l'artefact **`Lumen-windows-x64`** (il faut être connecté à GitHub).
+3. Dézippe l'archive et lance **`lumen.exe`**.
+
+Pour une version « officielle », crée un tag `v1.0.0` : l'archive sera publiée automatiquement dans les **Releases**.
+
+### Option développeur : compiler toi-même
+
+#### 1. Prérequis (une seule fois)
 
 1. **Git** : https://git-scm.com/download/win
 2. **Visual Studio 2022 Community** : https://visualstudio.microsoft.com/fr/downloads/
@@ -93,7 +116,7 @@ Autres optimisations :
    ```
    Les lignes « Windows Version » et « Visual Studio » doivent être cochées.
 
-### 2. Récupérer et lancer le projet
+#### 2. Récupérer et lancer le projet
 
 ```powershell
 git clone https://github.com/Weder77/IpTv.git
@@ -105,7 +128,7 @@ flutter run -d windows          # lance l'app en mode développement
 
 > La première compilation télécharge libmpv (~9 Mo) et SQLite : une connexion internet est nécessaire.
 
-### 3. Créer l'application finale
+#### 3. Créer l'application finale
 
 ```powershell
 flutter build windows --release
@@ -150,6 +173,7 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 - **Image corrompue ou verte** : désactive le **décodage matériel** dans les réglages.
 - **Effet de peigne** sur certaines chaînes : désentrelacement sur « Toujours ».
 - **Petit SSD ou peu de RAM** : réduis la taille du cache dans les réglages.
+- **Programmes du guide décalés d'une heure ou plus** : *Réglages → Sources → Modifier → Options avancées → Décalage du guide TV*.
 
 ---
 
@@ -157,6 +181,8 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 
 Tout est stocké **localement** dans une base SQLite (`lumen.db`) : sources, favoris, progression et réglages.
 Sous Windows elle se trouve dans `%APPDATA%\com.lumen\Lumen\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV.
+
+Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `lumen.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Lumen`.
 
 Lumen est un lecteur : il ne fournit aucun contenu.
 

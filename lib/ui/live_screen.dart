@@ -42,7 +42,8 @@ class _LiveScreenState extends State<LiveScreen> {
   final _listFocus = FocusNode(debugLabel: 'channels');
   Timer? _previewDebounce;
   Timer? _clock;
-  final Map<String, List<Program>> _shortEpg = {};
+  /// Xtream short-EPG fallback, with the time it was fetched.
+  final Map<String, ({DateTime fetchedAt, List<Program> programs})> _shortEpg = {};
   final Set<String> _shortEpgLoading = {};
 
   static const _rowHeight = 66.0;
@@ -108,6 +109,7 @@ class _LiveScreenState extends State<LiveScreen> {
 
   void _reload() {
     _contentVersion = _s.library.content;
+    _shortEpg.clear(); // source switched or edited (credentials, EPG offset)
     final src = _s.activeSource;
     _source = src;
     if (src == null) return;
@@ -145,8 +147,8 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 
   void _applyFilter() {
-    final f = searchKey(_filter);
-    _visible = f.isEmpty ? _channels : _channels.where((c) => c.search.contains(f)).toList();
+    final words = searchWords(_filter);
+    _visible = words.isEmpty ? _channels : _channels.where((c) => matchesWords(c.search, words)).toList();
     final cur = _s.player.current.value;
     _selected = cur == null ? -1 : _visible.indexWhere((c) => c.extId == cur.extId);
     if (_selected < 0 && _visible.isNotEmpty) _selected = 0;
@@ -236,19 +238,31 @@ class _LiveScreenState extends State<LiveScreen> {
     if (list.isNotEmpty) return list;
     final key = '${c.sourceId}:${c.extId}';
     final cached = _shortEpg[key];
-    if (cached != null) return cached.where((p) => p.stop.isAfter(now)).toList();
+    var upcoming = const <Program>[];
+    if (cached != null) {
+      upcoming = cached.programs.where((p) => p.stop.isAfter(now)).toList();
+      final age = now.difference(cached.fetchedAt);
+      // Empty answers / errors are retried after 2 min; real data after 30 min
+      // or as soon as everything fetched is over.
+      final stale = cached.programs.isEmpty
+          ? age.inMinutes >= 2
+          : (upcoming.isEmpty || age.inMinutes >= 30);
+      if (!stale) return upcoming;
+    }
     final src = _source;
-    if (src != null && src.isXtream && c.url == null && !_shortEpgLoading.contains(key)) {
-      _shortEpgLoading.add(key);
+    if (src != null && src.isXtream && c.url == null && _shortEpgLoading.add(key)) {
       final api = XtreamApi.forSource(src);
       api.shortEpg(c.extId, offset: Duration(minutes: src.epgOffsetMinutes)).then((progs) {
-        _shortEpg[key] = progs;
+        _shortEpg[key] = (fetchedAt: DateTime.now(), programs: progs);
         if (mounted) setState(() {});
       }).catchError((Object _) {
-        _shortEpg[key] = const [];
-      }).whenComplete(api.close);
+        _shortEpg[key] = (fetchedAt: DateTime.now(), programs: const <Program>[]);
+      }).whenComplete(() {
+        _shortEpgLoading.remove(key);
+        api.close();
+      });
     }
-    return const [];
+    return upcoming;
   }
 
   @override
@@ -313,6 +327,7 @@ class _LiveScreenState extends State<LiveScreen> {
                 : _guide
                     ? EpgGrid(
                         channels: _visible,
+                        epgVersion: _s.library.epg,
                         onPlay: (i) => _fullscreen(i),
                       )
                     : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

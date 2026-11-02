@@ -127,7 +127,7 @@ class M3uParser {
   static String _nameFromUrl(String url) {
     final path = Uri.tryParse(url)?.pathSegments.where((s) => s.isNotEmpty).toList();
     if (path == null || path.isEmpty) return url;
-    return Uri.decodeComponent(path.last);
+    return path.last; // pathSegments are already percent-decoded
   }
 }
 

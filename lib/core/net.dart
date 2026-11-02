@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'text.dart';
+
 /// User-Agent used for API / playlist requests when the source does not define one.
 const String kDefaultHttpUserAgent = 'Lumen/1.0';
 
@@ -65,9 +67,9 @@ Future<HttpClientResponse> openGet(
   } on HandshakeException {
     throw NetException('Erreur de connexion sécurisée (TLS).');
   } on HttpException catch (e) {
-    throw NetException('Erreur HTTP : ${e.message}');
+    throw NetException('Erreur HTTP : ${redactCredentials(e.message)}');
   } on ArgumentError {
-    throw NetException('Adresse invalide : $uri');
+    throw NetException('Adresse invalide : ${redactCredentials(uri.toString())}');
   }
 }
 

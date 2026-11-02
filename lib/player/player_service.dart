@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../core/format.dart';
+import '../core/text.dart';
 import '../data/models.dart';
 import '../data/settings.dart';
 
@@ -132,7 +133,7 @@ class PlayerService {
       if (done) _onEnded();
     }));
     _subs.add(player.stream.error.listen((e) {
-      debugPrint('mpv error: $e');
+      debugPrint('mpv error: ${redactCredentials(e)}');
       final item = current.value;
       // Only network / loading failures interrupt a live stream; decoder or
       // audio-device messages are not fatal.

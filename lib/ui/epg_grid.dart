@@ -14,8 +14,11 @@ import 'widgets/common.dart';
 /// built) and each row only lays out the programmes inside the visible time
 /// window, so it stays smooth with thousands of channels.
 class EpgGrid extends StatefulWidget {
-  const EpgGrid({super.key, required this.channels, required this.onPlay});
+  const EpgGrid({super.key, required this.channels, required this.onPlay, this.epgVersion = 0});
   final List<Channel> channels;
+
+  /// Changes when a guide import finishes: cached rows are reloaded.
+  final int epgVersion;
   final ValueChanged<int> onPlay;
 
   @override
@@ -50,7 +53,9 @@ class _EpgGridState extends State<EpgGrid> {
   @override
   void didUpdateWidget(EpgGrid old) {
     super.didUpdateWidget(old);
-    if (old.channels != widget.channels) _cache.clear();
+    if (old.channels != widget.channels || old.epgVersion != widget.epgVersion) {
+      _cache.clear();
+    }
   }
 
   @override
@@ -74,7 +79,11 @@ class _EpgGridState extends State<EpgGrid> {
     _offset.value = (_offset.value + minutes).clamp(-6 * 60.0, maxMin);
   }
 
-  void _toNow() => _offset.value = 0;
+  /// Puts "now" 30 min from the left edge (the grid may stay open for hours).
+  void _toNow() {
+    final minutes = DateTime.now().difference(_origin).inSeconds / 60 - 30;
+    _offset.value = minutes.clamp(-6 * 60.0, _s.settings.epgDays * 24 * 60.0);
+  }
 
   void _showDetails(Channel c, Program p, int index) {
     showDialog<void>(

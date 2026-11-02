@@ -233,6 +233,19 @@ void main() {
     expect(src.url, 'http://x/list.m3u');
   });
 
+  test('a programme that started long ago is still listed while running', () {
+    final repo = Repository(openMemoryDatabase());
+    final id = repo.insertSource(name: 'S', type: SourceType.m3u, url: 'http://x');
+    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    // 24 h block that started 10 h ago, then a normal programme.
+    repo.db.execute('INSERT INTO epg_programs VALUES (?, ?, ?, ?, ?, ?)',
+        [id, 'news', now - 10 * 3600, now + 14 * 3600, 'Info en continu', null]);
+    repo.db.execute('INSERT INTO epg_programs VALUES (?, ?, ?, ?, ?, ?)',
+        [id, 'news', now + 14 * 3600, now + 15 * 3600, 'Journal', null]);
+    final list = repo.programs(id, 'news', DateTime.now(), DateTime.now().add(const Duration(days: 1)));
+    expect(list.map((p) => p.title), ['Info en continu', 'Journal']);
+  });
+
   test('schema opens in memory', () {
     final db = openMemoryDatabase();
     expect(Repository(db).sources(), isEmpty);

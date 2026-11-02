@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'package:flutter/foundation.dart';
 
 import '../../core/format.dart';
+import '../../core/text.dart';
 import '../models.dart';
 import 'importers.dart';
 
@@ -74,7 +75,8 @@ class ImportService extends ChangeNotifier {
         }
       }
     } catch (e) {
-      final message = e.toString();
+      // Never store or display credentials contained in URLs.
+      final message = redactCredentials(e.toString());
       lastMessage = '${source.name} : $message';
       await _spawnError(path, id, message);
       onContentChanged(id);
