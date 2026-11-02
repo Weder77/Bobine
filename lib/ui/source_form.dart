@@ -216,7 +216,9 @@ class _SourceFormState extends State<SourceForm> {
     final sign = minutes > 0 ? '+' : '−';
     final m = minutes.abs();
     final h = m ~/ 60, r = m % 60;
-    return '$sign${h > 0 ? '$h h' : ''}${r > 0 ? ' ${r.toString().padLeft(h > 0 ? 2 : 1, '0')} min' : ''}'.trim();
+    if (h == 0) return '$sign$r min'; // "+30 min"
+    if (r == 0) return '$sign$h h'; // "+2 h"
+    return '$sign$h h ${r.toString().padLeft(2, '0')}'; // "+1 h 30"
   }
 
   @override
@@ -344,7 +346,7 @@ class _SourceFormState extends State<SourceForm> {
                 icon: const Icon(Icons.remove, size: 18),
               ),
               SizedBox(
-                width: 96,
+                width: 104,
                 child: Text(_offsetLabel(_epgOffset),
                     textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
               ),
