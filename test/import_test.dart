@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqlite3/sqlite3.dart';
 import 'package:lumen/data/db.dart';
 import 'package:lumen/data/epg_cache.dart';
 import 'package:lumen/data/import/import_service.dart';
@@ -20,6 +21,12 @@ String _xmltvTime(DateTime t) {
 void main() {
   late HttpServer server;
   late Directory tmp;
+  // Databases must be closed before deleting their files (Windows locks them).
+  final opened = <Repository>[];
+  Repository track(Repository r) {
+    opened.add(r);
+    return r;
+  }
   late String base;
   final now = DateTime.now();
 
@@ -100,12 +107,19 @@ void main() {
 
   tearDownAll(() async {
     await server.close(force: true);
-    await tmp.delete(recursive: true);
+    for (final r in opened) {
+      r.db.close();
+    }
+    try {
+      await tmp.delete(recursive: true);
+    } on FileSystemException {
+      // Best effort: a background isolate may still hold a handle briefly.
+    }
   });
 
   test('M3U import + EPG matching by id and by name', () async {
     final path = '${tmp.path}/m3u.db';
-    final repo = Repository(openAppDatabase(path));
+    final repo = track(Repository(openAppDatabase(path)));
     final id = repo.insertSource(name: 'Test', type: SourceType.m3u, url: '$base/playlist.m3u');
     final result = await importM3u(path, id, null);
     expect(result.live, 1500);
@@ -135,7 +149,7 @@ void main() {
 
   test('Xtream import, URLs, favourites and progress survive refresh', () async {
     final path = '${tmp.path}/xt.db';
-    final repo = Repository(openAppDatabase(path));
+    final repo = track(Repository(openAppDatabase(path)));
     final id = repo.insertSource(
         name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
     final r = await importXtream(path, id, null);
@@ -180,6 +194,43 @@ void main() {
     final list = repo.channels(id);
     expect(epg.now(list[0]), isNotNull);
     expect(epg.now(list[1]), isNotNull);
+  });
+
+  test('EPG offset shifts programme times', () async {
+    final path = '${tmp.path}/offset.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final a = repo.insertSource(
+        name: 'A', type: SourceType.m3u, url: '$base/playlist.m3u',
+        epgUrl: '$base/xmltv.php');
+    final b = repo.insertSource(
+        name: 'B', type: SourceType.m3u, url: '$base/playlist.m3u',
+        epgUrl: '$base/xmltv.php', epgOffset: 90);
+    expect(repo.source(b)!.epgOffsetMinutes, 90);
+    await importEpg(path, a, 3, null);
+    await importEpg(path, b, 3, null);
+    final from = DateTime.now().subtract(const Duration(hours: 12));
+    final to = DateTime.now().add(const Duration(days: 2));
+    final pa = repo.programs(a, 'ch1', from, to);
+    final pb = repo.programs(b, 'ch1', from, to);
+    final first = pa.first;
+    final shifted = pb.firstWhere((p) => p.title == first.title);
+    expect(shifted.start.difference(first.start), const Duration(minutes: 90));
+  });
+
+  test('migration v1 -> v2 adds epg_offset', () {
+    final path = '${tmp.path}/migrate.db';
+    openAppDatabase(path).close();
+    final raw = sqlite3.open(path);
+    raw.execute('ALTER TABLE sources DROP COLUMN epg_offset');
+    raw.execute('PRAGMA user_version = 1');
+    raw.execute(
+        "INSERT INTO sources (name, type, url, created_at) VALUES ('old', 'm3u', 'http://x/list.m3u', 0)");
+    raw.close();
+    final repo = track(Repository(openAppDatabase(path)));
+    expect(repo.db.select('PRAGMA user_version').first.columnAt(0), kSchemaVersion);
+    final src = repo.sources().single;
+    expect(src.epgOffsetMinutes, 0);
+    expect(src.url, 'http://x/list.m3u');
   });
 
   test('schema opens in memory', () {

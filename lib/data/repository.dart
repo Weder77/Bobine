@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import '../core/secrets.dart';
 import '../core/text.dart';
 import 'models.dart';
 
@@ -73,11 +74,15 @@ class Repository {
     String? epgUrl,
     String? userAgent,
     String liveFormat = 'ts',
+    int epgOffset = 0,
   }) {
     db.execute(
-      'INSERT INTO sources (name, type, url, username, password, epg_url, user_agent, live_format, created_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [name, type.name, url, username, password, _nz(epgUrl), _nz(userAgent), liveFormat, _nowSec],
+      'INSERT INTO sources (name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, created_at) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [
+        name, type.name, Secrets.protect(url), username, Secrets.protect(password),
+        Secrets.protect(_nz(epgUrl)), _nz(userAgent), liveFormat, epgOffset, _nowSec,
+      ],
     );
     return db.lastInsertRowId;
   }
@@ -91,11 +96,15 @@ class Repository {
     String? epgUrl,
     String? userAgent,
     String liveFormat = 'ts',
+    int epgOffset = 0,
   }) {
     db.execute(
       'UPDATE sources SET name = ?, url = ?, username = ?, password = ?, epg_url = ?, '
-      'user_agent = ?, live_format = ? WHERE id = ?',
-      [name, url, username, password, _nz(epgUrl), _nz(userAgent), liveFormat, id],
+      'user_agent = ?, live_format = ?, epg_offset = ? WHERE id = ?',
+      [
+        name, Secrets.protect(url), username, Secrets.protect(password),
+        Secrets.protect(_nz(epgUrl)), _nz(userAgent), liveFormat, epgOffset, id,
+      ],
     );
   }
 

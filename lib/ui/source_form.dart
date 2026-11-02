@@ -32,6 +32,7 @@ class _SourceFormState extends State<SourceForm> {
   final _epg = TextEditingController();
   final _ua = TextEditingController();
   String _liveFormat = 'ts';
+  int _epgOffset = 0; // minutes
   bool _obscure = true;
   bool _busy = false;
   String? _error;
@@ -56,6 +57,7 @@ class _SourceFormState extends State<SourceForm> {
       _epg.text = s.epgUrl ?? '';
       _ua.text = s.userAgent ?? '';
       _liveFormat = s.liveFormat;
+      _epgOffset = s.epgOffsetMinutes;
     }
   }
 
@@ -188,7 +190,8 @@ class _SourceFormState extends State<SourceForm> {
           password: isX ? _pass.text : null,
           epgUrl: _epg.text,
           userAgent: _ua.text,
-          liveFormat: _liveFormat);
+          liveFormat: _liveFormat,
+          epgOffset: _epgOffset);
       s.library.contentChanged();
     } else {
       id = s.repo.insertSource(
@@ -199,12 +202,21 @@ class _SourceFormState extends State<SourceForm> {
           password: isX ? _pass.text : null,
           epgUrl: _epg.text,
           userAgent: _ua.text,
-          liveFormat: _liveFormat);
+          liveFormat: _liveFormat,
+          epgOffset: _epgOffset);
       s.selectSource(id);
     }
     final source = s.repo.source(id)!;
     unawaited(s.refresh(source).catchError((Object _) {}));
     widget.onSaved(id);
+  }
+
+  static String _offsetLabel(int minutes) {
+    if (minutes == 0) return 'Aucun';
+    final sign = minutes > 0 ? '+' : '−';
+    final m = minutes.abs();
+    final h = m ~/ 60, r = m % 60;
+    return '$sign${h > 0 ? '$h h' : ''}${r > 0 ? ' ${r.toString().padLeft(h > 0 ? 2 : 1, '0')} min' : ''}'.trim();
   }
 
   @override
@@ -315,6 +327,31 @@ class _SourceFormState extends State<SourceForm> {
                 itemBuilder: (_) => [
                   for (final e in kUserAgentPresets.entries) PopupMenuItem(value: e.value, child: Text(e.key)),
                 ],
+              ),
+            ]),
+            const SizedBox(height: 14),
+            Row(children: [
+              const Expanded(
+                child: Text(
+                  'Décalage du guide TV\n'
+                  'À ajuster si les programmes affichés sont en avance ou en retard.',
+                  style: TextStyle(color: AppColors.muted, fontSize: 13),
+                ),
+              ),
+              IconButton.outlined(
+                tooltip: '-30 min',
+                onPressed: _epgOffset <= -720 ? null : () => setState(() => _epgOffset -= 30),
+                icon: const Icon(Icons.remove, size: 18),
+              ),
+              SizedBox(
+                width: 96,
+                child: Text(_offsetLabel(_epgOffset),
+                    textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
+              ),
+              IconButton.outlined(
+                tooltip: '+30 min',
+                onPressed: _epgOffset >= 720 ? null : () => setState(() => _epgOffset += 30),
+                icon: const Icon(Icons.add, size: 18),
               ),
             ]),
             if (isX) ...[

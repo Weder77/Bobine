@@ -1,7 +1,9 @@
 import 'package:sqlite3/sqlite3.dart';
 
+import '../core/secrets.dart';
+
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 1;
+const int kSchemaVersion = 2;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -12,6 +14,7 @@ Database openAppDatabase(String path) {
   final db = sqlite3.open(path);
   _configure(db, busyTimeoutMs: 150);
   _migrate(db);
+  _protectLegacySecrets(db);
   return db;
 }
 
@@ -46,11 +49,29 @@ void _migrate(Database db) {
   db.execute('BEGIN');
   try {
     if (version < 1) _createV1(db);
+    if (version < 2) {
+      // EPG time shift (minutes) for guides published with a wrong timezone.
+      db.execute('ALTER TABLE sources ADD COLUMN epg_offset INTEGER NOT NULL DEFAULT 0');
+    }
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
     db.execute('ROLLBACK');
     rethrow;
+  }
+}
+
+/// Encrypts credentials stored in clear by older versions (Windows only).
+void _protectLegacySecrets(Database db) {
+  if (!Secrets.supported) return;
+  final rows = db.select('SELECT id, url, password, epg_url FROM sources');
+  for (final r in rows) {
+    String? fix(Object? v) => v == null ? null : Secrets.protect(v as String);
+    final url = fix(r['url']), password = fix(r['password']), epg = fix(r['epg_url']);
+    if (url != r['url'] || password != r['password'] || epg != r['epg_url']) {
+      db.execute('UPDATE sources SET url = ?, password = ?, epg_url = ? WHERE id = ?',
+          [url, password, epg, r['id']]);
+    }
   }
 }
 

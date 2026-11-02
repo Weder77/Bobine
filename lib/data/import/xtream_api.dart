@@ -161,7 +161,8 @@ class XtreamApi {
       parseSeriesInfo(await _get('get_series_info', {'series_id': seriesId}), sourceId, seriesId);
 
   /// Short EPG for one channel (fallback when no XMLTV data exists).
-  Future<List<Program>> shortEpg(String streamId, {int limit = 12}) async {
+  Future<List<Program>> shortEpg(String streamId,
+      {int limit = 12, Duration offset = Duration.zero}) async {
     final json = await _get('get_short_epg', {'stream_id': streamId, 'limit': '$limit'});
     final list = json is Map ? asMapList(json['epg_listings']) : const <Map<String, Object?>>[];
     final out = <Program>[];
@@ -170,8 +171,8 @@ class XtreamApi {
       final stop = asInt(e['stop_timestamp']);
       if (start == null || stop == null) continue;
       out.add(Program(
-        start: DateTime.fromMillisecondsSinceEpoch(start * 1000),
-        stop: DateTime.fromMillisecondsSinceEpoch(stop * 1000),
+        start: DateTime.fromMillisecondsSinceEpoch(start * 1000).add(offset),
+        stop: DateTime.fromMillisecondsSinceEpoch(stop * 1000).add(offset),
         title: _b64(asString(e['title'])) ?? '',
         description: _b64(asString(e['description'])),
       ));

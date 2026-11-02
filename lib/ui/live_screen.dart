@@ -241,7 +241,7 @@ class _LiveScreenState extends State<LiveScreen> {
     if (src != null && src.isXtream && c.url == null && !_shortEpgLoading.contains(key)) {
       _shortEpgLoading.add(key);
       final api = XtreamApi.forSource(src);
-      api.shortEpg(c.extId).then((progs) {
+      api.shortEpg(c.extId, offset: Duration(minutes: src.epgOffsetMinutes)).then((progs) {
         _shortEpg[key] = progs;
         if (mounted) setState(() {});
       }).catchError((Object _) {

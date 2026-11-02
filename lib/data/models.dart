@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:sqlite3/sqlite3.dart';
 
+import '../core/secrets.dart';
+
 enum SourceType { m3u, xtream }
 
 /// Content kinds as stored in the database.
@@ -37,6 +39,7 @@ class Source {
     this.epgUpdatedAt,
     this.accountInfo,
     this.lastError,
+    this.epgOffsetMinutes = 0,
   });
 
   final int id;
@@ -56,6 +59,9 @@ class Source {
   final DateTime? epgUpdatedAt;
   final Map<String, Object?>? accountInfo;
   final String? lastError;
+
+  /// Shift applied to guide times (some providers publish a wrong timezone).
+  final int epgOffsetMinutes;
 
   bool get isXtream => type == SourceType.xtream;
 
@@ -82,10 +88,11 @@ class Source {
         id: r['id'] as int,
         name: r['name'] as String,
         type: r['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u,
-        url: r['url'] as String,
+        // Credentials are encrypted at rest (see Secrets).
+        url: Secrets.reveal(r['url'] as String) ?? '',
         username: r['username'] as String?,
-        password: r['password'] as String?,
-        epgUrl: r['epg_url'] as String?,
+        password: Secrets.reveal(r['password'] as String?),
+        epgUrl: Secrets.reveal(r['epg_url'] as String?),
         userAgent: r['user_agent'] as String?,
         liveFormat: (r['live_format'] as String?) ?? 'ts',
         contentUpdatedAt: _date(r['content_updated_at']),
@@ -94,6 +101,7 @@ class Source {
             ? null
             : (jsonDecode(r['account_info'] as String) as Map).cast<String, Object?>(),
         lastError: r['last_error'] as String?,
+        epgOffsetMinutes: (r['epg_offset'] as int?) ?? 0,
       );
 }
 

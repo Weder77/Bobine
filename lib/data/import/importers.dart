@@ -11,6 +11,7 @@ import 'dart:isolate';
 import 'package:sqlite3/sqlite3.dart';
 
 import '../../core/net.dart';
+import '../../core/secrets.dart';
 import '../../core/text.dart';
 import '../db.dart';
 import '../models.dart';
@@ -127,7 +128,7 @@ void _commit(Database db, int sourceId, _Batch batch, ProgressSink progress,
     db.execute(
       'UPDATE sources SET content_updated_at = ?, last_error = NULL, '
       'epg_url = COALESCE(epg_url, ?), account_info = COALESCE(?, account_info) WHERE id = ?',
-      [_now(), discoveredEpg, account == null ? null : jsonEncode(account), sourceId],
+      [_now(), Secrets.protect(discoveredEpg), account == null ? null : jsonEncode(account), sourceId],
     );
     db.execute('COMMIT');
   } catch (_) {
@@ -358,6 +359,7 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     if (url == null) return 0;
 
     final now = _now();
+    final shift = source.epgOffsetMinutes * 60;
     final minStop = now - 6 * 3600;
     final maxStart = now + days * 86400;
 
@@ -366,9 +368,11 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     var seen = 0;
 
     final parser = XmltvParser(
-      onProgramme: (channel, start, stop, title, desc) {
+      onProgramme: (channel, rawStart, rawStop, title, desc) {
         seen++;
         if (seen % 5000 == 0) progress('Guide TV', seen);
+        final start = rawStart + shift;
+        final stop = rawStop + shift;
         if (stop < minStop || start > maxStart) return;
         programmes.add([channel.toLowerCase(), start, stop, title, desc]);
       },
