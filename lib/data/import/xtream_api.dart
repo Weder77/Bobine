@@ -48,16 +48,25 @@ class VodDetails {
 
   /// Short tags for the detail page: "4K", "HDR", "5.1".
   List<String> get qualityTags => [
-        if ((videoHeight ?? 0) >= 2000) '4K' else if ((videoHeight ?? 0) >= 700) 'HD',
-        if (hdr != null) 'HDR',
-        if (audioChannels == 6) '5.1' else if (audioChannels == 8) '7.1',
-      ];
+    if ((videoHeight ?? 0) >= 2000) '4K' else if ((videoHeight ?? 0) >= 700) 'HD',
+    if (hdr != null) 'HDR',
+    if (audioChannels == 6) '5.1' else if (audioChannels == 8) '7.1',
+  ];
 }
 
 /// Series metadata + episodes (from `get_series_info`).
 class SeriesDetails {
-  const SeriesDetails({required this.episodes, this.plot, this.cast, this.director, this.genre,
-      this.releaseDate, this.backdrop, this.poster, this.rating});
+  const SeriesDetails({
+    required this.episodes,
+    this.plot,
+    this.cast,
+    this.director,
+    this.genre,
+    this.releaseDate,
+    this.backdrop,
+    this.poster,
+    this.rating,
+  });
   final List<Episode> episodes;
   final String? plot;
   final String? cast;
@@ -95,9 +104,9 @@ class XtreamApi {
     required this.password,
     this.userAgent,
     HttpClient? client,
-  })  : baseUrl = _normalize(baseUrl),
-        _client = client ?? createHttpClient(),
-        _ownsClient = client == null;
+  }) : baseUrl = _normalize(baseUrl),
+       _client = client ?? createHttpClient(),
+       _ownsClient = client == null;
 
   final String baseUrl;
   final String username;
@@ -107,12 +116,12 @@ class XtreamApi {
   final bool _ownsClient;
 
   factory XtreamApi.forSource(Source s, {HttpClient? client}) => XtreamApi(
-        baseUrl: s.baseUrl,
-        username: s.username ?? '',
-        password: s.password ?? '',
-        userAgent: s.userAgent,
-        client: client,
-      );
+    baseUrl: s.baseUrl,
+    username: s.username ?? '',
+    password: s.password ?? '',
+    userAgent: s.userAgent,
+    client: client,
+  );
 
   static String _normalize(String u) {
     var s = u.trim();
@@ -127,12 +136,7 @@ class XtreamApi {
 
   Uri _api([String? action, Map<String, String> extra = const {}]) {
     final base = Uri.parse('$baseUrl/player_api.php');
-    return base.replace(queryParameters: {
-      'username': username,
-      'password': password,
-      'action': ?action,
-      ...extra,
-    });
+    return base.replace(queryParameters: {'username': username, 'password': password, 'action': ?action, ...extra});
   }
 
   Future<Object?> _get(String? action, [Map<String, String> extra = const {}]) =>
@@ -177,15 +181,13 @@ class XtreamApi {
   Future<List<Map<String, Object?>>> vodStreams() => _list('get_vod_streams');
   Future<List<Map<String, Object?>>> seriesList() => _list('get_series');
 
-  Future<VodDetails> vodInfo(String vodId) async =>
-      parseVodInfo(await _get('get_vod_info', {'vod_id': vodId}));
+  Future<VodDetails> vodInfo(String vodId) async => parseVodInfo(await _get('get_vod_info', {'vod_id': vodId}));
 
   Future<SeriesDetails> seriesInfo(int sourceId, String seriesId) async =>
       parseSeriesInfo(await _get('get_series_info', {'series_id': seriesId}), sourceId, seriesId);
 
   /// Short EPG for one channel (fallback when no XMLTV data exists).
-  Future<List<Program>> shortEpg(String streamId,
-      {int limit = 12, Duration offset = Duration.zero}) async {
+  Future<List<Program>> shortEpg(String streamId, {int limit = 12, Duration offset = Duration.zero}) async {
     final json = await _get('get_short_epg', {'stream_id': streamId, 'limit': '$limit'});
     final list = json is Map ? asMapList(json['epg_listings']) : const <Map<String, Object?>>[];
     final out = <Program>[];
@@ -193,12 +195,14 @@ class XtreamApi {
       final start = asInt(e['start_timestamp']);
       final stop = asInt(e['stop_timestamp']);
       if (start == null || stop == null) continue;
-      out.add(Program(
-        start: DateTime.fromMillisecondsSinceEpoch(start * 1000).add(offset),
-        stop: DateTime.fromMillisecondsSinceEpoch(stop * 1000).add(offset),
-        title: _b64(asString(e['title'])) ?? '',
-        description: _b64(asString(e['description'])),
-      ));
+      out.add(
+        Program(
+          start: DateTime.fromMillisecondsSinceEpoch(start * 1000).add(offset),
+          stop: DateTime.fromMillisecondsSinceEpoch(stop * 1000).add(offset),
+          title: _b64(asString(e['title'])) ?? '',
+          description: _b64(asString(e['description'])),
+        ),
+      );
     }
     out.sort((a, b) => a.start.compareTo(b.start));
     return out;
@@ -290,16 +294,16 @@ VodDetails parseVodInfo(Object? json) {
 }
 
 String? _codecName(Object? v) => switch (asString(v)?.toLowerCase()) {
-      null => null,
-      'hevc' || 'h265' => 'HEVC',
-      'h264' || 'avc' => 'H.264',
-      'eac3' => 'E-AC3',
-      'ac3' => 'AC3',
-      'aac' => 'AAC',
-      'dts' => 'DTS',
-      'truehd' => 'TrueHD',
-      final other => other.toUpperCase(),
-    };
+  null => null,
+  'hevc' || 'h265' => 'HEVC',
+  'h264' || 'avc' => 'H.264',
+  'eac3' => 'E-AC3',
+  'ac3' => 'AC3',
+  'aac' => 'AAC',
+  'dts' => 'DTS',
+  'truehd' => 'TrueHD',
+  final other => other.toUpperCase(),
+};
 
 SeriesDetails parseSeriesInfo(Object? json, int sourceId, String seriesId) {
   if (json is! Map) return const SeriesDetails(episodes: []);
@@ -315,29 +319,32 @@ SeriesDetails parseSeriesInfo(Object? json, int sourceId, String seriesId) {
     }
   }
   for (final g in groups) {
-    final list = g.value is List ? asMapList(g.value) : (g.value is Map ? [(g.value as Map).cast<String, Object?>()] : <Map<String, Object?>>[]);
+    final list = g.value is List
+        ? asMapList(g.value)
+        : (g.value is Map ? [(g.value as Map).cast<String, Object?>()] : <Map<String, Object?>>[]);
     var index = 0;
     for (final e in list) {
       index++;
       final id = asString(e['id']);
       if (id == null) continue;
       final epInfo = e['info'] is Map ? (e['info'] as Map).cast<String, Object?>() : <String, Object?>{};
-      episodes.add(Episode(
-        sourceId: sourceId,
-        seriesExt: seriesId,
-        extId: id,
-        season: asInt(e['season']) ?? g.key ?? 1,
-        episode: asInt(e['episode_num']) ?? index,
-        title: asString(e['title']),
-        plot: asString(epInfo['plot']),
-        image: _firstImage(epInfo['movie_image']) ?? _firstImage(epInfo['cover_big']),
-        durationSec: parseDurationSec(epInfo),
-        container: asString(e['container_extension']),
-      ));
+      episodes.add(
+        Episode(
+          sourceId: sourceId,
+          seriesExt: seriesId,
+          extId: id,
+          season: asInt(e['season']) ?? g.key ?? 1,
+          episode: asInt(e['episode_num']) ?? index,
+          title: asString(e['title']),
+          plot: asString(epInfo['plot']),
+          image: _firstImage(epInfo['movie_image']) ?? _firstImage(epInfo['cover_big']),
+          durationSec: parseDurationSec(epInfo),
+          container: asString(e['container_extension']),
+        ),
+      );
     }
   }
-  episodes.sort((a, b) =>
-      a.season != b.season ? a.season.compareTo(b.season) : a.episode.compareTo(b.episode));
+  episodes.sort((a, b) => a.season != b.season ? a.season.compareTo(b.season) : a.episode.compareTo(b.episode));
   return SeriesDetails(
     episodes: episodes,
     plot: asString(info['plot']),

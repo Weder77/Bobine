@@ -20,9 +20,8 @@ enum ContentKind {
       ContentKind.values.firstWhere((k) => k.db == v, orElse: () => ContentKind.live);
 }
 
-DateTime? _date(Object? seconds) => seconds == null
-    ? null
-    : DateTime.fromMillisecondsSinceEpoch((seconds as int) * 1000);
+DateTime? _date(Object? seconds) =>
+    seconds == null ? null : DateTime.fromMillisecondsSinceEpoch((seconds as int) * 1000);
 
 class Source {
   const Source({
@@ -85,24 +84,24 @@ class Source {
   }
 
   factory Source.fromRow(Row r) => Source(
-        id: r['id'] as int,
-        name: r['name'] as String,
-        type: r['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u,
-        // Credentials are encrypted at rest (see Secrets).
-        url: Secrets.reveal(r['url'] as String) ?? '',
-        username: r['username'] as String?,
-        password: Secrets.reveal(r['password'] as String?),
-        epgUrl: Secrets.reveal(r['epg_url'] as String?),
-        userAgent: r['user_agent'] as String?,
-        liveFormat: (r['live_format'] as String?) ?? 'ts',
-        contentUpdatedAt: _date(r['content_updated_at']),
-        epgUpdatedAt: _date(r['epg_updated_at']),
-        accountInfo: r['account_info'] == null
-            ? null
-            : (jsonDecode(r['account_info'] as String) as Map).cast<String, Object?>(),
-        lastError: r['last_error'] as String?,
-        epgOffsetMinutes: (r['epg_offset'] as int?) ?? 0,
-      );
+    id: r['id'] as int,
+    name: r['name'] as String,
+    type: r['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u,
+    // Credentials are encrypted at rest (see Secrets).
+    url: Secrets.reveal(r['url'] as String) ?? '',
+    username: r['username'] as String?,
+    password: Secrets.reveal(r['password'] as String?),
+    epgUrl: Secrets.reveal(r['epg_url'] as String?),
+    userAgent: r['user_agent'] as String?,
+    liveFormat: (r['live_format'] as String?) ?? 'ts',
+    contentUpdatedAt: _date(r['content_updated_at']),
+    epgUpdatedAt: _date(r['epg_updated_at']),
+    accountInfo: r['account_info'] == null
+        ? null
+        : (jsonDecode(r['account_info'] as String) as Map).cast<String, Object?>(),
+    lastError: r['last_error'] as String?,
+    epgOffsetMinutes: (r['epg_offset'] as int?) ?? 0,
+  );
 }
 
 class ContentCategory {
@@ -120,12 +119,12 @@ class ContentCategory {
   final int count;
 
   factory ContentCategory.fromRow(Row r) => ContentCategory(
-        id: r['id'] as int,
-        kind: ContentKind.fromDb(r['kind'] as String),
-        extId: r['ext_id'] as String,
-        name: r['name'] as String,
-        count: (r['cnt'] as int?) ?? 0,
-      );
+    id: r['id'] as int,
+    kind: ContentKind.fromDb(r['kind'] as String),
+    extId: r['ext_id'] as String,
+    name: r['name'] as String,
+    count: (r['cnt'] as int?) ?? 0,
+  );
 }
 
 class Channel {
@@ -157,18 +156,18 @@ class Channel {
   final int catchupDays;
 
   factory Channel.fromRow(Row r) => Channel(
-        id: r['id'] as int,
-        sourceId: r['source_id'] as int,
-        extId: r['ext_id'] as String,
-        name: r['name'] as String,
-        search: (r['search'] as String?) ?? '',
-        categoryId: r['category_id'] as int?,
-        logo: r['logo'] as String?,
-        url: r['url'] as String?,
-        epgId: r['epg_id'] as String?,
-        number: r['number'] as int?,
-        catchupDays: (r['catchup_days'] as int?) ?? 0,
-      );
+    id: r['id'] as int,
+    sourceId: r['source_id'] as int,
+    extId: r['ext_id'] as String,
+    name: r['name'] as String,
+    search: (r['search'] as String?) ?? '',
+    categoryId: r['category_id'] as int?,
+    logo: r['logo'] as String?,
+    url: r['url'] as String?,
+    epgId: r['epg_id'] as String?,
+    number: r['number'] as int?,
+    catchupDays: (r['catchup_days'] as int?) ?? 0,
+  );
 }
 
 class Movie {
@@ -202,19 +201,19 @@ class Movie {
   final String? url;
 
   factory Movie.fromRow(Row r) => Movie(
-        id: r['id'] as int,
-        sourceId: r['source_id'] as int,
-        extId: r['ext_id'] as String,
-        name: r['name'] as String,
-        search: (r['search'] as String?) ?? '',
-        categoryId: r['category_id'] as int?,
-        poster: r['poster'] as String?,
-        rating: (r['rating'] as num?)?.toDouble(),
-        year: r['year'] as int?,
-        added: _date(r['added']),
-        container: r['container'] as String?,
-        url: r['url'] as String?,
-      );
+    id: r['id'] as int,
+    sourceId: r['source_id'] as int,
+    extId: r['ext_id'] as String,
+    name: r['name'] as String,
+    search: (r['search'] as String?) ?? '',
+    categoryId: r['category_id'] as int?,
+    poster: r['poster'] as String?,
+    rating: (r['rating'] as num?)?.toDouble(),
+    year: r['year'] as int?,
+    added: _date(r['added']),
+    container: r['container'] as String?,
+    url: r['url'] as String?,
+  );
 }
 
 class Series {
@@ -250,20 +249,20 @@ class Series {
   final DateTime? added;
 
   factory Series.fromRow(Row r) => Series(
-        id: r['id'] as int,
-        sourceId: r['source_id'] as int,
-        extId: r['ext_id'] as String,
-        name: r['name'] as String,
-        search: (r['search'] as String?) ?? '',
-        categoryId: r['category_id'] as int?,
-        poster: r['poster'] as String?,
-        backdrop: r['backdrop'] as String?,
-        plot: r['plot'] as String?,
-        genre: r['genre'] as String?,
-        rating: (r['rating'] as num?)?.toDouble(),
-        year: r['year'] as int?,
-        added: _date(r['added']),
-      );
+    id: r['id'] as int,
+    sourceId: r['source_id'] as int,
+    extId: r['ext_id'] as String,
+    name: r['name'] as String,
+    search: (r['search'] as String?) ?? '',
+    categoryId: r['category_id'] as int?,
+    poster: r['poster'] as String?,
+    backdrop: r['backdrop'] as String?,
+    plot: r['plot'] as String?,
+    genre: r['genre'] as String?,
+    rating: (r['rating'] as num?)?.toDouble(),
+    year: r['year'] as int?,
+    added: _date(r['added']),
+  );
 }
 
 class Episode {
@@ -292,8 +291,7 @@ class Episode {
   final String? container;
   final String? url;
 
-  String get code =>
-      'S${season.toString().padLeft(2, '0')}E${episode.toString().padLeft(2, '0')}';
+  String get code => 'S${season.toString().padLeft(2, '0')}E${episode.toString().padLeft(2, '0')}';
 
   String get displayTitle {
     final t = title?.trim();
@@ -302,27 +300,22 @@ class Episode {
   }
 
   factory Episode.fromRow(Row r) => Episode(
-        sourceId: r['source_id'] as int,
-        seriesExt: r['series_ext'] as String,
-        extId: r['ext_id'] as String,
-        season: r['season'] as int,
-        episode: r['episode'] as int,
-        title: r['title'] as String?,
-        plot: r['plot'] as String?,
-        image: r['image'] as String?,
-        durationSec: r['duration_s'] as int?,
-        container: r['container'] as String?,
-        url: r['url'] as String?,
-      );
+    sourceId: r['source_id'] as int,
+    seriesExt: r['series_ext'] as String,
+    extId: r['ext_id'] as String,
+    season: r['season'] as int,
+    episode: r['episode'] as int,
+    title: r['title'] as String?,
+    plot: r['plot'] as String?,
+    image: r['image'] as String?,
+    durationSec: r['duration_s'] as int?,
+    container: r['container'] as String?,
+    url: r['url'] as String?,
+  );
 }
 
 class Program {
-  const Program({
-    required this.start,
-    required this.stop,
-    required this.title,
-    this.description,
-  });
+  const Program({required this.start, required this.stop, required this.title, this.description});
   final DateTime start;
   final DateTime stop;
   final String title;
@@ -337,11 +330,11 @@ class Program {
   }
 
   factory Program.fromRow(Row r) => Program(
-        start: DateTime.fromMillisecondsSinceEpoch((r['start'] as int) * 1000),
-        stop: DateTime.fromMillisecondsSinceEpoch((r['stop'] as int) * 1000),
-        title: r['title'] as String,
-        description: r['description'] as String?,
-      );
+    start: DateTime.fromMillisecondsSinceEpoch((r['start'] as int) * 1000),
+    stop: DateTime.fromMillisecondsSinceEpoch((r['stop'] as int) * 1000),
+    title: r['title'] as String,
+    description: r['description'] as String?,
+  );
 }
 
 class ProgressEntry {
@@ -370,25 +363,23 @@ class ProgressEntry {
   final String? image;
   final String? seriesExt;
 
-  double get fraction => duration.inMilliseconds <= 0
-      ? 0
-      : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
+  double get fraction =>
+      duration.inMilliseconds <= 0 ? 0 : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);
 
   /// Whether playback should resume from [position] rather than start over.
-  bool get resumable =>
-      !finished && position.inSeconds > 30 && fraction < 0.95;
+  bool get resumable => !finished && position.inSeconds > 30 && fraction < 0.95;
 
   factory ProgressEntry.fromRow(Row r) => ProgressEntry(
-        sourceId: r['source_id'] as int,
-        kind: ContentKind.fromDb(r['kind'] as String),
-        extId: r['ext_id'] as String,
-        position: Duration(milliseconds: r['position_ms'] as int),
-        duration: Duration(milliseconds: r['duration_ms'] as int),
-        finished: (r['finished'] as int) == 1,
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(r['updated_at'] as int),
-        title: r['title'] as String,
-        subtitle: r['subtitle'] as String?,
-        image: r['image'] as String?,
-        seriesExt: r['series_ext'] as String?,
-      );
+    sourceId: r['source_id'] as int,
+    kind: ContentKind.fromDb(r['kind'] as String),
+    extId: r['ext_id'] as String,
+    position: Duration(milliseconds: r['position_ms'] as int),
+    duration: Duration(milliseconds: r['duration_ms'] as int),
+    finished: (r['finished'] as int) == 1,
+    updatedAt: DateTime.fromMillisecondsSinceEpoch(r['updated_at'] as int),
+    title: r['title'] as String,
+    subtitle: r['subtitle'] as String?,
+    image: r['image'] as String?,
+    seriesExt: r['series_ext'] as String?,
+  );
 }

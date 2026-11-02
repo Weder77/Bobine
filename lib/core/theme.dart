@@ -1,34 +1,41 @@
 import 'package:flutter/material.dart';
 
-/// "Nuit ambrée" design tokens (see the Lumen design canvas).
+/// "Salle obscure" design tokens (streaming direction, see the design canvas):
+/// the image comes first, actions are white, amber is only the brand mark and
+/// progress.
 class AppColors {
   // Grounds
-  static const bg = Color(0xFF07080B); // ink
-  static const surface = Color(0xFF11141B); // cards
-  static const surface2 = Color(0xFF161922); // menus, blocks
-  static const surface3 = Color(0xFF1E222C); // logos, chips
-  static const selected = Color(0xFF1A1D25); // selected rows
-  static const field = Color(0xFF0F1116); // inputs
-  static const border = Color(0xFF1C1F27); // hairlines
-  static const borderStrong = Color(0xFF2B2F3A); // outlined controls
+  static const bg = Color(0xFF111114);
+  static const surface = Color(0xFF1C1C21); // cards
+  static const surface2 = Color(0xFF232329); // menus, panels
+  static const surface3 = Color(0xFF2C2C33); // logos, chips
+  static const selected = Color(0xFF26262C); // selected rows
+  static const field = Color(0xFF18181C); // inputs
+  static const border = Color(0xFF26262C); // hairlines
+  static const borderStrong = Color(0xFF3A3A42); // outlined controls
 
   // Text
-  static const text = Color(0xFFF4F1EA);
-  static const textSoft = Color(0xFFC9CED8);
-  static const muted = Color(0xFFA3A9B5);
-  static const faint = Color(0xFF8B92A0);
+  static const text = Color(0xFFFFFFFF);
+  static const textSoft = Color(0xFFE6E7EB);
+  static const muted = Color(0xFFA9AAB1);
+  static const faint = Color(0xFF8C8D94);
 
-  // Accent: the only action colour.
+  // Brand: logo, progress bars, ratings.
   static const accent = Color(0xFFFFB547);
   static const onAccent = Color(0xFF1A1204);
   static Color get accentTint => accent.withValues(alpha: 0.14);
 
+  // Actions: white primary buttons, frosted secondary ones.
+  static const action = Color(0xFFFFFFFF);
+  static const onAction = Color(0xFF0B0B0D);
+  static const frosted = Color(0x33FFFFFF);
+
   // Status
-  static const live = Color(0xFFFF4D5E);
-  static const liveBadge = Color(0xFFE5293B);
+  static const live = Color(0xFFF23B4C);
+  static const liveBadge = Color(0xFFD81F33);
   static const success = Color(0xFF3DDC97);
 
-  // Content cues (icons of the quick-access tiles).
+  // Content cues.
   static const cueLive = Color(0xFF7FA6FF);
   static const cueFilms = Color(0xFFB39DFF);
   static const cueSeries = Color(0xFFFF8FA8);
@@ -42,30 +49,36 @@ class AppColors {
   );
 }
 
-/// Typefaces: Bricolage Grotesque for titles, Inter for the interface.
+/// Typefaces: Inter for the interface, Bebas Neue for poster titles.
 class AppFonts {
-  static const display = 'Bricolage';
   static const body = 'Inter';
+  static const poster = 'BebasNeue';
 }
 
-/// Title style in Bricolage Grotesque.
-TextStyle displayStyle(double size, {FontWeight weight = FontWeight.w700, Color? color, double? height}) =>
-    TextStyle(
-      fontFamily: AppFonts.display,
-      fontSize: size,
-      fontWeight: weight,
-      color: color ?? AppColors.text,
-      height: height,
-      letterSpacing: size >= 40 ? -0.01 * size : null,
-    );
+/// Heading style (Inter, heavy, slightly tightened).
+TextStyle displayStyle(double size, {FontWeight weight = FontWeight.w800, Color? color, double? height}) => TextStyle(
+  fontFamily: AppFonts.body,
+  fontSize: size,
+  fontWeight: weight,
+  color: color ?? AppColors.text,
+  height: height,
+  letterSpacing: size >= 24 ? -0.02 * size : null,
+);
 
-/// Small uppercase label ("MAINTENANT · 20:30").
-TextStyle labelStyle({Color color = AppColors.muted, double size = 12}) => TextStyle(
-      fontSize: size,
-      fontWeight: FontWeight.w700,
-      letterSpacing: size * 0.12,
-      color: color,
-    );
+/// Condensed capitals for titles over images ("LES VEILLEURS").
+TextStyle posterStyle(double size, {Color? color, double height = 0.9, List<Shadow>? shadows}) => TextStyle(
+  fontFamily: AppFonts.poster,
+  fontSize: size,
+  fontWeight: FontWeight.w400,
+  color: color ?? AppColors.text,
+  height: height,
+  letterSpacing: size * 0.01,
+  shadows: shadows,
+);
+
+/// Small uppercase label ("À SUIVRE").
+TextStyle labelStyle({Color color = AppColors.muted, double size = 12}) =>
+    TextStyle(fontSize: size, fontWeight: FontWeight.w700, letterSpacing: size * 0.14, color: color);
 
 const tabularFigures = [FontFeature.tabularFigures()];
 
@@ -95,13 +108,9 @@ ThemeData buildTheme() {
     splashFactory: InkSparkle.splashFactory,
     visualDensity: VisualDensity.compact,
   );
-  final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(14));
+  const buttonShape = StadiumBorder();
   return base.copyWith(
-    textTheme: base.textTheme.apply(
-      fontFamily: AppFonts.body,
-      bodyColor: AppColors.text,
-      displayColor: AppColors.text,
-    ),
+    textTheme: base.textTheme.apply(fontFamily: AppFonts.body, bodyColor: AppColors.text, displayColor: AppColors.text),
     dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 1),
     cardTheme: const CardThemeData(
       color: AppColors.surface,
@@ -119,23 +128,24 @@ ThemeData buildTheme() {
       prefixIconColor: AppColors.muted,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF23262F)),
+        borderSide: const BorderSide(color: AppColors.borderStrong),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: Color(0xFF23262F)),
+        borderSide: const BorderSide(color: AppColors.borderStrong),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.accent, width: 1.4),
+        borderSide: const BorderSide(color: AppColors.text, width: 1.4),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        backgroundColor: AppColors.accent,
-        foregroundColor: AppColors.onAccent,
+        backgroundColor: AppColors.action,
+        foregroundColor: AppColors.onAction,
+        disabledBackgroundColor: AppColors.surface3,
         minimumSize: const Size(0, 52),
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.symmetric(horizontal: 26),
         shape: buttonShape,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, fontSize: 16),
       ),
@@ -143,17 +153,17 @@ ThemeData buildTheme() {
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.text,
-        backgroundColor: Colors.white.withValues(alpha: 0.06),
+        backgroundColor: AppColors.frosted,
         minimumSize: const Size(0, 52),
-        padding: const EdgeInsets.symmetric(horizontal: 22),
-        side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        side: BorderSide.none,
         shape: buttonShape,
-        textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 16),
+        textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, fontSize: 16),
       ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.accent,
+        foregroundColor: AppColors.text,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 15),
       ),
     ),
@@ -161,33 +171,54 @@ ThemeData buildTheme() {
       style: IconButton.styleFrom(
         foregroundColor: AppColors.textSoft,
         minimumSize: const Size(44, 44),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        shape: const CircleBorder(),
       ),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? AppColors.surface3 : AppColors.surface),
+          (s) => s.contains(WidgetState.selected) ? AppColors.action : Colors.transparent,
+        ),
         foregroundColor: WidgetStateProperty.resolveWith(
-            (s) => s.contains(WidgetState.selected) ? AppColors.text : AppColors.muted),
-        side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
+          (s) => s.contains(WidgetState.selected) ? AppColors.onAction : AppColors.textSoft,
+        ),
+        side: const WidgetStatePropertyAll(BorderSide(color: AppColors.borderStrong)),
+        shape: const WidgetStatePropertyAll(StadiumBorder()),
         textStyle: const WidgetStatePropertyAll(
-            TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 14)),
+          TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 14),
+        ),
       ),
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? AppColors.onAccent : AppColors.muted),
+        (s) => s.contains(WidgetState.selected) ? AppColors.onAccent : AppColors.muted,
+      ),
       trackColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.selected) ? AppColors.accent : AppColors.surface3),
+        (s) => s.contains(WidgetState.selected) ? AppColors.accent : AppColors.surface3,
+      ),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
     ),
     chipTheme: ChipThemeData(
       backgroundColor: Colors.transparent,
-      selectedColor: AppColors.accentTint,
-      side: const BorderSide(color: AppColors.borderStrong),
+      selectedColor: AppColors.action,
+      side: WidgetStateBorderSide.resolveWith(
+        (s) => s.contains(WidgetState.selected)
+            ? const BorderSide(color: AppColors.action)
+            : const BorderSide(color: AppColors.borderStrong),
+      ),
       shape: const StadiumBorder(),
-      labelStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 14),
+      labelStyle: const TextStyle(
+        fontFamily: AppFonts.body,
+        fontWeight: FontWeight.w600,
+        fontSize: 14,
+        color: AppColors.textSoft,
+      ),
+      secondaryLabelStyle: const TextStyle(
+        fontFamily: AppFonts.body,
+        fontWeight: FontWeight.w700,
+        fontSize: 14,
+        color: AppColors.onAction,
+      ),
       showCheckmark: false,
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     ),
@@ -196,7 +227,7 @@ ThemeData buildTheme() {
       surfaceTintColor: Colors.transparent,
       elevation: 12,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         side: const BorderSide(color: AppColors.borderStrong),
       ),
       textStyle: const TextStyle(fontFamily: AppFonts.body, color: AppColors.text, fontSize: 14),
@@ -217,10 +248,7 @@ ThemeData buildTheme() {
       width: 520,
     ),
     tooltipTheme: TooltipThemeData(
-      decoration: BoxDecoration(
-        color: AppColors.surface3,
-        borderRadius: BorderRadius.circular(8),
-      ),
+      decoration: BoxDecoration(color: AppColors.surface3, borderRadius: BorderRadius.circular(8)),
       textStyle: const TextStyle(fontFamily: AppFonts.body, color: AppColors.text, fontSize: 12),
       waitDuration: const Duration(milliseconds: 500),
     ),
@@ -238,10 +266,12 @@ ThemeData buildTheme() {
       thickness: WidgetStateProperty.all(6),
       radius: const Radius.circular(3),
     ),
-    pageTransitionsTheme: const PageTransitionsTheme(builders: {
-      TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
-      TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
-      TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
-    }),
+    pageTransitionsTheme: const PageTransitionsTheme(
+      builders: {
+        TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+        TargetPlatform.macOS: FadeForwardsPageTransitionsBuilder(),
+      },
+    ),
   );
 }

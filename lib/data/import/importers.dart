@@ -68,15 +68,15 @@ class _Batch {
   /// Registers a category and returns its key.
   String category(ContentKind kind, String extId, String name) {
     final key = '${kind.db}|$extId';
-    categories.putIfAbsent(
-        key, () => (kind: kind, extId: extId, name: name, position: _catPos++));
+    categories.putIfAbsent(key, () => (kind: kind, extId: extId, name: name, position: _catPos++));
     return key;
   }
 
   void write(Database db, int sourceId, ProgressSink progress) {
     final catIds = <String, int>{};
     final catStmt = db.prepare(
-        'INSERT INTO categories (source_id, kind, ext_id, name, position) VALUES (?, ?, ?, ?, ?)');
+      'INSERT INTO categories (source_id, kind, ext_id, name, position) VALUES (?, ?, ?, ?, ?)',
+    );
     for (final e in categories.entries) {
       catStmt.execute([sourceId, e.value.kind.db, e.value.extId, e.value.name, e.value.position]);
       catIds[e.key] = db.lastInsertRowId;
@@ -97,20 +97,24 @@ class _Batch {
     }
 
     insertAll(
-        'INSERT INTO channels (source_id, ext_id, category_id, name, search, logo, url, epg_id, number, catchup_days, position) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        channels);
+      'INSERT INTO channels (source_id, ext_id, category_id, name, search, logo, url, epg_id, number, catchup_days, position) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      channels,
+    );
     insertAll(
-        'INSERT INTO movies (source_id, ext_id, category_id, name, search, poster, rating, year, added, container, url, position) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        movies);
+      'INSERT INTO movies (source_id, ext_id, category_id, name, search, poster, rating, year, added, container, url, position) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      movies,
+    );
     insertAll(
-        'INSERT INTO series (source_id, ext_id, category_id, name, search, poster, backdrop, plot, genre, rating, year, added, position) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        series);
+      'INSERT INTO series (source_id, ext_id, category_id, name, search, poster, backdrop, plot, genre, rating, year, added, position) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      series,
+    );
     final epStmt = db.prepare(
-        'INSERT INTO episodes (source_id, series_ext, ext_id, season, episode, title, plot, image, duration_s, container, url, added) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+      'INSERT INTO episodes (source_id, series_ext, ext_id, season, episode, title, plot, image, duration_s, container, url, added) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    );
     for (final r in episodes) {
       epStmt.execute([sourceId, ...r]);
     }
@@ -118,8 +122,14 @@ class _Batch {
   }
 }
 
-void _commit(Database db, int sourceId, _Batch batch, ProgressSink progress,
-    {String? discoveredEpg, Map<String, Object?>? account}) {
+void _commit(
+  Database db,
+  int sourceId,
+  _Batch batch,
+  ProgressSink progress, {
+  String? discoveredEpg,
+  Map<String, Object?>? account,
+}) {
   progress('Enregistrement', 0);
   db.execute('BEGIN IMMEDIATE');
   try {
@@ -168,15 +178,31 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
         case M3uKind.live:
           final cat = batch.category(ContentKind.live, group, group);
           batch.channels.add([
-            uniqueId(e.url), cat, e.name, searchKey(e.name), e.logo, e.url, e.tvgId,
+            uniqueId(e.url),
+            cat,
+            e.name,
+            searchKey(e.name),
+            e.logo,
+            e.url,
+            e.tvgId,
             asInt(e.attr('tvg-chno') ?? e.attr('channel-number')),
-            asInt(e.attr('catchup-days')) ?? 0, batch.channels.length,
+            asInt(e.attr('catchup-days')) ?? 0,
+            batch.channels.length,
           ]);
         case M3uKind.movie:
           final cat = batch.category(ContentKind.movie, group, group);
           batch.movies.add([
-            uniqueId(e.url), cat, e.name, searchKey(e.name), e.logo, null,
-            yearFromTitle(e.name), null, urlExtension(e.url), e.url, batch.movies.length,
+            uniqueId(e.url),
+            cat,
+            e.name,
+            searchKey(e.name),
+            e.logo,
+            null,
+            yearFromTitle(e.name),
+            null,
+            urlExtension(e.url),
+            e.url,
+            batch.movies.length,
           ]);
         case M3uKind.episode:
           final info = parseEpisode(e.name)!;
@@ -187,13 +213,32 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
             seriesByKey[key] = s;
             final cat = batch.category(ContentKind.series, group, group);
             batch.series.add([
-              s.extId, cat, info.seriesName, searchKey(info.seriesName), e.logo, null, null,
-              null, null, yearFromTitle(info.seriesName), null, s.position,
+              s.extId,
+              cat,
+              info.seriesName,
+              searchKey(info.seriesName),
+              e.logo,
+              null,
+              null,
+              null,
+              null,
+              yearFromTitle(info.seriesName),
+              null,
+              s.position,
             ]);
           }
           batch.episodes.add([
-            s.extId, uniqueId(e.url), info.season, info.episode, e.name, null, e.logo, null,
-            urlExtension(e.url), e.url, null,
+            s.extId,
+            uniqueId(e.url),
+            info.season,
+            info.episode,
+            e.name,
+            null,
+            e.logo,
+            null,
+            urlExtension(e.url),
+            e.url,
+            null,
           ]);
       }
     });
@@ -208,12 +253,16 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
       if (!file.existsSync()) throw NetException('Fichier introuvable : $path');
       bytes = file.openRead();
     } else {
-      bytes = await openGet(client, Uri.parse(location),
-          userAgent: source.userAgent, timeout: const Duration(seconds: 60));
+      bytes = await openGet(
+        client,
+        Uri.parse(location),
+        userAgent: source.userAgent,
+        timeout: const Duration(seconds: 60),
+      );
     }
-    await for (final line in gunzipIfNeeded(bytes)
-        .transform(const Utf8Decoder(allowMalformed: true))
-        .transform(const LineSplitter())) {
+    await for (final line in gunzipIfNeeded(
+      bytes,
+    ).transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter())) {
       parser.addLine(line);
     }
     if (count == 0) {
@@ -221,8 +270,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
     }
     progress('Analyse', count);
     _commit(db, sourceId, batch, progress, discoveredEpg: parser.epgUrl);
-    return ContentImportResult(
-        live: batch.channels.length, movies: batch.movies.length, series: batch.series.length);
+    return ContentImportResult(live: batch.channels.length, movies: batch.movies.length, series: batch.series.length);
   } finally {
     client.close(force: true);
     db.close();
@@ -244,7 +292,10 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
     progress('Téléchargement', 0);
     final warnings = <String>[];
     Future<List<Map<String, Object?>>> safe(
-        Future<List<Map<String, Object?>>> f, String what, {bool required = false}) async {
+      Future<List<Map<String, Object?>>> f,
+      String what, {
+      bool required = false,
+    }) async {
       try {
         return await f;
       } catch (e) {
@@ -300,9 +351,16 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
       final name = asString(s['name']) ?? 'Chaîne $id';
       final archive = asInt(s['tv_archive']) == 1 ? (asInt(s['tv_archive_duration']) ?? 0) : 0;
       batch.channels.add([
-        id, catKey(ContentKind.live, s['category_id']), name, searchKey(name),
-        asString(s['stream_icon']), null, asString(s['epg_channel_id']), asInt(s['num']),
-        archive, batch.channels.length,
+        id,
+        catKey(ContentKind.live, s['category_id']),
+        name,
+        searchKey(name),
+        asString(s['stream_icon']),
+        null,
+        asString(s['epg_channel_id']),
+        asInt(s['num']),
+        archive,
+        batch.channels.length,
       ]);
     }
     for (final m in results[3]) {
@@ -310,10 +368,17 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
       if (id == null || !seen.add('m$id')) continue;
       final name = asString(m['name']) ?? 'Film $id';
       batch.movies.add([
-        id, catKey(ContentKind.movie, m['category_id']), name, searchKey(name),
-        asString(m['stream_icon']), parseRating(m),
-        asInt(m['year']) ?? yearFromTitle(name), asInt(m['added']),
-        asString(m['container_extension']), null, batch.movies.length,
+        id,
+        catKey(ContentKind.movie, m['category_id']),
+        name,
+        searchKey(name),
+        asString(m['stream_icon']),
+        parseRating(m),
+        asInt(m['year']) ?? yearFromTitle(name),
+        asInt(m['added']),
+        asString(m['container_extension']),
+        null,
+        batch.movies.length,
       ]);
     }
     for (final s in results[5]) {
@@ -326,9 +391,17 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
           ? asString((s['backdrop_path'] as List).first)
           : asString(s['backdrop_path']);
       batch.series.add([
-        id, catKey(ContentKind.series, s['category_id']), name, searchKey(name),
-        asString(s['cover']), backdrop, asString(s['plot']), asString(s['genre']),
-        parseRating(s), year ?? yearFromTitle(name), asInt(s['last_modified']),
+        id,
+        catKey(ContentKind.series, s['category_id']),
+        name,
+        searchKey(name),
+        asString(s['cover']),
+        backdrop,
+        asString(s['plot']),
+        asString(s['genre']),
+        parseRating(s),
+        year ?? yearFromTitle(name),
+        asInt(s['last_modified']),
         batch.series.length,
       ]);
     }
@@ -388,15 +461,13 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     progress('Guide TV', 0);
     final Stream<List<int>> bytes;
     if (url.startsWith(RegExp(r'https?://', caseSensitive: false))) {
-      bytes = await openGet(client, Uri.parse(url),
-          userAgent: source.userAgent, timeout: const Duration(seconds: 90));
+      bytes = await openGet(client, Uri.parse(url), userAgent: source.userAgent, timeout: const Duration(seconds: 90));
     } else {
       final file = File(url.startsWith('file://') ? Uri.parse(url).toFilePath() : url);
       if (!file.existsSync()) throw NetException('Fichier EPG introuvable : ${file.path}');
       bytes = file.openRead();
     }
-    await for (final chunk
-        in gunzipIfNeeded(bytes).transform(const Utf8Decoder(allowMalformed: true))) {
+    await for (final chunk in gunzipIfNeeded(bytes).transform(const Utf8Decoder(allowMalformed: true))) {
       parser.add(chunk);
     }
     parser.close();
@@ -407,16 +478,16 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       db.execute('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
       db.execute('DELETE FROM epg_channels WHERE source_id = ?', [sourceId]);
       final p = db.prepare(
-          'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description) '
-          'VALUES (?, ?, ?, ?, ?, ?)');
+        'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description) '
+        'VALUES (?, ?, ?, ?, ?, ?)',
+      );
       var i = 0;
       for (final row in programmes) {
         p.execute([sourceId, ...row]);
         if (++i % 5000 == 0) progress('Enregistrement', i);
       }
       p.close();
-      final c = db.prepare(
-          'INSERT OR IGNORE INTO epg_channels (source_id, name_key, epg_id) VALUES (?, ?, ?)');
+      final c = db.prepare('INSERT OR IGNORE INTO epg_channels (source_id, name_key, epg_id) VALUES (?, ?, ?)');
       channelNames.forEach((key, id) => c.execute([sourceId, key, id]));
       c.close();
       db.execute('UPDATE sources SET epg_updated_at = ? WHERE id = ?', [now, sourceId]);

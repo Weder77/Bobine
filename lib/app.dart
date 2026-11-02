@@ -36,8 +36,7 @@ class _RootGate extends StatelessWidget {
     final s = AppScope.of(context);
     return ListenableBuilder(
       listenable: Listenable.merge([s.settings, s.library]),
-      builder: (context, _) =>
-          s.activeSource == null ? const OnboardingScreen() : const AppShell(),
+      builder: (context, _) => s.activeSource == null ? const OnboardingScreen() : const AppShell(),
     );
   }
 }
@@ -48,22 +47,24 @@ class StartupErrorApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
-        home: Scaffold(
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.error_outline, size: 48, color: AppColors.live),
-                const SizedBox(height: 16),
-                const Text('Lumen n\'a pas pu démarrer',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                SelectableText(error, style: const TextStyle(color: AppColors.muted)),
-              ]),
-            ),
+    debugShowCheckedModeBanner: false,
+    theme: buildTheme(),
+    home: Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.error_outline, size: 48, color: AppColors.live),
+              const SizedBox(height: 16),
+              const Text('Lumen n\'a pas pu démarrer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              SelectableText(error, style: const TextStyle(color: AppColors.muted)),
+            ],
           ),
         ),
-      );
+      ),
+    ),
+  );
 }

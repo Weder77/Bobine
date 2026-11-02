@@ -53,12 +53,24 @@ final class _DataBlob extends Struct {
   external Pointer<Uint8> pbData;
 }
 
-typedef _CryptNative = Int32 Function(Pointer<_DataBlob> dataIn, Pointer<Void> description,
-    Pointer<_DataBlob> entropy, Pointer<Void> reserved, Pointer<Void> prompt, Uint32 flags,
-    Pointer<_DataBlob> dataOut);
-typedef _CryptDart = int Function(Pointer<_DataBlob> dataIn, Pointer<Void> description,
-    Pointer<_DataBlob> entropy, Pointer<Void> reserved, Pointer<Void> prompt, int flags,
-    Pointer<_DataBlob> dataOut);
+typedef _CryptNative = Int32 Function(
+  Pointer<_DataBlob> dataIn,
+  Pointer<Void> description,
+  Pointer<_DataBlob> entropy,
+  Pointer<Void> reserved,
+  Pointer<Void> prompt,
+  Uint32 flags,
+  Pointer<_DataBlob> dataOut,
+);
+typedef _CryptDart = int Function(
+  Pointer<_DataBlob> dataIn,
+  Pointer<Void> description,
+  Pointer<_DataBlob> entropy,
+  Pointer<Void> reserved,
+  Pointer<Void> prompt,
+  int flags,
+  Pointer<_DataBlob> dataOut,
+);
 
 /// Minimal DPAPI binding (crypt32.dll + LocalFree from kernel32.dll).
 class _Dpapi {

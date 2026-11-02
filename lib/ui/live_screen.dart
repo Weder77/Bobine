@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,6 +16,8 @@ import 'epg_grid.dart';
 import 'launch.dart';
 import 'shell.dart';
 import 'widgets/common.dart';
+import 'widgets/live_card.dart';
+import 'widgets/net_image.dart';
 
 class LiveScreen extends StatefulWidget {
   const LiveScreen({super.key, required this.active, this.guide = false});
@@ -49,8 +52,6 @@ class _LiveScreenState extends State<LiveScreen> {
   /// Xtream short-EPG fallback, with the time it was fetched.
   final Map<String, ({DateTime fetchedAt, List<Program> programs})> _shortEpg = {};
   final Set<String> _shortEpgLoading = {};
-
-  static const _rowHeight = 82.0;
 
   @override
   void initState() {
@@ -195,11 +196,12 @@ class _LiveScreenState extends State<LiveScreen> {
   void _ensureVisible(int i) {
     if (!_listScroll.hasClients) return;
     final pos = _listScroll.position;
-    final top = i * _rowHeight;
-    if (top < pos.pixels) {
-      _listScroll.jumpTo(top);
-    } else if (top + _rowHeight > pos.pixels + pos.viewportDimension) {
-      _listScroll.jumpTo((top + _rowHeight - pos.viewportDimension).clamp(0, pos.maxScrollExtent));
+    final top = _gridTop + (i ~/ _columns) * _rowExtent;
+    final bottom = top + _rowExtent;
+    if (top < pos.pixels + 20) {
+      _listScroll.jumpTo((top - 20).clamp(0, pos.maxScrollExtent));
+    } else if (bottom > pos.pixels + pos.viewportDimension) {
+      _listScroll.jumpTo((bottom - pos.viewportDimension).clamp(0, pos.maxScrollExtent));
     }
   }
 
@@ -223,14 +225,18 @@ class _LiveScreenState extends State<LiveScreen> {
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
-    if (k == LogicalKeyboardKey.arrowDown) {
+    if (k == LogicalKeyboardKey.arrowRight) {
       _select(_selected + 1);
-    } else if (k == LogicalKeyboardKey.arrowUp) {
+    } else if (k == LogicalKeyboardKey.arrowLeft) {
       _select(_selected - 1);
+    } else if (k == LogicalKeyboardKey.arrowDown) {
+      _select((_selected + _columns).clamp(0, _visible.length - 1));
+    } else if (k == LogicalKeyboardKey.arrowUp) {
+      _select((_selected - _columns).clamp(0, _visible.length - 1));
     } else if (k == LogicalKeyboardKey.pageDown) {
-      _select((_selected + 10).clamp(0, _visible.length - 1));
+      _select((_selected + _columns * 3).clamp(0, _visible.length - 1));
     } else if (k == LogicalKeyboardKey.pageUp) {
-      _select((_selected - 10).clamp(0, _visible.length - 1));
+      _select((_selected - _columns * 3).clamp(0, _visible.length - 1));
     } else if (k == LogicalKeyboardKey.enter || k == LogicalKeyboardKey.numpadEnter) {
       _fullscreen();
     } else {
@@ -285,325 +291,401 @@ class _LiveScreenState extends State<LiveScreen> {
 
   // --------------------------------------------------------------- live
 
+  /// Grid metrics of the last layout (keyboard navigation, scrolling).
+  int _columns = 4;
+  double _rowExtent = 240;
+  double _gridTop = 0;
+
+  /// Categories shown as chips; all of them are in the menu.
+  List<CategoryEntry> get _chipEntries {
+    final chips = <CategoryEntry>[
+      ..._entries.where((e) => !e.id.startsWith('c:')),
+      ..._entries.where((e) => e.id.startsWith('c:')).take(6),
+    ];
+    if (!chips.any((e) => e.id == _cat)) {
+      final current = _entries.where((e) => e.id == _cat).firstOrNull;
+      if (current != null) chips.add(current);
+    }
+    return chips;
+  }
+
   Widget _buildLive() {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        CategoryPane(entries: _entries, selected: _cat, onSelect: _selectCategory),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.only(right: 48, top: 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 5, child: _buildListColumn()),
-                const SizedBox(width: 28),
-                Expanded(flex: 6, child: _buildPreview()),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildListColumn() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(_catLabel, maxLines: 1, overflow: TextOverflow.ellipsis, style: displayStyle(30)),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${formatCount(_visible.length)} chaînes · ↑ ↓ pour naviguer, Entrée pour le plein écran',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted, fontSize: 13),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            OutlinedButton.icon(
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 42),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                backgroundColor: Colors.transparent,
-                side: const BorderSide(color: AppColors.borderStrong),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-              onPressed: () => ShellNavigation.of(context)?.goTo(ShellTab.guide),
-              icon: const Icon(Icons.calendar_view_week_rounded, size: 18),
-              label: const Text('Guide TV'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          key: ValueKey('filter-$_cat'),
-          onChanged: (v) => setState(() {
-            _filter = v;
-            _applyFilter();
-          }),
-          decoration: const InputDecoration(
-            hintText: 'Rechercher une chaîne',
-            prefixIcon: Icon(Icons.search_rounded, size: 18),
-            contentPadding: EdgeInsets.symmetric(vertical: 11),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: _visible.isEmpty
-              ? EmptyState(
-                  icon: _cat == 'fav' ? Icons.star_outline_rounded : Icons.tv_off_rounded,
-                  title: _cat == 'fav' ? 'Aucune chaîne favorite' : 'Aucune chaîne',
-                  message: _cat == 'fav' ? "Clique sur l'étoile d'une chaîne pour l'ajouter ici." : null,
-                )
-              : _buildList(),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildList() {
+    final heroHeight = (MediaQuery.sizeOf(context).height * 0.5).clamp(380.0, 520.0);
     return Focus(
       focusNode: _listFocus,
       autofocus: true,
       onKeyEvent: _onKey,
-      child: Scrollbar(
-        controller: _listScroll,
-        child: ListView.builder(
-          controller: _listScroll,
-          padding: const EdgeInsets.only(right: 10, bottom: 24),
-          itemExtent: _rowHeight,
-          itemCount: _visible.length,
-          itemBuilder: (context, i) {
-            final c = _visible[i];
-            return _ChannelTile(
-              channel: c,
-              index: i,
-              selected: i == _selected,
-              favorite: _favs.contains(c.extId),
-              now: _s.epg.now(c),
-              next: _s.epg.next(c),
-              onTap: () {
-                _listFocus.requestFocus();
-                _select(i, immediate: true);
-              },
-              onDoubleTap: () => _fullscreen(i),
-              onFavorite: () => _toggleFav(c),
-            );
-          },
-        ),
+      child: LayoutBuilder(
+        builder: (context, box) {
+          const side = 48.0, gap = 14.0, minCard = 270.0;
+          final width = box.maxWidth - side * 2;
+          _columns = ((width + gap) / (minCard + gap)).floor().clamp(1, 8);
+          final cardW = (width - gap * (_columns - 1)) / _columns;
+          _rowExtent = cardW * 9 / 16 + 4 + 56 + 22;
+          _gridTop = heroHeight + 8 + 92;
+          return Scrollbar(
+            controller: _listScroll,
+            child: CustomScrollView(
+              controller: _listScroll,
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(side, 8, side, 0),
+                    child: SizedBox(height: heroHeight, child: _buildHero()),
+                  ),
+                ),
+                SliverToBoxAdapter(child: SizedBox(height: 92, child: _buildChips())),
+                if (_visible.isEmpty)
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: EmptyState(
+                        icon: _cat == 'fav' ? Icons.star_outline_rounded : Icons.tv_off_rounded,
+                        title: _cat == 'fav' ? 'Aucune chaîne favorite' : 'Aucune chaîne',
+                        message: _cat == 'fav' ? "Ajoute une chaîne avec l'étoile pour la retrouver ici." : null,
+                      ),
+                    ),
+                  )
+                else
+                  SliverPadding(
+                    padding: const EdgeInsets.fromLTRB(side, 0, side, 48),
+                    sliver: SliverGrid(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: _columns,
+                        mainAxisExtent: _rowExtent - 22,
+                        crossAxisSpacing: gap,
+                        mainAxisSpacing: 22,
+                      ),
+                      delegate: SliverChildBuilderDelegate(childCount: _visible.length, (context, i) {
+                        final c = _visible[i];
+                        return LiveCard(
+                          channel: c,
+                          width: cardW,
+                          selected: i == _selected,
+                          favorite: _favs.contains(c.extId),
+                          onTap: () {
+                            _listFocus.requestFocus();
+                            _select(i, immediate: true);
+                          },
+                          onDoubleTap: () => _fullscreen(i),
+                        );
+                      }),
+                    ),
+                  ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildPreview() {
+  Widget _buildChips() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(48, 26, 48, 22),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final e in _chipEntries) ...[
+                    _GuideChip(
+                      label: e.count == null ? e.label : '${e.label} · ${formatCount(e.count!)}',
+                      selected: e.id == _cat,
+                      onTap: () => _selectCategory(e.id),
+                    ),
+                    const SizedBox(width: 10),
+                  ],
+                  _categoryMenu(),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 260,
+            child: TextField(
+              key: ValueKey('filter-$_cat'),
+              onChanged: (v) => setState(() {
+                _filter = v;
+                _applyFilter();
+              }),
+              decoration: InputDecoration(
+                hintText: 'Rechercher une chaîne',
+                prefixIcon: const Icon(Icons.search_rounded, size: 19),
+                contentPadding: const EdgeInsets.symmetric(vertical: 11),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(999)),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  borderSide: const BorderSide(color: AppColors.borderStrong),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(999),
+                  borderSide: const BorderSide(color: AppColors.text, width: 1.4),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _categoryMenu() => PopupMenuButton<String>(
+    tooltip: 'Toutes les catégories',
+    onSelected: _selectCategory,
+    constraints: const BoxConstraints(maxHeight: 480, minWidth: 260),
+    itemBuilder: (_) => [
+      for (final e in _entries)
+        PopupMenuItem(
+          value: e.id,
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  e.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontWeight: e.id == _cat ? FontWeight.w700 : FontWeight.w500),
+                ),
+              ),
+              if (e.count != null) Text('${e.count}', style: const TextStyle(color: AppColors.faint, fontSize: 13)),
+            ],
+          ),
+        ),
+    ],
+    child: const _GuideChip(label: 'Toutes les catégories', selected: false, trailing: true),
+  );
+
+  /// The selected channel, large: live preview behind, programme in poster
+  /// capitals, actions, and what comes next.
+  Widget _buildHero() {
     final c = _current;
-    if (c == null) return const SizedBox.shrink();
+    if (c == null) {
+      return Container(
+        decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
+        alignment: Alignment.center,
+        child: Text(_catLabel, style: posterStyle(64)),
+      );
+    }
     final programs = _programsFor(c);
     final now = DateTime.now();
     final current = programs.where((p) => p.isLiveAt(now)).firstOrNull;
-    final upcoming = programs.where((p) => p.start.isAfter(now)).take(8).toList();
+    final upcoming = programs.where((p) => p.start.isAfter(now)).take(3).toList();
     final fav = _favs.contains(c.extId);
+    final titleSize = (MediaQuery.sizeOf(context).width * 0.058).clamp(52.0, 92.0);
 
-    return ListView(
-      padding: const EdgeInsets.only(bottom: 24),
-      children: [
-        AspectRatio(
-          aspectRatio: 16 / 9,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: AppColors.border),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: ValueListenableBuilder(
-              valueListenable: _s.player.current,
-              builder: (context, item, _) {
-                final playing = item != null && item.isLive && item.extId == c.extId;
-                return GestureDetector(
-                  onTap: playing ? null : () => _select(_selected, immediate: true),
-                  onDoubleTap: () => _fullscreen(),
-                  child: Stack(
-                    fit: StackFit.expand,
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(20),
+      child: ValueListenableBuilder(
+        valueListenable: _s.player.current,
+        builder: (context, item, _) {
+          final playing = item != null && item.isLive && item.extId == c.extId;
+          return GestureDetector(
+            onDoubleTap: () => _fullscreen(),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const ColoredBox(color: AppColors.surface),
+                if (playing)
+                  Video(
+                    controller: _s.player.video,
+                    controls: NoVideoControls,
+                    fit: BoxFit.cover,
+                    fill: Colors.black,
+                    subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+                  )
+                else ...[
+                  if (c.logo != null)
+                    ImageFiltered(
+                      imageFilter: ImageFilter.blur(sigmaX: 50, sigmaY: 50),
+                      child: Opacity(opacity: 0.5, child: NetImage(c.logo, decodeWidth: 160)),
+                    ),
+                  Align(
+                    alignment: const Alignment(0.55, -0.1),
+                    child: ChannelLogo(name: c.name, url: c.logo, size: 150),
+                  ),
+                ],
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xE60A0A0C), Color(0x800A0A0C), Color(0x000A0A0C)],
+                      stops: [0, 0.38, 0.7],
+                    ),
+                  ),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment(0, 0),
+                      colors: [Color(0xCC0A0A0C), Color(0x000A0A0C)],
+                    ),
+                  ),
+                ),
+                if (playing)
+                  StreamBuilder<bool>(
+                    stream: _s.player.player.stream.buffering,
+                    builder: (context, snap) => snap.data == true
+                        ? const Center(child: CircularProgressIndicator(color: AppColors.text))
+                        : const SizedBox.shrink(),
+                  ),
+                Positioned(
+                  left: 44,
+                  right: 360,
+                  bottom: 40,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (playing)
-                        Video(
-                          controller: _s.player.video,
-                          controls: NoVideoControls,
-                          fill: Colors.black,
-                          subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+                      Row(
+                        children: [
+                          ChannelLogo(name: c.name, url: c.logo, size: 56),
+                          const SizedBox(width: 14),
+                          Flexible(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '${c.number ?? _selected + 1} · ${c.name}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const LiveBadge(),
+                                    if (c.catchupDays > 0) ...[
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        'Replay ${c.catchupDays} jours',
+                                        style: const TextStyle(fontSize: 13, color: AppColors.textSoft),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        current?.title ?? c.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: posterStyle(
+                          titleSize,
+                          shadows: const [Shadow(color: Color(0x80000000), blurRadius: 24)],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (current != null)
+                        Row(
+                          children: [
+                            Text(formatClock(current.start), style: _timeStyle),
+                            const SizedBox(width: 10),
+                            SizedBox(
+                              width: 240,
+                              child: ProgressLine(
+                                current.progressAt(now),
+                                color: AppColors.live,
+                                track: const Color(0x40FFFFFF),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Text(formatClock(current.stop), style: _timeStyle),
+                            const SizedBox(width: 10),
+                            Text(
+                              '· encore ${formatRuntime(current.stop.difference(now).inSeconds)}',
+                              style: const TextStyle(fontSize: 14, color: AppColors.muted),
+                            ),
+                          ],
                         )
                       else
-                        Center(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              ChannelLogo(name: c.name, url: c.logo, size: 72),
-                              const SizedBox(height: 14),
-                              const Text("Clique pour l'aperçu", style: TextStyle(color: AppColors.muted)),
-                            ],
+                        const Text('Pas de programme disponible', style: TextStyle(color: AppColors.muted)),
+                      const SizedBox(height: 20),
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          FilledButton.icon(
+                            onPressed: () => _fullscreen(),
+                            icon: const Icon(Icons.play_arrow_rounded, size: 26),
+                            label: const Text('Plein écran'),
                           ),
-                        ),
-                      if (playing) ...[
-                        StreamBuilder<bool>(
-                          stream: _s.player.player.stream.buffering,
-                          builder: (context, snap) => snap.data == true
-                              ? const Center(child: CircularProgressIndicator())
-                              : const SizedBox.shrink(),
-                        ),
-                        const Positioned(top: 14, left: 14, child: LiveBadge()),
-                        Positioned(
-                          top: 14,
-                          right: 14,
-                          child: StreamBuilder<int?>(
-                            stream: _s.player.player.stream.height,
-                            initialData: _s.player.player.state.height,
-                            builder: (context, snap) => (snap.data ?? 0) <= 0
-                                ? const SizedBox.shrink()
-                                : Pill(
-                                    '${snap.data}p',
-                                    color: AppColors.bg.withValues(alpha: 0.72),
-                                    textColor: AppColors.textSoft,
-                                  ),
+                          if (!playing)
+                            OutlinedButton.icon(
+                              onPressed: () => _select(_selected, immediate: true),
+                              icon: const Icon(Icons.visibility_outlined, size: 21),
+                              label: const Text('Aperçu'),
+                            ),
+                          OutlinedButton.icon(
+                            onPressed: () => ShellNavigation.of(context)?.goTo(ShellTab.guide),
+                            icon: const Icon(Icons.calendar_view_week_rounded, size: 21),
+                            label: const Text('Guide TV'),
                           ),
-                        ),
-                      ],
-                      Positioned(
-                        right: 14,
-                        bottom: 14,
-                        child: IconButton(
-                          tooltip: 'Plein écran (Entrée)',
-                          onPressed: () => _fullscreen(),
-                          style: IconButton.styleFrom(backgroundColor: AppColors.bg.withValues(alpha: 0.72)),
-                          icon: const Icon(Icons.fullscreen_rounded, color: AppColors.text),
-                        ),
+                          RoundAction(
+                            icon: fav ? Icons.star_rounded : Icons.star_outline_rounded,
+                            tooltip: fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
+                            color: fav ? AppColors.accent : null,
+                            onPressed: () => _toggleFav(c),
+                          ),
+                        ],
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        Row(
-          children: [
-            ChannelLogo(name: c.name, url: c.logo, size: 56),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(c.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: displayStyle(24)),
-                  const SizedBox(height: 2),
-                  Text(
-                    [
-                      'Chaîne ${c.number ?? _selected + 1}',
-                      if (c.catchupDays > 0) 'Replay ${c.catchupDays} jours',
-                    ].join(' · '),
-                    style: const TextStyle(fontSize: 13, color: AppColors.muted),
-                  ),
-                ],
-              ),
-            ),
-            IconButton.outlined(
-              tooltip: fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
-              onPressed: () => _toggleFav(c),
-              style: IconButton.styleFrom(
-                minimumSize: const Size(48, 48),
-                side: const BorderSide(color: AppColors.borderStrong),
-              ),
-              icon: Icon(
-                fav ? Icons.star_rounded : Icons.star_outline_rounded,
-                color: fav ? AppColors.accent : AppColors.text,
-              ),
-            ),
-            const SizedBox(width: 10),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 48)),
-              onPressed: () => _fullscreen(),
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Regarder'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        if (current != null)
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'MAINTENANT · ${formatClock(current.start)} – ${formatClock(current.stop)}',
-                  style: labelStyle(color: AppColors.accent),
                 ),
-                const SizedBox(height: 8),
-                Text(current.title, style: displayStyle(20)),
-                const SizedBox(height: 12),
-                ProgressLine(current.progressAt(now)),
-                if (current.description != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    current.description!,
-                    maxLines: 5,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.textSoft, height: 1.5),
-                  ),
-                ],
-              ],
-            ),
-          )
-        else
-          const Text('Aucune information de programme pour cette chaîne.', style: TextStyle(color: AppColors.muted)),
-        if (upcoming.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          Text('À SUIVRE', style: labelStyle()),
-          const SizedBox(height: 4),
-          for (var i = 0; i < upcoming.length; i++)
-            Tooltip(
-              message: upcoming[i].description ?? '',
-              waitDuration: const Duration(milliseconds: 700),
-              child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                decoration: BoxDecoration(
-                  border: i == upcoming.length - 1 ? null : const Border(bottom: BorderSide(color: Color(0xFF16191F))),
-                ),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 60,
-                      child: Text(
-                        formatClock(upcoming[i].start),
-                        style: const TextStyle(color: AppColors.muted, fontFeatures: tabularFigures),
+                if (upcoming.isNotEmpty)
+                  Positioned(
+                    right: 22,
+                    bottom: 22,
+                    width: 300,
+                    child: Container(
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xB80A0A0C),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('À SUIVRE', style: labelStyle()),
+                          const SizedBox(height: 8),
+                          for (final p in upcoming)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              child: Row(
+                                children: [
+                                  SizedBox(width: 52, child: Text(formatClock(p.start), style: _timeStyle)),
+                                  Expanded(
+                                    child: Text(
+                                      p.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                    Expanded(child: Text(upcoming[i].title, maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ],
-                ),
-              ),
+                  ),
+              ],
             ),
-        ],
-      ],
+          );
+        },
+      ),
     );
   }
+
+  static const _timeStyle = TextStyle(fontSize: 14, color: AppColors.muted, fontFeatures: tabularFigures);
 
   // -------------------------------------------------------------- guide
 
@@ -674,7 +756,7 @@ class _LiveScreenState extends State<LiveScreen> {
                       padding: const EdgeInsets.all(3),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(999),
                         border: Border.all(color: AppColors.border),
                       ),
                       child: Row(
@@ -693,8 +775,7 @@ class _LiveScreenState extends State<LiveScreen> {
                     FilledButton(
                       style: FilledButton.styleFrom(
                         minimumSize: const Size(0, 42),
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 18),
                         textStyle: const TextStyle(
                           fontFamily: AppFonts.body,
                           fontWeight: FontWeight.w700,
@@ -748,9 +829,9 @@ class _GuideChip extends StatelessWidget {
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 15),
       decoration: BoxDecoration(
-        color: selected ? AppColors.accentTint : Colors.transparent,
+        color: selected ? AppColors.action : Colors.transparent,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: selected ? AppColors.accent : AppColors.borderStrong),
+        border: Border.all(color: selected ? AppColors.action : AppColors.borderStrong),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -759,8 +840,8 @@ class _GuideChip extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: selected ? AppColors.text : AppColors.textSoft,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              color: selected ? AppColors.onAction : AppColors.textSoft,
             ),
           ),
           if (trailing) ...[
@@ -790,10 +871,10 @@ class _DayButton extends StatelessWidget {
     button: true,
     selected: selected,
     child: Material(
-      color: selected ? AppColors.surface3 : Colors.transparent,
-      borderRadius: BorderRadius.circular(9),
+      color: selected ? AppColors.action : Colors.transparent,
+      borderRadius: BorderRadius.circular(999),
       child: InkWell(
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(999),
         onTap: onTap,
         child: Container(
           height: 34,
@@ -803,146 +884,12 @@ class _DayButton extends StatelessWidget {
             label,
             style: TextStyle(
               fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: selected ? AppColors.text : AppColors.muted,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+              color: selected ? AppColors.onAction : AppColors.muted,
             ),
           ),
         ),
       ),
     ),
   );
-}
-
-class _ChannelTile extends StatelessWidget {
-  const _ChannelTile({
-    required this.channel,
-    required this.index,
-    required this.selected,
-    required this.favorite,
-    required this.now,
-    required this.next,
-    required this.onTap,
-    required this.onDoubleTap,
-    required this.onFavorite,
-  });
-
-  final Channel channel;
-  final int index;
-  final bool selected;
-  final bool favorite;
-  final Program? now;
-  final Program? next;
-  final VoidCallback onTap;
-  final VoidCallback onDoubleTap;
-  final VoidCallback onFavorite;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = channel;
-    final t = DateTime.now();
-    final left = now?.stop.difference(t);
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: HoverBuilder(
-        builder: (context, hover) {
-          return GestureDetector(
-            onTap: onTap,
-            onDoubleTap: onDoubleTap,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              decoration: BoxDecoration(
-                color: selected ? AppColors.selected : (hover ? AppColors.surface : Colors.transparent),
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: selected ? AppColors.accent : Colors.transparent),
-              ),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 36,
-                    child: Text(
-                      '${c.number ?? index + 1}',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: selected ? AppColors.accent : AppColors.faint,
-                        fontFeatures: tabularFigures,
-                      ),
-                    ),
-                  ),
-                  ChannelLogo(name: c.name, url: c.logo, size: 48),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Flexible(
-                              flex: 0,
-                              child: Text(
-                                c.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                              ),
-                            ),
-                            if (now != null) ...[
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  now!.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontSize: 13, color: AppColors.muted),
-                                ),
-                              ),
-                            ] else
-                              const Spacer(),
-                          ],
-                        ),
-                        if (now != null) ...[
-                          const SizedBox(height: 6),
-                          ProgressLine(now!.progressAt(t), height: 3),
-                          if (next != null) ...[
-                            const SizedBox(height: 5),
-                            Text(
-                              'Ensuite ${formatClock(next!.start)} ${next!.title}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12, color: AppColors.faint),
-                            ),
-                          ],
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  if (hover || favorite)
-                    IconButton(
-                      visualDensity: VisualDensity.compact,
-                      tooltip: favorite ? 'Retirer des favoris' : 'Ajouter aux favoris',
-                      onPressed: onFavorite,
-                      icon: Icon(
-                        favorite ? Icons.star_rounded : Icons.star_outline_rounded,
-                        size: 20,
-                        color: favorite ? AppColors.accent : AppColors.muted,
-                      ),
-                    )
-                  else if (left != null)
-                    Text(
-                      formatRuntime(left.inSeconds < 60 ? 60 : left.inSeconds),
-                      style: const TextStyle(fontSize: 13, color: AppColors.muted, fontFeatures: tabularFigures),
-                    ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
 }

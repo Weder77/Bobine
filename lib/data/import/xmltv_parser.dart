@@ -5,8 +5,7 @@
 /// blocks and extracts the few fields we need.
 library;
 
-typedef ProgrammeCallback = void Function(
-    String channel, int start, int stop, String title, String? description);
+typedef ProgrammeCallback = void Function(String channel, int start, int stop, String title, String? description);
 typedef ChannelCallback = void Function(String id, List<String> displayNames);
 
 class XmltvParser {
@@ -60,7 +59,7 @@ class XmltvParser {
         return;
       }
       // Self-closing element: nothing useful inside.
-      if (s.codeUnitAt(openEnd - 1) == 0x2F /* / */) {
+      if (s.codeUnitAt(openEnd - 1) == 0x2F /* / */ ) {
         pos = openEnd + 1;
         continue;
       }
@@ -202,9 +201,7 @@ String decodeEntities(String s) {
       case 'nbsp':
         return ' ';
     }
-    final code = e.startsWith('#x')
-        ? int.tryParse(e.substring(2), radix: 16)
-        : int.tryParse(e.substring(1));
+    final code = e.startsWith('#x') ? int.tryParse(e.substring(2), radix: 16) : int.tryParse(e.substring(1));
     if (code == null || code > 0x10FFFF) return m.group(0)!;
     return String.fromCharCode(code);
   });
@@ -224,8 +221,7 @@ int? parseXmltvTime(String? v) {
   final rest = s.substring(hasSeconds ? 14 : 12).trim();
   final m = RegExp(r'^([+-])(\d{2}):?(\d{2})').firstMatch(rest);
   if (m != null) {
-    offsetSec = (int.parse(m.group(2)!) * 3600 + int.parse(m.group(3)!) * 60) *
-        (m.group(1) == '-' ? -1 : 1);
+    offsetSec = (int.parse(m.group(2)!) * 3600 + int.parse(m.group(3)!) * 60) * (m.group(1) == '-' ? -1 : 1);
   }
   final utc = DateTime.utc(year, month, day, hour, minute, second);
   return utc.millisecondsSinceEpoch ~/ 1000 - offsetSec;

@@ -30,7 +30,7 @@ class OnboardingScreen extends StatelessWidget {
                     children: [
                       const LumenMark(size: 44),
                       const SizedBox(width: 14),
-                      Text('LUMEN', style: displayStyle(26, weight: FontWeight.w800).copyWith(letterSpacing: 5.2)),
+                      Text('LUMEN', style: posterStyle(40).copyWith(letterSpacing: 6)),
                     ],
                   ),
                   const SizedBox(height: 36),

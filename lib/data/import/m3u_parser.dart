@@ -2,12 +2,7 @@
 library;
 
 class M3uEntry {
-  M3uEntry({
-    required this.name,
-    required this.url,
-    this.attrs = const {},
-    this.group,
-  });
+  M3uEntry({required this.name, required this.url, this.attrs = const {}, this.group});
   final String name;
   final String url;
   final Map<String, String> attrs;
@@ -34,10 +29,23 @@ class EpisodeInfo {
 
 final RegExp _attrRe = RegExp(r'''([A-Za-z0-9_\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,"']+))''');
 final RegExp _episodeRe = RegExp(
-    r'^(.*?)[\s\-_.:|(\[]*\b[Ss](\d{1,2})[\s\-_.]*[EeXx](\d{1,4})\b',
-    caseSensitive: false);
+  r'^(.*?)[\s\-_.:|(\[]*\b[Ss](\d{1,2})[\s\-_.]*[EeXx](\d{1,4})\b',
+  caseSensitive: false,
+);
 const Set<String> _vodExtensions = {
-  'mp4', 'mkv', 'avi', 'mov', 'wmv', 'm4v', 'webm', 'flv', 'mpg', 'mpeg', 'ogv', '3gp', 'divx',
+  'mp4',
+  'mkv',
+  'avi',
+  'mov',
+  'wmv',
+  'm4v',
+  'webm',
+  'flv',
+  'mpg',
+  'mpeg',
+  'ogv',
+  '3gp',
+  'divx',
 };
 
 /// Incremental parser: feed it lines with [addLine], read [entries] / callbacks.

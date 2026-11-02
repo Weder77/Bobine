@@ -84,7 +84,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     final year =
         _m.year?.toString() ??
         ((d?.releaseDate != null && d!.releaseDate!.length >= 4) ? d.releaseDate!.substring(0, 4) : null);
-    final meta = <String>[?year, if (d?.durationSec != null) formatRuntime(d!.durationSec), ?d?.genre];
+    final meta = <String>['Film', ?year, if (d?.durationSec != null) formatRuntime(d!.durationSec)];
     final image = d?.backdrop ?? _m.poster;
 
     final video = <String>[
@@ -103,13 +103,19 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     ];
 
     return DetailLayout(
-      breadcrumb: _category == null ? 'Films' : 'Films  ›  $_category',
+      breadcrumb: _category == null ? 'Films' : 'Films · $_category',
       backdrop: d?.backdrop,
       poster: d?.poster ?? _m.poster,
       title: _m.name,
       rating: rating,
       meta: meta,
       tags: d?.qualityTags ?? const [],
+      fields: [
+        if (d?.cast != null) ('Distribution', d!.cast!),
+        if (d?.director != null) ('Réalisation', d!.director!),
+        if (d?.genre != null) ('Genres', d!.genre!),
+        if (_category != null) ('Catégorie', _category!),
+      ],
       loading: _loading,
       progress: resumable ? p.fraction : null,
       progressLabel: resumable ? 'reste ${formatRuntime((p.duration - p.position).inSeconds)}' : null,
@@ -117,29 +123,21 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
         FilledButton.icon(
           style: FilledButton.styleFrom(minimumSize: const Size(0, 54)),
           onPressed: () => Launch.movie(context, _m, image: image),
-          icon: const Icon(Icons.play_arrow_rounded, size: 24),
+          icon: const Icon(Icons.play_arrow_rounded, size: 26),
           label: Text(resumable ? 'Reprendre à ${formatDuration(p.position)}' : 'Lecture'),
         ),
-        if (resumable)
-          OutlinedButton(
-            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54)),
-            onPressed: () => Launch.movie(context, _m, restart: true, image: image),
-            child: const Text('Depuis le début'),
-          ),
-        IconButton(
+        RoundAction(
+          icon: _fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
           tooltip: _fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
+          color: _fav ? AppColors.cueSeries : null,
           onPressed: () => _s.toggleFavorite(ContentKind.movie, _m.extId, _m.sourceId),
-          style: IconButton.styleFrom(
-            minimumSize: const Size(54, 54),
-            backgroundColor: Colors.white.withValues(alpha: 0.06),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          ),
-          icon: Icon(
-            _fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-            color: _fav ? AppColors.cueSeries : AppColors.text,
-          ),
         ),
+        if (resumable)
+          RoundAction(
+            icon: Icons.replay_rounded,
+            tooltip: 'Depuis le début',
+            onPressed: () => Launch.movie(context, _m, restart: true, image: image),
+          ),
       ],
       bottom: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,13 +162,13 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
             DetailSection(
               title: _category == null ? 'Dans la même catégorie' : 'Dans $_category',
               child: SizedBox(
-                height: 324,
+                height: 318,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   clipBehavior: Clip.none,
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   itemCount: _related.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 18),
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, i) {
                     final m = _related[i];
                     return PosterCard(
@@ -191,8 +189,6 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       ),
       children: [
         if (d?.plot != null) DetailParagraph(d!.plot!),
-        if (d?.director != null) DetailField('Réalisation', d!.director!),
-        if (d?.cast != null) DetailField('Avec', d!.cast!),
         if (p != null && p.finished)
           const Padding(
             padding: EdgeInsets.only(top: 8),

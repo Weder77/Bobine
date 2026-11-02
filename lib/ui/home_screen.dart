@@ -11,6 +11,7 @@ import '../services.dart';
 import 'launch.dart';
 import 'shell.dart';
 import 'widgets/common.dart';
+import 'widgets/live_card.dart';
 import 'widgets/net_image.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -86,9 +87,9 @@ class _HomeScreenState extends State<HomeScreen> {
       final isEpisode = p.kind == ContentKind.episode;
       items.add(
         _HeroItem(
-          kicker: isEpisode ? 'REPRENDRE · SÉRIE' : 'REPRENDRE · FILM',
+          kicker: isEpisode ? 'SÉRIE · REPRENDRE' : 'FILM · REPRENDRE',
           title: p.title,
-          meta: p.subtitle ?? '',
+          meta: [if (p.subtitle != null && p.subtitle!.isNotEmpty) p.subtitle!],
           image: p.image,
           landscape: true,
           progress: p.fraction,
@@ -101,12 +102,10 @@ class _HomeScreenState extends State<HomeScreen> {
     for (final m in _d.recentMovies.where((m) => m.poster != null).take(4 - items.length)) {
       items.add(
         _HeroItem(
-          kicker: 'NOUVEAU · FILM',
+          kicker: 'FILM · NOUVEAU',
           title: m.name,
-          meta: [
-            if (m.year != null) '${m.year}',
-            if (m.rating != null) '★ ${m.rating!.toStringAsFixed(1).replaceAll('.', ',')}',
-          ].join(' · '),
+          meta: ['Film', if (m.year != null) '${m.year}'],
+          rating: m.rating,
           image: m.poster,
           landscape: false,
           primaryLabel: 'Lecture',
@@ -159,25 +158,23 @@ class _HomeScreenState extends State<HomeScreen> {
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: ListView(
-        padding: const EdgeInsets.only(top: 8, bottom: 56),
+        padding: EdgeInsets.only(top: hero.isEmpty ? kTopBarHeight : 0, bottom: 64),
         children: [
           if (hero.isNotEmpty) _HeroCarousel(items: hero),
-          const SizedBox(height: 28),
-          _QuickTiles(data: _d, onOpen: (tab) => nav?.goTo(tab)),
-          const SizedBox(height: 44),
+          const SizedBox(height: 40),
           if (_d.continueWatching.isNotEmpty) ...[
             SectionRow(
-              title: 'Continuer à regarder',
-              height: 250,
+              title: 'Reprendre',
+              height: 216,
+              itemWidth: 300,
+              gap: 12,
               itemCount: _d.continueWatching.length,
               itemBuilder: (context, i) {
                 final p = _d.continueWatching[i];
                 return LandscapeCard(
                   title: p.title,
-                  subtitle: [
-                    if (p.subtitle != null) p.subtitle!,
-                    'reste ${formatRuntime((p.duration - p.position).inSeconds)}',
-                  ].join(' · '),
+                  subtitle: p.subtitle ?? (p.kind == ContentKind.episode ? 'Épisode' : 'Film'),
+                  trailing: 'reste ${formatRuntime((p.duration - p.position).inSeconds)}',
                   image: p.image,
                   progress: p.fraction,
                   onTap: () => Launch.resume(context, p),
@@ -188,7 +185,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 36),
           ],
           if (_d.liveChannels.isNotEmpty) ...[
             _LiveRow(
@@ -196,21 +193,24 @@ class _HomeScreenState extends State<HomeScreen> {
               channels: _d.liveChannels,
               onGuide: () => nav?.goTo(ShellTab.guide),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 36),
           ],
           if (_d.recentMovies.isNotEmpty) ...[
             _movieRow('Films ajoutés récemment', _d.recentMovies, favMovieIds, () => nav?.goTo(ShellTab.movies)),
-            const SizedBox(height: 40),
+            const SizedBox(height: 36),
           ],
           if (_d.favMovies.isNotEmpty) ...[
-            _movieRow('Mes films', _d.favMovies, favMovieIds, null),
-            const SizedBox(height: 40),
+            _movieRow('Films favoris', _d.favMovies, favMovieIds, null),
+            const SizedBox(height: 36),
           ],
           if (_d.recentSeries.isNotEmpty) ...[
             _seriesRow('Séries récentes', _d.recentSeries, () => nav?.goTo(ShellTab.series)),
-            const SizedBox(height: 40),
+            const SizedBox(height: 36),
           ],
-          if (_d.favSeries.isNotEmpty) ...[_seriesRow('Mes séries', _d.favSeries, null), const SizedBox(height: 40)],
+          if (_d.favSeries.isNotEmpty) ...[
+            _seriesRow('Séries favorites', _d.favSeries, null),
+            const SizedBox(height: 36),
+          ],
           if (_d.topMovies.isNotEmpty && _d.topMovies.first.rating != null)
             _movieRow('Les mieux notés', _d.topMovies, favMovieIds, null),
         ],
@@ -224,7 +224,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _movieRow(String title, List<Movie> list, Set<String> favs, VoidCallback? onMore) {
     return SectionRow(
       title: title,
-      height: 324,
+      height: 318,
+      gap: 12,
       trailing: _more(onMore),
       itemCount: list.length,
       itemBuilder: (context, i) {
@@ -244,7 +245,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _seriesRow(String title, List<Series> list, VoidCallback? onMore) {
     return SectionRow(
       title: title,
-      height: 324,
+      height: 318,
+      gap: 12,
       trailing: _more(onMore),
       itemCount: list.length,
       itemBuilder: (context, i) {
@@ -272,6 +274,7 @@ class _HeroItem {
     required this.landscape,
     required this.primaryLabel,
     required this.onPrimary,
+    this.rating,
     this.progress,
     this.progressLabel,
     this.secondaryLabel,
@@ -279,7 +282,8 @@ class _HeroItem {
   });
   final String kicker;
   final String title;
-  final String meta;
+  final List<String> meta;
+  final double? rating;
   final String? image;
   final bool landscape;
   final double? progress;
@@ -290,7 +294,7 @@ class _HeroItem {
   final void Function(BuildContext)? onSecondary;
 }
 
-/// Rotating banner (auto-advance, dots to pick an item).
+/// Full-width banner under the glass bar (auto-advance, dots to pick).
 class _HeroCarousel extends StatefulWidget {
   const _HeroCarousel({required this.items});
   final List<_HeroItem> items;
@@ -332,29 +336,49 @@ class _HeroCarouselState extends State<_HeroCarousel> {
   @override
   Widget build(BuildContext context) {
     final item = widget.items[_index];
+    final height = (MediaQuery.sizeOf(context).height * 0.74).clamp(540.0, 780.0);
     return MouseRegion(
       onEnter: (_) => _hover = true,
       onExit: (_) => _hover = false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 48),
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(24),
           child: SizedBox(
-            height: 500,
+            height: height,
             child: Stack(
               fit: StackFit.expand,
               children: [
+                const ColoredBox(color: AppColors.surface),
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 450),
                   layoutBuilder: _fill,
                   child: _HeroBackground(key: ValueKey(_index), item: item),
                 ),
-                // Legibility gradient (left).
+                // Scrims: under the glass bar, on the left for the text, at the bottom.
                 const DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
-                      colors: [Color(0xEB07080B), Color(0x9907080B), Color(0x0007080B)],
-                      stops: [0, 0.45, 0.78],
+                      begin: Alignment.topCenter,
+                      end: Alignment(0, -0.45),
+                      colors: [Color(0x800A0A0C), Color(0x000A0A0C)],
+                    ),
+                  ),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xE60A0A0C), Color(0x990A0A0C), Color(0x000A0A0C)],
+                      stops: [0, 0.34, 0.68],
+                    ),
+                  ),
+                ),
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter,
+                      end: Alignment(0, 0.1),
+                      colors: [Color(0xBF0A0A0C), Color(0x000A0A0C)],
                     ),
                   ),
                 ),
@@ -366,12 +390,12 @@ class _HeroCarouselState extends State<_HeroCarousel> {
                 if (widget.items.length > 1)
                   Positioned(
                     right: 32,
-                    bottom: 32,
+                    bottom: 36,
                     child: Row(
                       children: [
                         for (var i = 0; i < widget.items.length; i++)
                           Padding(
-                            padding: const EdgeInsets.only(left: 8),
+                            padding: const EdgeInsets.only(left: 6),
                             child: Semantics(
                               button: true,
                               label: 'À la une ${i + 1}',
@@ -381,11 +405,11 @@ class _HeroCarouselState extends State<_HeroCarousel> {
                                   cursor: SystemMouseCursors.click,
                                   child: AnimatedContainer(
                                     duration: const Duration(milliseconds: 250),
-                                    width: i == _index ? 28 : 8,
-                                    height: 8,
+                                    width: i == _index ? 24 : 8,
+                                    height: 5,
                                     decoration: BoxDecoration(
-                                      color: i == _index ? AppColors.accent : Colors.white.withValues(alpha: 0.35),
-                                      borderRadius: BorderRadius.circular(4),
+                                      color: i == _index ? Colors.white : Colors.white.withValues(alpha: 0.4),
+                                      borderRadius: BorderRadius.circular(3),
                                     ),
                                   ),
                                 ),
@@ -413,33 +437,34 @@ class _HeroBackground extends StatelessWidget {
     if (item.landscape) {
       return NetImage(
         item.image,
-        decodeWidth: 1400,
-        alignment: Alignment.topCenter,
-        placeholder: const ColoredBox(color: Color(0xFF141A26)),
+        decodeWidth: 1600,
+        alignment: const Alignment(0, -0.3),
+        placeholder: const ColoredBox(color: AppColors.surface),
       );
     }
-    // Portrait poster: blurred backdrop + the poster itself on the right.
+    // Portrait poster: blurred, enlarged poster as the backdrop and the
+    // poster itself on the right.
     return Stack(
       fit: StackFit.expand,
       children: [
         ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+          imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
           child: Opacity(
-            opacity: 0.55,
-            child: NetImage(item.image, decodeWidth: 300, placeholder: const ColoredBox(color: Color(0xFF141A26))),
+            opacity: 0.6,
+            child: NetImage(item.image, decodeWidth: 300, placeholder: const ColoredBox(color: AppColors.surface)),
           ),
         ),
         Align(
-          alignment: const Alignment(0.86, 0),
+          alignment: const Alignment(0.82, 0.25),
           child: Container(
-            width: 250,
-            height: 375,
+            width: 280,
+            height: 420,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              boxShadow: const [BoxShadow(color: Color(0x80000000), blurRadius: 40, offset: Offset(0, 20))],
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 50, offset: Offset(0, 24))],
             ),
             clipBehavior: Clip.antiAlias,
-            child: NetImage(item.image, decodeWidth: 250),
+            child: NetImage(item.image, decodeWidth: 280),
           ),
         ),
       ],
@@ -453,53 +478,69 @@ class _HeroContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final titleSize = (width * 0.075).clamp(64.0, 116.0);
     return Padding(
-      padding: const EdgeInsets.all(56),
+      padding: const EdgeInsets.fromLTRB(36, 120, 36, 56),
       child: Align(
         alignment: Alignment.bottomLeft,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+          constraints: const BoxConstraints(maxWidth: 620),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(item.kicker, style: labelStyle(color: AppColors.accent, size: 13)),
-              const SizedBox(height: 14),
+              Row(
+                children: [
+                  const LumenMark(size: 20),
+                  const SizedBox(width: 8),
+                  Text(item.kicker, style: labelStyle(color: AppColors.textSoft, size: 13)),
+                ],
+              ),
+              const SizedBox(height: 12),
               Text(
                 item.title,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: displayStyle(68, weight: FontWeight.w800, height: 0.98),
+                style: posterStyle(
+                  titleSize,
+                  height: 0.88,
+                  shadows: const [Shadow(color: Color(0x80000000), blurRadius: 30, offset: Offset(0, 4))],
+                ),
               ),
-              if (item.meta.isNotEmpty) ...[
+              if (item.meta.isNotEmpty || item.rating != null) ...[
                 const SizedBox(height: 14),
-                Text(item.meta, style: const TextStyle(fontSize: 17, color: AppColors.textSoft)),
+                _MetaLine(meta: item.meta, rating: item.rating),
               ],
               if (item.progress != null) ...[
                 const SizedBox(height: 16),
                 Row(
                   children: [
-                    SizedBox(width: 280, child: ProgressLine(item.progress!, height: 5)),
-                    const SizedBox(width: 14),
+                    SizedBox(width: 240, child: ProgressLine(item.progress!, track: const Color(0x40FFFFFF))),
+                    const SizedBox(width: 12),
                     Text(
                       item.progressLabel ?? '',
-                      style: const TextStyle(fontSize: 14, color: AppColors.muted, fontFeatures: tabularFigures),
+                      style: const TextStyle(fontSize: 14, color: AppColors.textSoft, fontFeatures: tabularFigures),
                     ),
                   ],
                 ),
               ],
-              const SizedBox(height: 26),
+              const SizedBox(height: 24),
               Wrap(
                 spacing: 12,
                 runSpacing: 12,
                 children: [
                   FilledButton.icon(
                     onPressed: () => item.onPrimary(context),
-                    icon: const Icon(Icons.play_arrow_rounded, size: 24),
+                    icon: const Icon(Icons.play_arrow_rounded, size: 26),
                     label: Text(item.primaryLabel),
                   ),
                   if (item.secondaryLabel != null && item.onSecondary != null)
-                    OutlinedButton(onPressed: () => item.onSecondary!(context), child: Text(item.secondaryLabel!)),
+                    OutlinedButton.icon(
+                      onPressed: () => item.onSecondary!(context),
+                      icon: const Icon(Icons.info_outline_rounded, size: 22),
+                      label: Text(item.secondaryLabel!),
+                    ),
                 ],
               ),
             ],
@@ -510,148 +551,37 @@ class _HeroContent extends StatelessWidget {
   }
 }
 
-// ----------------------------------------------------------- quick tiles
-
-/// Shortcut tiles under the banner: Live TV, Films, Séries, Recherche.
-class _QuickTiles extends StatelessWidget {
-  const _QuickTiles({required this.data, required this.onOpen});
-  final _HomeData data;
-  final ValueChanged<int> onOpen;
+/// "Film • 2024 • ★ 6,8" line.
+class _MetaLine extends StatelessWidget {
+  const _MetaLine({required this.meta, this.rating});
+  final List<String> meta;
+  final double? rating;
 
   @override
   Widget build(BuildContext context) {
-    final tiles = [
-      _Tile(
-        icon: Icons.live_tv_rounded,
-        cue: AppColors.cueLive,
-        title: 'Live TV',
-        subtitle: '${formatCount(data.liveCount)} chaînes · ${data.liveCategories} catégories',
-        live: true,
-        onTap: () => onOpen(ShellTab.live),
-      ),
-      _Tile(
-        icon: Icons.movie_outlined,
-        cue: AppColors.cueFilms,
-        title: 'Films',
-        subtitle: '${formatCount(data.movieCount)} films',
-        onTap: () => onOpen(ShellTab.movies),
-      ),
-      _Tile(
-        icon: Icons.video_library_outlined,
-        cue: AppColors.cueSeries,
-        title: 'Séries',
-        subtitle: '${formatCount(data.seriesCount)} séries',
-        onTap: () => onOpen(ShellTab.series),
-      ),
-      _Tile(
-        icon: Icons.search_rounded,
-        cue: AppColors.accent,
-        title: 'Recherche',
-        subtitle: 'Sans accents, mots dans le désordre',
-        onTap: () => onOpen(ShellTab.search),
-      ),
-    ];
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 48),
-      child: Row(
-        children: [
-          for (var i = 0; i < tiles.length; i++) ...[if (i > 0) const SizedBox(width: 18), Expanded(child: tiles[i])],
-        ],
-      ),
-    );
-  }
-}
-
-class _Tile extends StatefulWidget {
-  const _Tile({
-    required this.icon,
-    required this.cue,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.live = false,
-  });
-  final IconData icon;
-  final Color cue;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final bool live;
-
-  @override
-  State<_Tile> createState() => _TileState();
-}
-
-class _TileState extends State<_Tile> {
-  bool _hover = false;
-  bool _focus = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final lit = _hover || _focus;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: lit ? AppColors.text : AppColors.border, width: 2),
-        boxShadow: lit ? [BoxShadow(color: widget.cue.withValues(alpha: 0.2), spreadRadius: 6)] : null,
-      ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: widget.onTap,
-          onHover: (v) => setState(() => _hover = v),
-          onFocusChange: (v) => setState(() => _focus = v),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: widget.cue.withValues(alpha: 0.16),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(widget.icon, color: widget.cue, size: 25),
-                    ),
-                    const Spacer(),
-                    if (widget.live)
-                      Row(
-                        children: [
-                          Container(
-                            width: 7,
-                            height: 7,
-                            decoration: const BoxDecoration(color: AppColors.live, shape: BoxShape.circle),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            'EN DIRECT',
-                            style: labelStyle(color: const Color(0xFFFF8A96)).copyWith(letterSpacing: 1),
-                          ),
-                        ],
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 22),
-                Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: displayStyle(26)),
-                const SizedBox(height: 4),
-                Text(
-                  widget.subtitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: AppColors.muted, fontSize: 15),
-                ),
-              ],
-            ),
-          ),
+    const style = TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.textSoft);
+    final parts = <Widget>[
+      for (final m in meta) Text(m, style: style),
+      if (rating != null && rating! > 0)
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.star_rounded, size: 17, color: AppColors.accent),
+            const SizedBox(width: 3),
+            Text(rating!.toStringAsFixed(1).replaceAll('.', ','), style: style),
+          ],
         ),
-      ),
+    ];
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        for (var i = 0; i < parts.length; i++) ...[
+          if (i > 0) const Text('•', style: TextStyle(color: AppColors.faint)),
+          parts[i],
+        ],
+      ],
     );
   }
 }
@@ -666,81 +596,15 @@ class _LiveRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final s = AppScope.of(context);
     return SectionRow(
       title: title,
-      height: 160,
+      height: 216,
+      itemWidth: 300,
+      gap: 12,
       trailing: TextButton(onPressed: onGuide, child: const Text('Ouvrir le guide')),
       itemCount: channels.length,
-      itemBuilder: (context, i) {
-        final c = channels[i];
-        final now = s.epg.now(c);
-        return HoverBuilder(
-          builder: (context, hover) => GestureDetector(
-            onTap: () => Launch.channel(context, c, channels),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 300,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: hover ? AppColors.text : AppColors.border, width: hover ? 2 : 1),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      ChannelLogo(name: c.name, url: c.logo, size: 44),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              c.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                            Text(
-                              now == null ? 'En direct' : '${formatClock(now.start)} – ${formatClock(now.stop)}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                color: AppColors.muted,
-                                fontFeatures: tabularFigures,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (c.number != null)
-                        Text(
-                          '${c.number}',
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted),
-                        ),
-                    ],
-                  ),
-                  const Spacer(),
-                  Text(
-                    now?.title ?? 'Programme non disponible',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 16,
-                      color: now == null ? AppColors.muted : AppColors.text,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  ProgressLine(now?.progressAt(DateTime.now()) ?? 0),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
+      itemBuilder: (context, i) =>
+          LiveCard(channel: channels[i], onTap: () => Launch.channel(context, channels[i], channels)),
     );
   }
 }

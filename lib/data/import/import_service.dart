@@ -58,7 +58,8 @@ class ImportService extends ChangeNotifier {
         _running[id] = ImportStatus(sourceId: id, stage: 'Préparation');
         notifyListeners();
         final result = await _spawnContent(source.isXtream, path, id, send);
-        lastMessage = '${source.name} : ${formatCount(result.live)} chaînes, '
+        lastMessage =
+            '${source.name} : ${formatCount(result.live)} chaînes, '
             '${formatCount(result.movies)} films, ${formatCount(result.series)} séries';
         onContentChanged(id);
       }

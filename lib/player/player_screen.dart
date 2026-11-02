@@ -93,6 +93,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool _controls = true;
   bool _menuOpen = false;
+
+  /// "Audio & sous-titres" panel.
+  bool _tracksPanel = false;
   bool _overControls = false;
   bool _fullscreen = false;
   bool _showStats = false;
@@ -483,7 +486,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else if (k == LogicalKeyboardKey.keyF || k == LogicalKeyboardKey.f11) {
       if (!repeat) _setFullscreen(!_fullscreen);
     } else if (k == LogicalKeyboardKey.escape) {
-      if (_channelPanel) {
+      if (_tracksPanel) {
+        _setTracksPanel(false);
+      } else if (_channelPanel) {
         _toggleChannelPanel();
       } else if (_fullscreen) {
         _setFullscreen(false);
@@ -601,6 +606,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 _buildError(),
                 if (_showStats) _buildStats(),
                 _buildControls(),
+                if (_tracksPanel) _buildTracksPanel(),
                 if (_isLive) _buildChannelPanel(),
                 if (_nextCountdown != null) _buildNextCard(),
               ],
@@ -625,7 +631,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 const SizedBox(
                   width: 54,
                   height: 54,
-                  child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent),
+                  child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.text),
                 ),
                 const SizedBox(height: 14),
                 StreamBuilder<double>(
@@ -793,7 +799,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               right: 0,
               top: 0,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(32, 24, 32, 80),
+                padding: const EdgeInsets.fromLTRB(32, 28, 40, 90),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
                     colors: [Color(0xCC000000), Color(0x00000000)],
@@ -802,7 +808,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                 ),
                 child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Tooltip(
                       message: 'Retour (Échap)',
@@ -810,47 +816,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
                         onPressed: () => Navigator.of(context).maybePop(),
                         style: IconButton.styleFrom(
                           foregroundColor: AppColors.text,
-                          backgroundColor: Colors.white.withValues(alpha: 0.10),
-                          fixedSize: const Size(48, 48),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          fixedSize: const Size(54, 54),
+                          shape: const CircleBorder(),
                         ),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 32),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _item.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: displayStyle(28, weight: FontWeight.w700, height: 1.15),
-                          ),
-                          if (_item.subtitle != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Text(
-                                _item.subtitle!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
+                    const Spacer(),
                     ValueListenableBuilder<String?>(
                       valueListenable: _decoder,
                       builder: (context, d, _) => d == null
                           ? const SizedBox.shrink()
                           : Container(
-                              margin: const EdgeInsets.only(left: 16, top: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: Colors.white.withValues(alpha: 0.10),
-                                borderRadius: BorderRadius.circular(9),
+                                color: Colors.black.withValues(alpha: 0.45),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 d,
@@ -878,7 +859,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   _showControls();
                 },
                 child: Container(
-                  padding: const EdgeInsets.fromLTRB(32, 120, 32, 24),
+                  padding: const EdgeInsets.fromLTRB(40, 130, 40, 30),
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
                       colors: [Color(0x00000000), Color(0xE6000000)],
@@ -919,60 +900,86 @@ class _PlayerScreenState extends State<PlayerScreen> {
             valueListenable: _cache,
             builder: (context, cache, _) {
               final dur = _ps.player.state.duration;
-              final hours = dur.inHours > 0;
-              final ahead = cache.cacheEnd == null ? Duration.zero : cache.cacheEnd! - pos;
-              return Column(
+              return Row(
                 children: [
-                  SeekBar(
-                    position: pos,
-                    duration: dur,
-                    ranges: cache.ranges,
-                    onInteraction: _showControls,
-                    onSeek: (d) {
-                      _ps.player.seek(d);
-                      _position.value = d;
-                    },
+                  Expanded(
+                    child: SeekBar(
+                      position: pos,
+                      duration: dur,
+                      ranges: cache.ranges,
+                      onInteraction: _showControls,
+                      onSeek: (d) {
+                        _ps.player.seek(d);
+                        _position.value = d;
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Text(
-                        formatDuration(pos, forceHours: hours),
-                        style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: tabularFigures),
-                      ),
-                      const SizedBox(width: 12),
-                      if (ahead.inSeconds >= 1)
-                        Tooltip(
-                          message: 'Déjà téléchargé devant la lecture : avancer dans cette zone est instantané',
-                          child: _CachePill(ahead),
-                        ),
-                      const Spacer(),
-                      Text(
-                        '−${formatDuration(dur - pos, forceHours: hours)} · ${formatDuration(dur, forceHours: hours)}',
-                        style: const TextStyle(color: AppColors.textSoft, fontFeatures: tabularFigures),
-                      ),
-                    ],
+                  const SizedBox(width: 18),
+                  Tooltip(
+                    message: '${formatDuration(pos, forceHours: dur.inHours > 0)} / ${formatDuration(dur)}',
+                    child: Text(
+                      formatDuration(dur - pos, forceHours: dur.inHours > 0),
+                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, fontFeatures: tabularFigures),
+                    ),
                   ),
                 ],
               );
             },
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Row(
           children: [
             _playButton(),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             OverlayButton(icon: Icons.replay_10_rounded, tooltip: '−$step s (←)', onPressed: () => _seekBy(-step)),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             OverlayButton(icon: Icons.forward_10_rounded, tooltip: '+$step s (→)', onPressed: () => _seekBy(step)),
-            if (next != null) ...[
-              const SizedBox(width: 6),
-              OverlayButton(icon: Icons.skip_next_rounded, tooltip: 'Épisode suivant (N)', onPressed: _playNextEpisode),
-            ],
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             _volume(),
-            const Spacer(),
+            const SizedBox(width: 10),
+            ValueListenableBuilder<Duration>(
+              valueListenable: _position,
+              builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
+                valueListenable: _cache,
+                builder: (context, cache, _) {
+                  final ahead = cache.cacheEnd == null ? Duration.zero : cache.cacheEnd! - pos;
+                  return ahead.inSeconds < 1
+                      ? const SizedBox.shrink()
+                      : Tooltip(
+                          message: 'Déjà téléchargé devant la lecture : avancer dans cette zone est instantané',
+                          child: _CachePill(ahead),
+                        );
+                },
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(
+                      text: _item.title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    if (_item.subtitle != null)
+                      TextSpan(
+                        text: '   ${_item.subtitle}',
+                        style: const TextStyle(color: AppColors.textSoft),
+                      ),
+                  ],
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 18),
+              ),
+            ),
+            const SizedBox(width: 16),
+            if (next != null) ...[
+              OverlayButton(icon: Icons.skip_next_rounded, tooltip: 'Épisode suivant (N)', onPressed: _playNextEpisode),
+              const SizedBox(width: 4),
+            ],
             ..._trackMenus(withSpeed: true),
           ],
         ),
@@ -1173,6 +1180,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
+  void _setTracksPanel(bool open) {
+    setState(() {
+      _tracksPanel = open;
+      _menuOpen = open;
+    });
+    if (open) {
+      _refreshSelectedTracks();
+      _showControls(sticky: true);
+    } else {
+      _showControls();
+      _focus.requestFocus();
+    }
+  }
+
   List<Widget> _trackMenus({required bool withSpeed}) {
     final player = _ps.player;
     void opened() {
@@ -1186,50 +1207,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _focus.requestFocus();
     }
 
-    const gap = SizedBox(width: 6);
+    const gap = SizedBox(width: 4);
     return [
-      ChoiceMenu<AudioTrack>(
-        icon: Icons.music_note_rounded,
-        tooltip: 'Piste audio (A)',
-        header: 'PISTE AUDIO · A',
-        onOpened: opened,
-        onClosed: closed,
-        items: () {
-          final list = player.state.tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
-          return [
-            for (var i = 0; i < list.length; i++)
-              ChoiceItem(
-                list[i],
-                audioTrackTitle(list[i], i),
-                detail: audioTrackDetail(list[i]),
-                selected: list[i].id == _aid,
-              ),
-          ];
-        },
-        onSelected: _selectAudio,
-      ),
-      gap,
-      ChoiceMenu<SubtitleTrack>(
-        icon: Icons.closed_caption_rounded,
-        tooltip: 'Sous-titres (S)',
-        header: 'SOUS-TITRES · S',
-        onOpened: opened,
-        onClosed: closed,
-        items: () {
-          final list = player.state.tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no').toList();
-          final none = !list.any((t) => t.id == _sid);
-          return [
-            ChoiceItem(SubtitleTrack.no(), 'Désactivés', selected: none),
-            for (var i = 0; i < list.length; i++)
-              ChoiceItem(
-                list[i],
-                subtitleTrackTitle(list[i], i),
-                detail: subtitleTrackDetail(list[i]),
-                selected: list[i].id == _sid,
-              ),
-          ];
-        },
-        onSelected: _selectSubtitle,
+      OverlayButton(
+        icon: Icons.subtitles_outlined,
+        tooltip: 'Audio et sous-titres (A / S)',
+        active: _tracksPanel,
+        onPressed: () => _setTracksPanel(!_tracksPanel),
       ),
       gap,
       if (withSpeed) ...[
@@ -1276,6 +1260,73 @@ class _PlayerScreenState extends State<PlayerScreen> {
     ];
   }
 
+  /// "Audio" and "Sous-titres" side by side, above the controls.
+  Widget _buildTracksPanel() {
+    final tracks = _ps.player.state.tracks;
+    final audio = tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
+    final subs = tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no').toList();
+    final noSub = !subs.any((t) => t.id == _sid);
+    return Positioned.fill(
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _setTracksPanel(false)),
+          ),
+          Positioned(
+            right: 40,
+            bottom: 140,
+            child: Container(
+              width: 600,
+              constraints: const BoxConstraints(maxHeight: 460),
+              padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
+              decoration: BoxDecoration(
+                color: const Color(0xF51C1C21),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 60, offset: Offset(0, 24))],
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _TrackColumn(
+                      title: 'Audio',
+                      empty: 'Une seule piste',
+                      entries: [
+                        for (var i = 0; i < audio.length; i++)
+                          (
+                            audioTrackTitle(audio[i], i),
+                            audioTrackDetail(audio[i]),
+                            audio[i].id == _aid,
+                            () => _selectAudio(audio[i]),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 28),
+                  Expanded(
+                    child: _TrackColumn(
+                      title: 'Sous-titres',
+                      entries: [
+                        ('Désactivés', '', noSub, () => _selectSubtitle(SubtitleTrack.no())),
+                        for (var i = 0; i < subs.length; i++)
+                          (
+                            subtitleTrackTitle(subs[i], i),
+                            subtitleTrackDetail(subs[i]),
+                            subs[i].id == _sid,
+                            () => _selectSubtitle(subs[i]),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildChannelPanel() {
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 220),
@@ -1319,7 +1370,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           return Padding(
                             padding: const EdgeInsets.symmetric(vertical: 2),
                             child: Material(
-                              color: sel ? AppColors.accentTint : Colors.transparent,
+                              color: sel ? const Color(0x24FFFFFF) : Colors.transparent,
                               borderRadius: BorderRadius.circular(12),
                               child: InkWell(
                                 borderRadius: BorderRadius.circular(12),
@@ -1333,7 +1384,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                         child: Text(
                                           '${c.number ?? i + 1}',
                                           style: TextStyle(
-                                            color: sel ? AppColors.accent : AppColors.faint,
+                                            color: sel ? AppColors.text : AppColors.faint,
                                             fontWeight: FontWeight.w700,
                                             fontFeatures: tabularFigures,
                                           ),
@@ -1352,7 +1403,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 fontWeight: FontWeight.w600,
-                                                color: sel ? AppColors.accent : AppColors.text,
+                                                color: AppColors.text,
                                               ),
                                             ),
                                             if (now != null)
@@ -1435,7 +1486,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 }
 
 /// Dark glass used by the panels drawn over the video.
-const _glass = Color(0xD107080B);
+const _glass = Color(0xD10A0A0C);
 
 /// "⚡ +04:12 déjà en cache · saut instantané".
 class _CachePill extends StatelessWidget {
@@ -1445,14 +1496,14 @@ class _CachePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(999)),
+    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         const Icon(Icons.bolt_rounded, size: 15, color: AppColors.accent),
         const SizedBox(width: 5),
         Text(
-          '+${formatDuration(ahead)} déjà en cache · saut instantané',
+          '+${formatDuration(ahead)} en cache',
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
@@ -1463,4 +1514,71 @@ class _CachePill extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// One column of the "Audio & sous-titres" panel.
+class _TrackColumn extends StatelessWidget {
+  const _TrackColumn({required this.title, required this.entries, this.empty});
+  final String title;
+  final List<(String, String, bool, VoidCallback)> entries;
+  final String? empty;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        if (entries.isEmpty && empty != null) Text(empty!, style: const TextStyle(color: AppColors.muted)),
+        Flexible(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final (label, detail, selected, onTap) in entries)
+                  HoverBuilder(
+                    builder: (context, hover) => Semantics(
+                      button: true,
+                      selected: selected,
+                      child: GestureDetector(
+                        onTap: onTap,
+                        behavior: HitTestBehavior.opaque,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              SizedBox(width: 30, child: selected ? const Icon(Icons.check_rounded, size: 20) : null),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      label,
+                                      style: TextStyle(
+                                        fontSize: 17,
+                                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                        color: selected || hover ? AppColors.text : const Color(0xFFB8B9BF),
+                                      ),
+                                    ),
+                                    if (detail.isNotEmpty)
+                                      Text(detail, style: const TextStyle(fontSize: 13, color: AppColors.faint)),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }

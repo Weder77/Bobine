@@ -75,12 +75,12 @@ class _SearchScreenState extends State<SearchScreen> {
             focusNode: _focus,
             onChanged: _onChanged,
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-            cursorColor: AppColors.accent,
+            cursorColor: AppColors.text,
             decoration: InputDecoration(
               hintText: 'Chaînes, films, séries…',
               prefixIcon: const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 14),
-                child: Icon(Icons.search_rounded, size: 26, color: AppColors.accent),
+                child: Icon(Icons.search_rounded, size: 26, color: AppColors.text),
               ),
               contentPadding: const EdgeInsets.symmetric(vertical: 22),
               border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
@@ -90,7 +90,7 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
-                borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+                borderSide: const BorderSide(color: AppColors.text, width: 1.5),
               ),
               suffixIcon: _query.isEmpty
                   ? null
@@ -130,7 +130,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       decoration: BoxDecoration(
                         color: hover ? AppColors.surface2 : AppColors.surface,
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: hover ? AppColors.accent : AppColors.border),
+                        border: Border.all(color: hover ? AppColors.text : AppColors.border),
                       ),
                       child: Row(
                         children: [

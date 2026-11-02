@@ -134,17 +134,16 @@ class AppServices {
   void refreshStaleSources() {
     final now = DateTime.now();
     for (final s in repo.sources()) {
-      final contentStale = s.contentUpdatedAt == null ||
-          now.difference(s.contentUpdatedAt!).inHours >= settings.contentRefreshHours;
-      final epgStale = s.effectiveEpgUrl != null &&
+      final contentStale =
+          s.contentUpdatedAt == null || now.difference(s.contentUpdatedAt!).inHours >= settings.contentRefreshHours;
+      final epgStale =
+          s.effectiveEpgUrl != null &&
           settings.epgRefreshHours > 0 &&
-          (s.epgUpdatedAt == null ||
-              now.difference(s.epgUpdatedAt!).inHours >= settings.epgRefreshHours);
+          (s.epgUpdatedAt == null || now.difference(s.epgUpdatedAt!).inHours >= settings.epgRefreshHours);
       // Content of non-active sources is refreshed lazily when selected.
       final isActive = s.id == settings.activeSourceId;
       if ((contentStale && isActive) || epgStale) {
-        unawaited(refresh(s, content: contentStale && isActive, epg: epgStale)
-            .catchError((Object _) {}));
+        unawaited(refresh(s, content: contentStale && isActive, epg: epgStale).catchError((Object _) {}));
       }
     }
   }
@@ -160,8 +159,7 @@ class AppScope extends InheritedWidget {
   const AppScope({super.key, required this.services, required super.child});
   final AppServices services;
 
-  static AppServices of(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<AppScope>()!.services;
+  static AppServices of(BuildContext context) => context.getInheritedWidgetOfExactType<AppScope>()!.services;
 
   @override
   bool updateShouldNotify(AppScope oldWidget) => services != oldWidget.services;

@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
@@ -53,12 +55,135 @@ class ProgressLine extends StatelessWidget {
   );
 }
 
-/// Focus / hover ring used by cards: a light outline plus a soft halo.
-BoxDecoration focusRing({required bool on, double radius = 14, Color? halo}) => BoxDecoration(
+/// Focus / hover ring used by cards: a white outline and a deep shadow.
+BoxDecoration focusRing({required bool on, double radius = 12, Color? halo}) => BoxDecoration(
   borderRadius: BorderRadius.circular(radius),
   border: Border.all(color: on ? AppColors.text : Colors.transparent, width: 2),
-  boxShadow: on ? [BoxShadow(color: (halo ?? AppColors.accent).withValues(alpha: 0.22), spreadRadius: 4)] : null,
+  boxShadow: on
+      ? [BoxShadow(color: halo ?? const Color(0x99000000), blurRadius: 28, offset: const Offset(0, 12))]
+      : null,
 );
+
+/// Saturation matrix for the glass effect.
+List<double> _saturation(double s) {
+  const r = 0.2126, g = 0.7152, b = 0.0722;
+  return [
+    r * (1 - s) + s, g * (1 - s), b * (1 - s), 0, 0, //
+    r * (1 - s), g * (1 - s) + s, b * (1 - s), 0, 0, //
+    r * (1 - s), g * (1 - s), b * (1 - s) + s, 0, 0, //
+    0, 0, 0, 1, 0,
+  ];
+}
+
+/// "Liquid glass" surface: blurs and saturates what is behind it, with a
+/// light rim on the top edge and a soft drop shadow.
+class Glass extends StatelessWidget {
+  const Glass({
+    super.key,
+    required this.child,
+    this.radius = 999,
+    this.padding = EdgeInsets.zero,
+    this.height,
+    this.strong = false,
+    this.shadow = true,
+  });
+  final Widget child;
+  final double radius;
+  final EdgeInsetsGeometry padding;
+  final double? height;
+
+  /// Brighter glass (selected tab inside a glass bar).
+  final bool strong;
+  final bool shadow;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = BorderRadius.circular(radius);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: r,
+        boxShadow: shadow ? const [BoxShadow(color: Color(0x59000000), blurRadius: 32, offset: Offset(0, 12))] : null,
+      ),
+      child: ClipRRect(
+        borderRadius: r,
+        child: BackdropFilter(
+          filter: ImageFilter.compose(
+            outer: ColorFilter.matrix(_saturation(1.8)),
+            inner: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+          ),
+          child: CustomPaint(
+            foregroundPainter: _GlassRim(radius: radius, strong: strong),
+            child: Container(
+              height: height,
+              padding: padding,
+              decoration: BoxDecoration(
+                borderRadius: r,
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: strong
+                      ? const [Color(0x61FFFFFF), Color(0x29FFFFFF)]
+                      : const [Color(0x38FFFFFF), Color(0x12FFFFFF)],
+                ),
+              ),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassRim extends CustomPainter {
+  _GlassRim({required this.radius, required this.strong});
+  final double radius;
+  final bool strong;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rr = RRect.fromRectAndRadius(rect.deflate(0.5), Radius.circular(radius.clamp(0, size.height / 2)));
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: strong
+            ? const [Color(0xB3FFFFFF), Color(0x33FFFFFF), Color(0x1AFFFFFF)]
+            : const [Color(0x99FFFFFF), Color(0x26FFFFFF), Color(0x1FFFFFFF)],
+        stops: const [0, 0.45, 1],
+      ).createShader(rect);
+    canvas.drawRRect(rr, paint);
+  }
+
+  @override
+  bool shouldRepaint(_GlassRim old) => old.radius != radius || old.strong != strong;
+}
+
+/// Round outlined icon action ("Ma liste", "Recommencer").
+class RoundAction extends StatelessWidget {
+  const RoundAction({super.key, required this.icon, required this.tooltip, required this.onPressed, this.color});
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback? onPressed;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) => IconButton(
+    tooltip: tooltip,
+    onPressed: onPressed,
+    iconSize: 24,
+    style: IconButton.styleFrom(
+      fixedSize: const Size(54, 54),
+      backgroundColor: const Color(0x66111114),
+      side: const BorderSide(color: Color(0x8CFFFFFF), width: 2),
+      shape: const CircleBorder(),
+    ),
+    icon: Icon(icon, color: color ?? AppColors.text),
+  );
+}
 
 /// Poster (2:3) card for movies and series.
 class PosterCard extends StatelessWidget {
@@ -102,10 +227,10 @@ class PosterCard extends StatelessWidget {
                       aspectRatio: 2 / 3,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 160),
-                        decoration: focusRing(on: hover, radius: 16),
+                        decoration: focusRing(on: hover, radius: 12),
                         padding: const EdgeInsets.all(2),
                         child: ClipRRect(
-                          borderRadius: BorderRadius.circular(13),
+                          borderRadius: BorderRadius.circular(10),
                           child: Stack(
                             fit: StackFit.expand,
                             children: [
@@ -126,7 +251,12 @@ class PosterCard extends StatelessWidget {
                                   ),
                                 ),
                               if (progress != null && progress! > 0)
-                                Positioned(left: 10, right: 10, bottom: 10, child: ProgressLine(progress!)),
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: ProgressLine(progress!, track: const Color(0x40FFFFFF)),
+                                ),
                             ],
                           ),
                         ),
@@ -167,13 +297,8 @@ class _TitlePlaceholder extends StatelessWidget {
     child: Align(
       alignment: Alignment.bottomLeft,
       child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Text(
-          title,
-          maxLines: 4,
-          overflow: TextOverflow.ellipsis,
-          style: displayStyle(20, color: AppColors.textSoft),
-        ),
+        padding: const EdgeInsets.all(16),
+        child: Text(title, maxLines: 4, overflow: TextOverflow.ellipsis, style: posterStyle(34)),
       ),
     ),
   );
@@ -201,7 +326,8 @@ class RatingBadge extends StatelessWidget {
   );
 }
 
-/// Wide 16:9 card used for "Continuer à regarder".
+/// Wide 16:9 card: the title is written on the image in poster capitals,
+/// progress runs along the bottom edge, details go underneath.
 class LandscapeCard extends StatelessWidget {
   const LandscapeCard({
     super.key,
@@ -209,6 +335,7 @@ class LandscapeCard extends StatelessWidget {
     required this.image,
     required this.onTap,
     this.subtitle,
+    this.trailing,
     this.progress,
     this.width = 300,
     this.onRemove,
@@ -216,6 +343,7 @@ class LandscapeCard extends StatelessWidget {
 
   final String title;
   final String? subtitle;
+  final String? trailing;
   final String? image;
   final double? progress;
   final double width;
@@ -227,84 +355,117 @@ class LandscapeCard extends StatelessWidget {
     return RepaintBoundary(
       child: HoverBuilder(
         builder: (context, hover) {
-          return GestureDetector(
-            onTap: onTap,
-            child: SizedBox(
-              width: width,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 160),
-                      decoration: focusRing(on: hover, radius: 16),
-                      padding: const EdgeInsets.all(2),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(13),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            NetImage(
-                              image,
-                              decodeWidth: width,
-                              alignment: Alignment.topCenter,
-                              placeholder: const ColoredBox(color: AppColors.surface3),
-                            ),
-                            const DecoratedBox(
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [Colors.transparent, Color(0xB3000000)],
-                                  begin: Alignment(0, 0.2),
-                                  end: Alignment.bottomCenter,
+          return Semantics(
+            button: true,
+            label: title,
+            child: GestureDetector(
+              onTap: onTap,
+              child: SizedBox(
+                width: width,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 16 / 9,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        decoration: focusRing(on: hover, radius: 12),
+                        padding: const EdgeInsets.all(2),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              NetImage(
+                                image,
+                                decodeWidth: width,
+                                alignment: const Alignment(0, -0.4),
+                                placeholder: const ColoredBox(color: AppColors.surface3),
+                              ),
+                              const DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [Color(0x00000000), Color(0xCC0A0A0C)],
+                                    begin: Alignment(0, -0.1),
+                                    end: Alignment.bottomCenter,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Center(
-                              child: AnimatedOpacity(
-                                opacity: hover ? 1 : 0,
-                                duration: const Duration(milliseconds: 150),
-                                child: Container(
-                                  width: 52,
-                                  height: 52,
-                                  decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
-                                  child: const Icon(Icons.play_arrow_rounded, color: AppColors.onAccent, size: 30),
-                                ),
-                              ),
-                            ),
-                            if (onRemove != null && hover)
                               Positioned(
-                                top: 8,
-                                right: 8,
-                                child: IconButton.filledTonal(
-                                  iconSize: 16,
-                                  tooltip: 'Retirer',
-                                  onPressed: onRemove,
-                                  icon: const Icon(Icons.close),
+                                left: 14,
+                                right: 14,
+                                bottom: 16,
+                                child: Text(
+                                  title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: posterStyle(
+                                    30,
+                                    shadows: const [Shadow(color: Color(0x80000000), blurRadius: 12)],
+                                  ),
                                 ),
                               ),
-                            if (progress != null)
-                              Positioned(left: 12, right: 12, bottom: 12, child: ProgressLine(progress!)),
-                          ],
+                              Center(
+                                child: AnimatedOpacity(
+                                  opacity: hover ? 1 : 0,
+                                  duration: const Duration(milliseconds: 150),
+                                  child: Container(
+                                    width: 52,
+                                    height: 52,
+                                    decoration: const BoxDecoration(color: AppColors.action, shape: BoxShape.circle),
+                                    child: const Icon(Icons.play_arrow_rounded, color: AppColors.onAction, size: 32),
+                                  ),
+                                ),
+                              ),
+                              if (onRemove != null && hover)
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: IconButton(
+                                    iconSize: 16,
+                                    tooltip: 'Retirer',
+                                    onPressed: onRemove,
+                                    style: IconButton.styleFrom(backgroundColor: const Color(0xB30A0A0C)),
+                                    icon: const Icon(Icons.close_rounded),
+                                  ),
+                                ),
+                              if (progress != null)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  child: ProgressLine(progress!, track: const Color(0x40FFFFFF)),
+                                ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
-                  ),
-                  if (subtitle != null)
-                    Text(
-                      subtitle!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, color: AppColors.muted),
-                    ),
-                ],
+                    if (subtitle != null || trailing != null) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              subtitle ?? '',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                                color: AppColors.textSoft,
+                              ),
+                            ),
+                          ),
+                          if (trailing != null) ...[
+                            const SizedBox(width: 8),
+                            Text(trailing!, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           );
@@ -348,7 +509,7 @@ class ChannelLogo extends StatelessWidget {
   }
 }
 
-/// Section header: Bricolage title and an optional accent link.
+/// Section header: heavy Inter title and an optional link.
 class SectionHeader extends StatelessWidget {
   const SectionHeader(this.title, {super.key, this.actionLabel, this.onAction});
   final String title;
@@ -359,7 +520,9 @@ class SectionHeader extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     crossAxisAlignment: CrossAxisAlignment.center,
     children: [
-      Expanded(child: Text(title, style: displayStyle(24))),
+      Expanded(
+        child: Text(title, style: displayStyle(22, weight: FontWeight.w700)),
+      ),
       if (actionLabel != null && onAction != null) TextButton(onPressed: onAction, child: Text(actionLabel!)),
     ],
   );
@@ -417,7 +580,9 @@ class _SectionRowState extends State<SectionRow> {
           padding: const EdgeInsets.fromLTRB(48, 0, 48, 14),
           child: Row(
             children: [
-              Expanded(child: Text(widget.title, style: displayStyle(24))),
+              Expanded(
+                child: Text(widget.title, style: displayStyle(22, weight: FontWeight.w700)),
+              ),
               ?widget.trailing,
             ],
           ),
@@ -435,6 +600,7 @@ class _SectionRowState extends State<SectionRow> {
                   clipBehavior: Clip.none,
                   itemCount: widget.itemCount,
                   separatorBuilder: (_, _) => SizedBox(width: widget.gap),
+
                   itemBuilder: widget.itemBuilder,
                 ),
                 if (hover) ...[
@@ -458,8 +624,8 @@ class _Arrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(
     child: Material(
-      color: AppColors.surface2.withValues(alpha: 0.92),
-      shape: const CircleBorder(side: BorderSide(color: AppColors.borderStrong)),
+      color: const Color(0xD90A0A0C),
+      shape: const CircleBorder(side: BorderSide(color: Color(0x40FFFFFF))),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
@@ -595,7 +761,7 @@ class _CategoryPaneState extends State<CategoryPane> {
                             child: Row(
                               children: [
                                 if (e.icon != null) ...[
-                                  Icon(e.icon, size: 18, color: sel ? AppColors.accent : AppColors.muted),
+                                  Icon(e.icon, size: 18, color: sel ? AppColors.text : AppColors.muted),
                                   const SizedBox(width: 10),
                                 ],
                                 Expanded(
@@ -615,7 +781,7 @@ class _CategoryPaneState extends State<CategoryPane> {
                                     '${e.count}',
                                     style: TextStyle(
                                       fontSize: 13,
-                                      color: sel ? AppColors.accent : AppColors.faint,
+                                      color: sel ? AppColors.text : AppColors.faint,
                                       fontFeatures: tabularFigures,
                                     ),
                                   ),
@@ -680,35 +846,25 @@ class QualityTag extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: const Color(0xFF3A3F4B)),
+      borderRadius: BorderRadius.circular(4),
+      border: Border.all(color: const Color(0x73FFFFFF)),
     ),
-    child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+    child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.1)),
   );
 }
 
-/// Red "EN DIRECT" badge with a white dot.
+/// Red "DIRECT" badge.
 class LiveBadge extends StatelessWidget {
-  const LiveBadge({super.key});
+  const LiveBadge({super.key, this.label = 'DIRECT'});
+  final String label;
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(color: AppColors.liveBadge, borderRadius: BorderRadius.circular(8)),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 6),
-        const Text(
-          'EN DIRECT',
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.7, color: Colors.white),
-        ),
-      ],
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(color: AppColors.liveBadge, borderRadius: BorderRadius.circular(5)),
+    child: Text(
+      label,
+      style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.9, color: Colors.white),
     ),
   );
 }

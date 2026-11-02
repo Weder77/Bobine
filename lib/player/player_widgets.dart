@@ -206,14 +206,14 @@ class _SeekPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final h = thick ? 8.0 : 7.0;
+    final h = thick ? 7.0 : 6.0;
     final y = size.height / 2;
     final r = Radius.circular(h / 2);
     RRect bar(double from, double to) => RRect.fromLTRBR(from * size.width, y - h / 2, to * size.width, y + h / 2, r);
 
-    canvas.drawRRect(bar(0, 1), Paint()..color = const Color(0x2EFFFFFF));
+    canvas.drawRRect(bar(0, 1), Paint()..color = const Color(0x40FFFFFF));
     if (total > 0) {
-      final cached = Paint()..color = const Color(0x6BFFFFFF);
+      final cached = Paint()..color = const Color(0x80FFFFFF);
       for (final c in ranges) {
         final a = (c.start.inMilliseconds / total).clamp(0.0, 1.0);
         final b = (c.end.inMilliseconds / total).clamp(0.0, 1.0);
@@ -223,8 +223,7 @@ class _SeekPainter extends CustomPainter {
     final p = played.clamp(0.0, 1.0);
     canvas.drawRRect(bar(0, p), Paint()..color = AppColors.accent);
     final cx = p * size.width;
-    canvas.drawCircle(Offset(cx, y), thick ? 15 : 14, Paint()..color = const Color(0x59000000));
-    canvas.drawCircle(Offset(cx, y), thick ? 10 : 9, Paint()..color = AppColors.accent);
+    canvas.drawCircle(Offset(cx, y), thick ? 13 : 11, Paint()..color = AppColors.accent);
   }
 
   @override
@@ -252,30 +251,18 @@ class OverlayButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final button = big
-        ? IconButton(
-            onPressed: onPressed,
-            iconSize: 32,
-            style: IconButton.styleFrom(
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.onAccent,
-              fixedSize: const Size(60, 60),
-              shape: const CircleBorder(),
-            ),
-            icon: Icon(icon),
-          )
-        : IconButton(
-            onPressed: onPressed,
-            iconSize: 24,
-            style: IconButton.styleFrom(
-              foregroundColor: AppColors.text,
-              disabledForegroundColor: Colors.white24,
-              backgroundColor: active ? Colors.white.withValues(alpha: 0.14) : Colors.transparent,
-              fixedSize: const Size(48, 48),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            icon: Icon(icon),
-          );
+    final button = IconButton(
+      onPressed: onPressed,
+      iconSize: big ? 44 : 30,
+      style: IconButton.styleFrom(
+        foregroundColor: AppColors.text,
+        disabledForegroundColor: Colors.white24,
+        backgroundColor: active ? Colors.white.withValues(alpha: 0.16) : Colors.transparent,
+        fixedSize: Size.square(big ? 60 : 54),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      icon: Icon(icon),
+    );
     return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
@@ -371,14 +358,14 @@ class _ChoiceMenuState<T> extends State<ChoiceMenu<T>> {
           margin: const EdgeInsets.symmetric(vertical: 2),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: item.selected ? AppColors.accentTint : Colors.transparent,
+            color: item.selected ? const Color(0x1FFFFFFF) : Colors.transparent,
             borderRadius: BorderRadius.circular(10),
           ),
           child: Row(
             children: [
               SizedBox(
                 width: 30,
-                child: item.selected ? const Icon(Icons.check_rounded, size: 20, color: AppColors.accent) : null,
+                child: item.selected ? const Icon(Icons.check_rounded, size: 20, color: AppColors.text) : null,
               ),
               Expanded(
                 child: Column(

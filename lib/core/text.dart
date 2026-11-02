@@ -2,18 +2,63 @@
 library;
 
 const Map<String, String> _accentMap = {
-  'à': 'a', 'á': 'a', 'â': 'a', 'ã': 'a', 'ä': 'a', 'å': 'a', 'ā': 'a',
-  'ç': 'c', 'ć': 'c', 'č': 'c',
-  'è': 'e', 'é': 'e', 'ê': 'e', 'ë': 'e', 'ē': 'e', 'ę': 'e', 'ě': 'e',
-  'ì': 'i', 'í': 'i', 'î': 'i', 'ï': 'i', 'ī': 'i', 'ı': 'i',
-  'ñ': 'n', 'ń': 'n', 'ň': 'n',
-  'ò': 'o', 'ó': 'o', 'ô': 'o', 'õ': 'o', 'ö': 'o', 'ø': 'o', 'ō': 'o',
-  'ù': 'u', 'ú': 'u', 'û': 'u', 'ü': 'u', 'ū': 'u', 'ů': 'u',
-  'ý': 'y', 'ÿ': 'y',
-  'ś': 's', 'š': 's', 'ș': 's', 'ş': 's',
-  'ź': 'z', 'ż': 'z', 'ž': 'z',
-  'ł': 'l', 'ř': 'r', 'ť': 't', 'ț': 't', 'ď': 'd', 'ğ': 'g',
-  'œ': 'oe', 'æ': 'ae', 'ß': 'ss',
+  'à': 'a',
+  'á': 'a',
+  'â': 'a',
+  'ã': 'a',
+  'ä': 'a',
+  'å': 'a',
+  'ā': 'a',
+  'ç': 'c',
+  'ć': 'c',
+  'č': 'c',
+  'è': 'e',
+  'é': 'e',
+  'ê': 'e',
+  'ë': 'e',
+  'ē': 'e',
+  'ę': 'e',
+  'ě': 'e',
+  'ì': 'i',
+  'í': 'i',
+  'î': 'i',
+  'ï': 'i',
+  'ī': 'i',
+  'ı': 'i',
+  'ñ': 'n',
+  'ń': 'n',
+  'ň': 'n',
+  'ò': 'o',
+  'ó': 'o',
+  'ô': 'o',
+  'õ': 'o',
+  'ö': 'o',
+  'ø': 'o',
+  'ō': 'o',
+  'ù': 'u',
+  'ú': 'u',
+  'û': 'u',
+  'ü': 'u',
+  'ū': 'u',
+  'ů': 'u',
+  'ý': 'y',
+  'ÿ': 'y',
+  'ś': 's',
+  'š': 's',
+  'ș': 's',
+  'ş': 's',
+  'ź': 'z',
+  'ż': 'z',
+  'ž': 'z',
+  'ł': 'l',
+  'ř': 'r',
+  'ť': 't',
+  'ț': 't',
+  'ď': 'd',
+  'ğ': 'g',
+  'œ': 'oe',
+  'æ': 'ae',
+  'ß': 'ss',
 };
 
 /// Lower-cases and removes diacritics: "Écran Télé" -> "ecran tele".
@@ -28,12 +73,10 @@ String foldText(String input) {
 }
 
 /// Search key stored in DB: folded text, single spaces.
-String searchKey(String input) =>
-    foldText(input).replaceAll(RegExp(r'\s+'), ' ').trim();
+String searchKey(String input) => foldText(input).replaceAll(RegExp(r'\s+'), ' ').trim();
 
 /// Words of a user query, normalised like [searchKey].
-List<String> searchWords(String query) =>
-    searchKey(query).split(' ').where((w) => w.isNotEmpty).toList();
+List<String> searchWords(String query) => searchKey(query).split(' ').where((w) => w.isNotEmpty).toList();
 
 /// True when every word of the query appears in [key] (any order), the same
 /// rule as the global search: "hd tf1" matches "fr: tf1 hd".
@@ -54,11 +97,13 @@ String redactCredentials(String text) => text
     .replaceAllMapped(_secretPath, (m) => '${m.group(1)}***/');
 
 final RegExp _countryPrefix = RegExp(
-    r'^\s*(\|?[a-z]{2,3}\|?\s*[:|\-]\s*|\[[a-z]{2,3}\]\s*|\([a-z]{2,3}\)\s*)',
-    caseSensitive: false);
+  r'^\s*(\|?[a-z]{2,3}\|?\s*[:|\-]\s*|\[[a-z]{2,3}\]\s*|\([a-z]{2,3}\)\s*)',
+  caseSensitive: false,
+);
 final RegExp _qualityTokens = RegExp(
-    r'\b(uhd|fhd|hd|sd|hq|lq|4k|8k|hevc|h265|h264|1080p?|720p?|2160p?|50fps|60fps|backup|vip|\+1)\b',
-    caseSensitive: false);
+  r'\b(uhd|fhd|hd|sd|hq|lq|4k|8k|hevc|h265|h264|1080p?|720p?|2160p?|50fps|60fps|backup|vip|\+1)\b',
+  caseSensitive: false,
+);
 
 /// Normalizes a channel name for EPG matching:
 /// "FR: TF1 HD" -> "tf1", "|FR| France 2 FHD" -> "france2".

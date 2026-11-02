@@ -69,8 +69,7 @@ void _protectLegacySecrets(Database db) {
     String? fix(Object? v) => v == null ? null : Secrets.protect(v as String);
     final url = fix(r['url']), password = fix(r['password']), epg = fix(r['epg_url']);
     if (url != r['url'] || password != r['password'] || epg != r['epg_url']) {
-      db.execute('UPDATE sources SET url = ?, password = ?, epg_url = ? WHERE id = ?',
-          [url, password, epg, r['id']]);
+      db.execute('UPDATE sources SET url = ?, password = ?, epg_url = ? WHERE id = ?', [url, password, epg, r['id']]);
     }
   }
 }
@@ -103,8 +102,7 @@ void _createV1(Database db) {
       name TEXT NOT NULL,
       position INTEGER NOT NULL
     )''');
-  db.execute(
-      'CREATE INDEX idx_categories ON categories(source_id, kind, position)');
+  db.execute('CREATE INDEX idx_categories ON categories(source_id, kind, position)');
 
   db.execute('''
     CREATE TABLE channels (
