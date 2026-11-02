@@ -139,6 +139,13 @@ class Repository {
     ).map(ContentCategory.fromRow).where((c) => c.count > 0).toList();
   }
 
+  /// Name of a category (for breadcrumbs), or null.
+  String? categoryName(int? id) {
+    if (id == null) return null;
+    final rows = db.select('SELECT name FROM categories WHERE id = ?', [id]);
+    return rows.isEmpty ? null : rows.first['name'] as String;
+  }
+
   int count(int sourceId, ContentKind kind) {
     final table = switch (kind) {
       ContentKind.live => 'channels',

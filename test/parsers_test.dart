@@ -140,6 +140,19 @@ http://srv/plain/stream4.ts
       expect(c.password, 's3cr3t');
     });
 
+    test('vod technical info gives quality tags', () {
+      final d = parseVodInfo({
+        'info': {
+          'video': {'codec_name': 'hevc', 'width': 3840, 'height': 2160, 'color_transfer': 'smpte2084'},
+          'audio': {'codec_name': 'eac3', 'channels': 6},
+        },
+      });
+      expect(d.videoCodec, 'HEVC');
+      expect(d.audioCodec, 'E-AC3');
+      expect(d.qualityTags, ['4K', 'HDR', '5.1']);
+      expect(parseVodInfo({'info': {'video': [], 'audio': []}}).qualityTags, isEmpty);
+    });
+
     test('vod duration formats', () {
       expect(parseDurationSec({'duration': '01:52:10'}), 6730);
       expect(parseDurationSec({'duration_secs': '95'}), 95);

@@ -18,6 +18,12 @@ class VodDetails {
     this.poster,
     this.rating,
     this.trailer,
+    this.videoCodec,
+    this.videoWidth,
+    this.videoHeight,
+    this.hdr,
+    this.audioCodec,
+    this.audioChannels,
   });
   final String? plot;
   final String? cast;
@@ -29,6 +35,23 @@ class VodDetails {
   final String? poster;
   final double? rating;
   final String? trailer;
+
+  // Technical info of the main stream (when the panel provides it).
+  final String? videoCodec;
+  final int? videoWidth;
+  final int? videoHeight;
+
+  /// "HDR10", "HLG" or null.
+  final String? hdr;
+  final String? audioCodec;
+  final int? audioChannels;
+
+  /// Short tags for the detail page: "4K", "HDR", "5.1".
+  List<String> get qualityTags => [
+        if ((videoHeight ?? 0) >= 2000) '4K' else if ((videoHeight ?? 0) >= 700) 'HD',
+        if (hdr != null) 'HDR',
+        if (audioChannels == 6) '5.1' else if (audioChannels == 8) '7.1',
+      ];
 }
 
 /// Series metadata + episodes (from `get_series_info`).
@@ -238,6 +261,10 @@ int? parseDurationSec(Map<String, Object?> info) {
 VodDetails parseVodInfo(Object? json) {
   if (json is! Map) return const VodDetails();
   final info = json['info'] is Map ? (json['info'] as Map).cast<String, Object?>() : <String, Object?>{};
+  Map<String, Object?> sub(String k) =>
+      info[k] is Map ? (info[k] as Map).cast<String, Object?>() : const <String, Object?>{};
+  final video = sub('video');
+  final audio = sub('audio');
   return VodDetails(
     plot: asString(info['plot']) ?? asString(info['description']),
     cast: asString(info['cast']) ?? asString(info['actors']),
@@ -249,8 +276,30 @@ VodDetails parseVodInfo(Object? json) {
     poster: _firstImage(info['movie_image']) ?? _firstImage(info['cover_big']),
     rating: parseRating(info),
     trailer: asString(info['youtube_trailer']),
+    videoCodec: _codecName(video['codec_name']),
+    videoWidth: asInt(video['width']),
+    videoHeight: asInt(video['height']),
+    hdr: switch (asString(video['color_transfer'])) {
+      'smpte2084' => 'HDR10',
+      'arib-std-b67' => 'HLG',
+      _ => null,
+    },
+    audioCodec: _codecName(audio['codec_name']),
+    audioChannels: asInt(audio['channels']),
   );
 }
+
+String? _codecName(Object? v) => switch (asString(v)?.toLowerCase()) {
+      null => null,
+      'hevc' || 'h265' => 'HEVC',
+      'h264' || 'avc' => 'H.264',
+      'eac3' => 'E-AC3',
+      'ac3' => 'AC3',
+      'aac' => 'AAC',
+      'dts' => 'DTS',
+      'truehd' => 'TrueHD',
+      final other => other.toUpperCase(),
+    };
 
 SeriesDetails parseSeriesInfo(Object? json, int sourceId, String seriesId) {
   if (json is! Map) return const SeriesDetails(episodes: []);

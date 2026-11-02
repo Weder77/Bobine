@@ -97,8 +97,23 @@ class PlayerService {
   Timer? _volumeSave;
 
   static const _protocols = [
-    'udp', 'rtp', 'rtsp', 'rtmp', 'rtmps', 'tcp', 'tls', 'data', 'file', 'http', 'https',
-    'httpproxy', 'crypto', 'hls', 'mmsh', 'mmst', 'srt',
+    'udp',
+    'rtp',
+    'rtsp',
+    'rtmp',
+    'rtmps',
+    'tcp',
+    'tls',
+    'data',
+    'file',
+    'http',
+    'https',
+    'httpproxy',
+    'crypto',
+    'hls',
+    'mmsh',
+    'mmst',
+    'srt',
   ];
 
   /// Creates the player synchronously and finishes configuration in the
@@ -129,50 +144,60 @@ class PlayerService {
     await applyTuning();
     await player.setVolume(settings.volume);
 
-    _subs.add(player.stream.completed.listen((done) {
-      if (done) _onEnded();
-    }));
-    _subs.add(player.stream.error.listen((e) {
-      debugPrint('mpv error: ${redactCredentials(e)}');
-      final item = current.value;
-      // Only network / loading failures interrupt a live stream; decoder or
-      // audio-device messages are not fatal.
-      if (item != null && item.isLive && isFatalError(e)) _onEnded();
-    }));
-    _subs.add(player.stream.buffering.listen((b) {
-      _bufferingSince = b ? (_bufferingSince ?? DateTime.now()) : null;
-    }));
+    _subs.add(
+      player.stream.completed.listen((done) {
+        if (done) _onEnded();
+      }),
+    );
+    _subs.add(
+      player.stream.error.listen((e) {
+        debugPrint('mpv error: ${redactCredentials(e)}');
+        final item = current.value;
+        // Only network / loading failures interrupt a live stream; decoder or
+        // audio-device messages are not fatal.
+        if (item != null && item.isLive && isFatalError(e)) _onEnded();
+      }),
+    );
+    _subs.add(
+      player.stream.buffering.listen((b) {
+        _bufferingSince = b ? (_bufferingSince ?? DateTime.now()) : null;
+      }),
+    );
     // A live stream stuck buffering (server stopped sending) is reopened.
     _watchdog = Timer.periodic(const Duration(seconds: 5), (_) {
       final item = current.value;
       final since = _bufferingSince;
-      if (item != null && item.isLive && since != null &&
-          DateTime.now().difference(since).inSeconds >= 20) {
+      if (item != null && item.isLive && since != null && DateTime.now().difference(since).inSeconds >= 20) {
         _bufferingSince = null;
         _onEnded();
       }
     });
-    _subs.add(player.stream.playing.listen((p) {
-      if (p) {
-        status.value = null;
-        // A stream that plays for a while resets the reconnection budget.
-        if (DateTime.now().difference(_lastReconnect).inSeconds > 30) _reconnects = 0;
-      }
-    }));
+    _subs.add(
+      player.stream.playing.listen((p) {
+        if (p) {
+          status.value = null;
+          // A stream that plays for a while resets the reconnection budget.
+          if (DateTime.now().difference(_lastReconnect).inSeconds > 30) _reconnects = 0;
+        }
+      }),
+    );
     _subs.add(player.stream.videoParams.listen((_) => _maybeDeinterlace()));
-    _subs.add(player.stream.volume.listen((v) {
-      settings.volume = v;
-      _volumeSave?.cancel();
-      _volumeSave = Timer(const Duration(seconds: 2), settings.saveQuietly);
-    }));
+    _subs.add(
+      player.stream.volume.listen((v) {
+        settings.volume = v;
+        _volumeSave?.cancel();
+        _volumeSave = Timer(const Duration(seconds: 2), settings.saveQuietly);
+      }),
+    );
     settings.addListener(applyTuning);
   }
 
   static final RegExp _fatal = RegExp(
-      r'failed to open|failed to recognize|tcp:|http error|server returned|connection (refused|reset|timed out)|'
-      r'timed out|no route|not found|forbidden|unauthorized|input/output error|invalid data found|'
-      r'end of file|could not open (the )?(stream|file)',
-      caseSensitive: false);
+    r'failed to open|failed to recognize|tcp:|http error|server returned|connection (refused|reset|timed out)|'
+    r'timed out|no route|not found|forbidden|unauthorized|input/output error|invalid data found|'
+    r'end of file|could not open (the )?(stream|file)',
+    caseSensitive: false,
+  );
 
   /// Whether an mpv error message means the stream could not be read.
   static bool isFatalError(String message) => _fatal.hasMatch(message);
@@ -221,9 +246,11 @@ class PlayerService {
       'network-timeout': '20',
       // FFmpeg HTTP: keep-alive connections (faster seeks out of cache) and
       // automatic reconnection when the IPTV server drops the connection.
-      'stream-lavf-o': 'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
+      'stream-lavf-o':
+          'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
           'reconnect_delay_max=5,multiple_requests=1',
-      'demuxer-lavf-o': 'seg_max_retry=5,strict=experimental,allowed_extensions=ALL,'
+      'demuxer-lavf-o':
+          'seg_max_retry=5,strict=experimental,allowed_extensions=ALL,'
           'protocol_whitelist=[${_protocols.join(',')}]',
       'hls-bitrate': 'max',
       'tls-verify': 'no',
@@ -331,8 +358,7 @@ class PlayerService {
       Duration d(num v) => Duration(milliseconds: (v * 1000).round());
       final ranges = <CachedRange>[
         for (final r in (json['seekable-ranges'] as List? ?? const []))
-          if (r is Map && r['start'] is num && r['end'] is num)
-            CachedRange(d(r['start'] as num), d(r['end'] as num)),
+          if (r is Map && r['start'] is num && r['end'] is num) CachedRange(d(r['start'] as num), d(r['end'] as num)),
       ];
       return CacheState(
         ranges: ranges,
@@ -355,15 +381,32 @@ class PlayerService {
     final cacheDur = double.tryParse(await p('demuxer-cache-duration')) ?? 0;
     final vbr = double.tryParse(await p('video-bitrate')) ?? 0;
     final interlaced = await p('video-frame-info/interlaced');
+    final codecName = await p('video-format');
+    final codec = codecName.isEmpty ? (await p('video-codec')).split(' ').first : videoCodecLabel(codecName);
+    final rate = double.tryParse(fps);
     return [
-      ('Vidéo', (await p('video-codec')).split(' ').first),
-      ('Résolution', w.isEmpty ? '—' : '$w×$h${interlaced == 'yes' ? 'i' : 'p'} @ ${double.tryParse(fps)?.toStringAsFixed(2) ?? '?'} i/s'),
+      (
+        'Vidéo',
+        [if (codec.isNotEmpty) codec, if (w.isNotEmpty) '$w×$h${interlaced == 'yes' ? 'i' : 'p'}'].join(' ') +
+            (rate == null || rate <= 0 ? '' : ' · ${formatFps(rate)} i/s'),
+      ),
       ('Décodage', _hwLabel(await p('hwdec-current'))),
-      ('Désentrelacement', await p('deinterlace')),
+      (
+        'Désentrelacement',
+        switch (await p('deinterlace')) {
+          'yes' => 'Oui',
+          'no' => 'Non',
+          'auto' => 'Auto',
+          final v => v,
+        },
+      ),
       ('Audio', await _audioLine(p)),
-      ('Conteneur', await p('file-format')),
-      ('Débit vidéo', vbr > 0 ? '${(vbr / 1e6).toStringAsFixed(2)} Mb/s' : '—'),
-      ('Cache', '${formatDuration(Duration(milliseconds: (cacheDur * 1000).round()))} • ${formatBytes(cache.forwardBytes)}'),
+      ('Conteneur', (await p('file-format')).toUpperCase()),
+      ('Débit vidéo', vbr > 0 ? '${(vbr / 1e6).toStringAsFixed(2).replaceAll('.', ',')} Mb/s' : '—'),
+      (
+        'Cache',
+        '${formatDuration(Duration(milliseconds: (cacheDur * 1000).round()))} devant · ${formatBytes(cache.forwardBytes)}',
+      ),
       ('Réseau', cache.inputRate > 0 ? '${formatBytes(cache.inputRate)}/s' : '—'),
       ('Images perdues', '${await p('frame-drop-count')} (décodeur : ${await p('decoder-frame-drop-count')})'),
     ];
@@ -372,13 +415,29 @@ class PlayerService {
   static Future<String> _audioLine(Future<String> Function(String) p) async {
     final codec = await p('audio-codec-name');
     if (codec.isEmpty) return '—';
-    final ch = await p('audio-params/channel-count');
-    final rate = await p('audio-params/samplerate');
-    return [codec, if (ch.isNotEmpty) '$ch canaux', if (rate.isNotEmpty) '$rate Hz'].join(' • ');
+    final ch = int.tryParse(await p('audio-params/channel-count'));
+    final rate = int.tryParse(await p('audio-params/samplerate'));
+    return [
+      codecLabel(codec),
+      if (ch != null) channelLayoutLabel(ch),
+      if (rate != null) '${(rate / 1000).toStringAsFixed(rate % 1000 == 0 ? 0 : 1).replaceAll('.', ',')} kHz',
+    ].join(' · ');
   }
 
-  static String _hwLabel(String v) =>
-      (v.isEmpty || v == 'no') ? 'Logiciel (CPU)' : 'Matériel ($v)';
+  /// Short summary for the player top bar: "Décodage matériel · HEVC 4K".
+  Future<String?> decoderSummary() async {
+    var codec = await prop('video-format');
+    if (codec.isEmpty) codec = (await prop('video-codec')).split(' ').first;
+    final h = int.tryParse(await prop('video-params/h')) ?? 0;
+    final w = int.tryParse(await prop('video-params/w')) ?? 0;
+    if (codec.isEmpty && h == 0) return null;
+    final hw = await prop('hwdec-current');
+    final mode = (hw.isEmpty || hw == 'no') ? 'Décodage logiciel' : 'Décodage matériel';
+    final format = [if (codec.isNotEmpty) videoCodecLabel(codec), ?videoResolutionLabel(w, h)].join(' ');
+    return format.isEmpty ? mode : '$mode · $format';
+  }
+
+  static String _hwLabel(String v) => (v.isEmpty || v == 'no') ? 'Logiciel (CPU)' : 'Matériel ($v)';
 
   Future<void> dispose() async {
     _watchdog?.cancel();
@@ -388,4 +447,34 @@ class PlayerService {
     }
     await player.dispose();
   }
+}
+
+/// "HEVC", "H.264", "AV1"… from an mpv/ffmpeg codec name.
+String videoCodecLabel(String codec) => switch (codec.toLowerCase()) {
+  'hevc' || 'h265' => 'HEVC',
+  'h264' || 'avc' || 'avc1' => 'H.264',
+  'av1' => 'AV1',
+  'vp9' => 'VP9',
+  'vp8' => 'VP8',
+  'mpeg2video' => 'MPEG-2',
+  'mpeg4' => 'MPEG-4',
+  'vc1' => 'VC-1',
+  final other => other.toUpperCase(),
+};
+
+/// "4K", "1080p", "720p"… from the decoded picture size.
+String? videoResolutionLabel(int w, int h) {
+  if (h <= 0) return null;
+  if (w >= 3200 || h >= 2000) return '4K';
+  if (w >= 2200 || h >= 1300) return '1440p';
+  if (w >= 1700 || h >= 1000) return '1080p';
+  if (w >= 1100 || h >= 700) return '720p';
+  return '${h}p';
+}
+
+/// "25", "23,98", "29,97"… frames per second.
+String formatFps(double fps) {
+  final rounded = fps.roundToDouble();
+  if ((fps - rounded).abs() < 0.02) return rounded.toInt().toString();
+  return fps.toStringAsFixed(2).replaceAll('.', ',');
 }

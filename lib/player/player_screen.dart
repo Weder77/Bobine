@@ -50,13 +50,15 @@ class PlayerScreen extends StatefulWidget {
   final PlayerSession session;
 
   static Future<void> open(BuildContext context, PlayerSession session) {
-    return Navigator.of(context).push(PageRouteBuilder(
-      opaque: true,
-      transitionDuration: const Duration(milliseconds: 180),
-      reverseTransitionDuration: const Duration(milliseconds: 150),
-      pageBuilder: (_, _, _) => PlayerScreen(session: session),
-      transitionsBuilder: (_, anim, _, child) => FadeTransition(opacity: anim, child: child),
-    ));
+    return Navigator.of(context).push(
+      PageRouteBuilder(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 180),
+        reverseTransitionDuration: const Duration(milliseconds: 150),
+        pageBuilder: (_, _, _) => PlayerScreen(session: session),
+        transitionsBuilder: (_, anim, _, child) => FadeTransition(opacity: anim, child: child),
+      ),
+    );
   }
 
   @override
@@ -85,6 +87,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final _focus = FocusNode(debugLabel: 'player');
   final _position = ValueNotifier<Duration>(Duration.zero);
   final _cache = ValueNotifier<CacheState>(const CacheState());
+  final _decoder = ValueNotifier<String?>(null);
   final List<StreamSubscription> _subs = [];
   final _panelScroll = ScrollController();
 
@@ -129,17 +132,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     unawaited(_ps.play(_item, start: widget.session.start));
     if (_isLive) _s.repo.touchChannel(_item.sourceId, _item.extId);
 
-    _subs.add(_ps.player.stream.completed.listen((done) {
-      if (done) _onCompleted();
-    }));
-    _subs.add(_ps.player.stream.error.listen((e) {
-      if (!mounted || !PlayerService.isFatalError(e)) return;
-      if (!_ps.player.state.playing) setState(() => _error = redactCredentials(e));
-    }));
+    _subs.add(
+      _ps.player.stream.completed.listen((done) {
+        if (done) _onCompleted();
+      }),
+    );
+    _subs.add(
+      _ps.player.stream.error.listen((e) {
+        if (!mounted || !PlayerService.isFatalError(e)) return;
+        if (!_ps.player.state.playing) setState(() => _error = redactCredentials(e));
+      }),
+    );
     _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
-    _subs.add(_ps.player.stream.playing.listen((p) {
-      if (p && _error != null && mounted) setState(() => _error = null);
-    }));
+    _subs.add(
+      _ps.player.stream.playing.listen((p) {
+        if (p && _error != null && mounted) setState(() => _error = null);
+      }),
+    );
 
     // Light-weight UI clock: position 4×/s, cache ranges 1×/s, stats 1×/s.
     _tick = Timer.periodic(const Duration(milliseconds: 250), (_) => _onTick());
@@ -171,6 +180,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _focus.dispose();
     _position.dispose();
     _cache.dispose();
+    _decoder.dispose();
     _panelScroll.dispose();
     super.dispose();
   }
@@ -181,6 +191,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_controls || _showStats) _position.value = _ps.player.state.position;
     if (_tickCount % 4 == 0) {
       if (_controls || _showStats) _cache.value = await _ps.cacheState();
+      if (_controls && (_decoder.value == null || _tickCount % 40 == 0)) {
+        final d = await _ps.decoderSummary();
+        if (mounted) _decoder.value = d;
+      }
       if (_showStats) {
         final st = await _ps.stats();
         if (mounted) setState(() => _stats = st);
@@ -240,9 +254,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final dur = _ps.player.state.duration;
     if (dur.inSeconds > 0) {
       _s.repo.saveProgress(
-        sourceId: _item.sourceId, kind: _item.kind, extId: _item.extId,
-        position: dur, duration: dur, title: _item.title, subtitle: _item.subtitle,
-        image: _item.image, seriesExt: _item.seriesExt,
+        sourceId: _item.sourceId,
+        kind: _item.kind,
+        extId: _item.extId,
+        position: dur,
+        duration: dur,
+        title: _item.title,
+        subtitle: _item.subtitle,
+        image: _item.image,
+        seriesExt: _item.seriesExt,
       );
     }
     if (_nextEpisode != null && _s.settings.autoNextEpisode) {
@@ -402,8 +422,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _showControls(sticky: true);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_panelScroll.hasClients) {
-          _panelScroll.jumpTo((_chIndex * 60.0 - 200)
-              .clamp(0.0, _panelScroll.position.maxScrollExtent));
+          _panelScroll.jumpTo((_chIndex * 60.0 - 200).clamp(0.0, _panelScroll.position.maxScrollExtent));
         }
       });
     } else {
@@ -443,8 +462,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final step = _s.settings.seekStep * (shift ? 6 : 1);
     final repeat = e is KeyRepeatEvent;
 
-    if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK ||
-        k == LogicalKeyboardKey.mediaPlayPause) {
+    if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.mediaPlayPause) {
       if (!repeat) _togglePlay();
     } else if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.keyJ) {
       _seekBy(-step);
@@ -500,15 +518,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   static String? _digitOf(LogicalKeyboardKey k) {
     const digits = [
-      LogicalKeyboardKey.digit0, LogicalKeyboardKey.digit1, LogicalKeyboardKey.digit2,
-      LogicalKeyboardKey.digit3, LogicalKeyboardKey.digit4, LogicalKeyboardKey.digit5,
-      LogicalKeyboardKey.digit6, LogicalKeyboardKey.digit7, LogicalKeyboardKey.digit8,
+      LogicalKeyboardKey.digit0,
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+      LogicalKeyboardKey.digit7,
+      LogicalKeyboardKey.digit8,
       LogicalKeyboardKey.digit9,
     ];
     const numpad = [
-      LogicalKeyboardKey.numpad0, LogicalKeyboardKey.numpad1, LogicalKeyboardKey.numpad2,
-      LogicalKeyboardKey.numpad3, LogicalKeyboardKey.numpad4, LogicalKeyboardKey.numpad5,
-      LogicalKeyboardKey.numpad6, LogicalKeyboardKey.numpad7, LogicalKeyboardKey.numpad8,
+      LogicalKeyboardKey.numpad0,
+      LogicalKeyboardKey.numpad1,
+      LogicalKeyboardKey.numpad2,
+      LogicalKeyboardKey.numpad3,
+      LogicalKeyboardKey.numpad4,
+      LogicalKeyboardKey.numpad5,
+      LogicalKeyboardKey.numpad6,
+      LogicalKeyboardKey.numpad7,
+      LogicalKeyboardKey.numpad8,
       LogicalKeyboardKey.numpad9,
     ];
     var i = digits.indexOf(k);
@@ -543,35 +573,38 @@ class _PlayerScreenState extends State<PlayerScreen> {
           child: MouseRegion(
             cursor: _controls ? SystemMouseCursors.basic : SystemMouseCursors.none,
             onHover: (_) => _showControls(),
-            child: Stack(fit: StackFit.expand, children: [
-              GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () {
-                  _focus.requestFocus();
-                  if (_channelPanel) return _toggleChannelPanel();
-                  _isLive ? _showControls() : _togglePlay();
-                },
-                onDoubleTap: () => _setFullscreen(!_fullscreen),
-                child: Video(
-                  key: ValueKey(_aspect),
-                  controller: _ps.video,
-                  controls: NoVideoControls,
-                  fit: fit,
-                  aspectRatio: ratio,
-                  fill: Colors.black,
-                  filterQuality: FilterQuality.medium,
-                  subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () {
+                    _focus.requestFocus();
+                    if (_channelPanel) return _toggleChannelPanel();
+                    _isLive ? _showControls() : _togglePlay();
+                  },
+                  onDoubleTap: () => _setFullscreen(!_fullscreen),
+                  child: Video(
+                    key: ValueKey(_aspect),
+                    controller: _ps.video,
+                    controls: NoVideoControls,
+                    fit: fit,
+                    aspectRatio: ratio,
+                    fill: Colors.black,
+                    filterQuality: FilterQuality.medium,
+                    subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+                  ),
                 ),
-              ),
-              _buildBuffering(),
-              if (_osd != null) _buildOsd(),
-              if (_digits.isNotEmpty) _buildDigits(),
-              _buildError(),
-              if (_showStats) _buildStats(),
-              _buildControls(),
-              if (_isLive) _buildChannelPanel(),
-              if (_nextCountdown != null) _buildNextCard(),
-            ]),
+                _buildBuffering(),
+                if (_osd != null) _buildOsd(),
+                if (_digits.isNotEmpty) _buildDigits(),
+                _buildError(),
+                if (_showStats) _buildStats(),
+                _buildControls(),
+                if (_isLive) _buildChannelPanel(),
+                if (_nextCountdown != null) _buildNextCard(),
+              ],
+            ),
           ),
         ),
       ),
@@ -586,21 +619,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
         builder: (context, snap) {
           if (snap.data != true) return const SizedBox.shrink();
           return Center(
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              const SizedBox(
-                width: 54,
-                height: 54,
-                child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent),
-              ),
-              const SizedBox(height: 14),
-              StreamBuilder<double>(
-                stream: _ps.player.stream.bufferingPercentage,
-                builder: (context, p) => Text(
-                  p.hasData && p.data! > 0 ? 'Mise en mémoire… ${p.data!.round()} %' : 'Chargement…',
-                  style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(
+                  width: 54,
+                  height: 54,
+                  child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent),
                 ),
-              ),
-            ]),
+                const SizedBox(height: 14),
+                StreamBuilder<double>(
+                  stream: _ps.player.stream.bufferingPercentage,
+                  builder: (context, p) => Text(
+                    p.hasData && p.data! > 0 ? 'Mise en mémoire… ${p.data!.round()} %' : 'Chargement…',
+                    style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
           );
         },
       ),
@@ -608,33 +644,40 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildOsd() => IgnorePointer(
-        child: Align(
-          alignment: const Alignment(0, -0.55),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.7),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(_osd!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
-          ),
+    child: Align(
+      alignment: const Alignment(0, -0.55),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+        decoration: BoxDecoration(
+          color: _glass,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
-      );
+        child: Text(_osd!, style: displayStyle(22, weight: FontWeight.w700)),
+      ),
+    ),
+  );
 
   Widget _buildDigits() => Positioned(
-        top: 40,
-        right: 48,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.75),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.accent),
-          ),
-          child: Text(_digits,
-              style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w800, color: AppColors.accent)),
-        ),
-      );
+    top: 40,
+    right: 48,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+      decoration: BoxDecoration(
+        color: _glass,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.accent, width: 1.5),
+      ),
+      child: Text(
+        _digits,
+        style: displayStyle(
+          46,
+          weight: FontWeight.w800,
+          color: AppColors.accent,
+        ).copyWith(fontFeatures: tabularFigures),
+      ),
+    ),
+  );
 
   Widget _buildError() {
     return ValueListenableBuilder<String?>(
@@ -647,37 +690,44 @@ class _PlayerScreenState extends State<PlayerScreen> {
           alignment: const Alignment(0, 0.35),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 520),
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.8),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.border),
+              color: _glass,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
-            child: Column(mainAxisSize: MainAxisSize.min, children: [
-              Icon(reconnecting ? Icons.wifi_tethering : Icons.error_outline,
-                  color: reconnecting ? AppColors.accent : AppColors.live, size: 30),
-              const SizedBox(height: 10),
-              Text(reconnecting ? message : 'Lecture impossible',
-                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-              if (!reconnecting) ...[
-                const SizedBox(height: 6),
-                Text(message,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  reconnecting ? Icons.wifi_tethering_rounded : Icons.error_outline_rounded,
+                  color: reconnecting ? AppColors.accent : AppColors.live,
+                  size: 32,
+                ),
+                const SizedBox(height: 10),
+                Text(reconnecting ? message : 'Lecture impossible', style: displayStyle(20)),
+                if (!reconnecting) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    message,
                     textAlign: TextAlign.center,
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted, fontSize: 13)),
-                const SizedBox(height: 14),
-                FilledButton.icon(
-                  onPressed: () {
-                    setState(() => _error = null);
-                    _ps.status.value = null;
-                    _ps.play(_item, force: true, start: _isLive ? null : _ps.player.state.position);
-                  },
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Réessayer'),
-                ),
+                    style: const TextStyle(color: AppColors.muted, fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton.icon(
+                    onPressed: () {
+                      setState(() => _error = null);
+                      _ps.status.value = null;
+                      _ps.play(_item, force: true, start: _isLive ? null : _ps.player.state.position);
+                    },
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: const Text('Réessayer'),
+                  ),
+                ],
               ],
-            ]),
+            ),
           ),
         );
       },
@@ -685,36 +735,49 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   Widget _buildStats() => Positioned(
-        top: 24,
-        left: 24,
-        child: IgnorePointer(
-          child: Container(
-            width: 380,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Statistiques (I)',
-                  style: TextStyle(fontWeight: FontWeight.w800, color: AppColors.accent)),
-              const SizedBox(height: 8),
-              for (final (k, v) in _stats)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    SizedBox(
-                        width: 130,
-                        child: Text(k, style: const TextStyle(color: AppColors.muted, fontSize: 12.5))),
-                    Expanded(
-                        child: Text(v.isEmpty ? '—' : v,
-                            style: const TextStyle(fontSize: 12.5, fontFeatures: [FontFeature.tabularFigures()]))),
-                  ]),
-                ),
-            ]),
-          ),
+    top: 104,
+    left: 32,
+    child: IgnorePointer(
+      child: Container(
+        width: 360,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          color: _glass,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
-      );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'STATISTIQUES · I',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.accent),
+            ),
+            const SizedBox(height: 10),
+            for (final (k, v) in _stats)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 130,
+                      child: Text(k, style: const TextStyle(color: AppColors.muted, fontSize: 13.5)),
+                    ),
+                    Expanded(
+                      child: Text(
+                        v.isEmpty ? '—' : v,
+                        style: const TextStyle(fontSize: 13.5, fontFeatures: tabularFigures),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 
   Widget _buildControls() {
     return IgnorePointer(
@@ -722,190 +785,310 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: AnimatedOpacity(
         opacity: _controls ? 1 : 0,
         duration: const Duration(milliseconds: 200),
-        child: Stack(children: [
-          // Top bar
-          Positioned(
-            left: 0,
-            right: 0,
-            top: 0,
-            child: Container(
-              padding: const EdgeInsets.fromLTRB(16, 16, 24, 40),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xCC000000), Colors.transparent],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Row(children: [
-                OverlayButton(
-                  icon: Icons.arrow_back,
-                  tooltip: 'Retour (Échap)',
-                  onPressed: () => Navigator.of(context).maybePop(),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(_item.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                    if (_item.subtitle != null)
-                      Text(_item.subtitle!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white70)),
-                  ]),
-                ),
-              ]),
-            ),
-          ),
-          // Bottom bar
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: MouseRegion(
-              onEnter: (_) => _overControls = true,
-              onExit: (_) {
-                _overControls = false;
-                _showControls();
-              },
+        child: Stack(
+          children: [
+            // Top bar
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 60, 24, 18),
+                padding: const EdgeInsets.fromLTRB(32, 24, 32, 80),
                 decoration: const BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [Colors.transparent, Color(0xE6000000)],
+                    colors: [Color(0xCC000000), Color(0x00000000)],
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                   ),
                 ),
-                child: _isLive ? _liveBar() : _vodBar(),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Tooltip(
+                      message: 'Retour (Échap)',
+                      child: IconButton(
+                        onPressed: () => Navigator.of(context).maybePop(),
+                        style: IconButton.styleFrom(
+                          foregroundColor: AppColors.text,
+                          backgroundColor: Colors.white.withValues(alpha: 0.10),
+                          fixedSize: const Size(48, 48),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        ),
+                        icon: const Icon(Icons.arrow_back_rounded, size: 22),
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _item.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: displayStyle(28, weight: FontWeight.w700, height: 1.15),
+                          ),
+                          if (_item.subtitle != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                _item.subtitle!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(color: AppColors.textSoft, fontSize: 15),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    ValueListenableBuilder<String?>(
+                      valueListenable: _decoder,
+                      builder: (context, d, _) => d == null
+                          ? const SizedBox.shrink()
+                          : Container(
+                              margin: const EdgeInsets.only(left: 16, top: 4),
+                              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.10),
+                                borderRadius: BorderRadius.circular(9),
+                              ),
+                              child: Text(
+                                d,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSoft,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ]),
+            // Bottom bar
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: MouseRegion(
+                onEnter: (_) => _overControls = true,
+                onExit: (_) {
+                  _overControls = false;
+                  _showControls();
+                },
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(32, 120, 32, 24),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0x00000000), Color(0xE6000000)],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                  ),
+                  child: _isLive ? _liveBar() : _vodBar(),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _playButton({bool big = false}) => StreamBuilder<bool>(
-        stream: _ps.player.stream.playing,
-        initialData: _ps.player.state.playing,
-        builder: (context, snap) => OverlayButton(
-          big: big,
-          icon: snap.data == true ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          tooltip: snap.data == true ? 'Pause (Espace)' : 'Lecture (Espace)',
-          onPressed: _togglePlay,
-        ),
-      );
+  Widget _playButton() => StreamBuilder<bool>(
+    stream: _ps.player.stream.playing,
+    initialData: _ps.player.state.playing,
+    builder: (context, snap) => OverlayButton(
+      big: true,
+      icon: snap.data == true ? Icons.pause_rounded : Icons.play_arrow_rounded,
+      tooltip: snap.data == true ? 'Pause (Espace)' : 'Lecture (Espace)',
+      onPressed: _togglePlay,
+    ),
+  );
 
   Widget _vodBar() {
     final step = _s.settings.seekStep;
     final next = _nextEpisode;
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      ValueListenableBuilder<Duration>(
-        valueListenable: _position,
-        builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
-          valueListenable: _cache,
-          builder: (context, cache, _) {
-            final dur = _ps.player.state.duration;
-            return Column(children: [
-              SeekBar(
-                position: pos,
-                duration: dur,
-                ranges: cache.ranges,
-                onInteraction: _showControls,
-                onSeek: (d) {
-                  _ps.player.seek(d);
-                  _position.value = d;
-                },
-              ),
-              Row(children: [
-                Text(formatDuration(pos, forceHours: dur.inHours > 0),
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: [FontFeature.tabularFigures()])),
-                const SizedBox(width: 12),
-                if (cache.cacheEnd != null && cache.cacheEnd! > pos)
-                  Tooltip(
-                    message: 'Déjà téléchargé devant la lecture : avancer dans cette zone est instantané',
-                    child: Pill('Cache +${formatDuration(cache.cacheEnd! - pos)}',
-                        icon: Icons.bolt, color: Colors.white12, textColor: Colors.white70),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ValueListenableBuilder<Duration>(
+          valueListenable: _position,
+          builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
+            valueListenable: _cache,
+            builder: (context, cache, _) {
+              final dur = _ps.player.state.duration;
+              final hours = dur.inHours > 0;
+              final ahead = cache.cacheEnd == null ? Duration.zero : cache.cacheEnd! - pos;
+              return Column(
+                children: [
+                  SeekBar(
+                    position: pos,
+                    duration: dur,
+                    ranges: cache.ranges,
+                    onInteraction: _showControls,
+                    onSeek: (d) {
+                      _ps.player.seek(d);
+                      _position.value = d;
+                    },
                   ),
-                const Spacer(),
-                Text('-${formatDuration(dur - pos, forceHours: dur.inHours > 0)}  /  ${formatDuration(dur)}',
-                    style: const TextStyle(color: Colors.white70, fontFeatures: [FontFeature.tabularFigures()])),
-              ]),
-            ]);
-          },
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text(
+                        formatDuration(pos, forceHours: hours),
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontFeatures: tabularFigures),
+                      ),
+                      const SizedBox(width: 12),
+                      if (ahead.inSeconds >= 1)
+                        Tooltip(
+                          message: 'Déjà téléchargé devant la lecture : avancer dans cette zone est instantané',
+                          child: _CachePill(ahead),
+                        ),
+                      const Spacer(),
+                      Text(
+                        '−${formatDuration(dur - pos, forceHours: hours)} · ${formatDuration(dur, forceHours: hours)}',
+                        style: const TextStyle(color: AppColors.textSoft, fontFeatures: tabularFigures),
+                      ),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
         ),
-      ),
-      const SizedBox(height: 6),
-      Row(children: [
-        _playButton(big: true),
-        const SizedBox(width: 8),
-        OverlayButton(icon: Icons.replay_10_rounded, tooltip: '-$step s (←)', onPressed: () => _seekBy(-step)),
-        OverlayButton(icon: Icons.forward_10_rounded, tooltip: '+$step s (→)', onPressed: () => _seekBy(step)),
-        if (next != null)
-          OverlayButton(icon: Icons.skip_next_rounded, tooltip: 'Épisode suivant (N)', onPressed: _playNextEpisode),
-        const SizedBox(width: 8),
-        _volume(),
-        const Spacer(),
-        ..._trackMenus(withSpeed: true),
-      ]),
-    ]);
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            _playButton(),
+            const SizedBox(width: 6),
+            OverlayButton(icon: Icons.replay_10_rounded, tooltip: '−$step s (←)', onPressed: () => _seekBy(-step)),
+            const SizedBox(width: 6),
+            OverlayButton(icon: Icons.forward_10_rounded, tooltip: '+$step s (→)', onPressed: () => _seekBy(step)),
+            if (next != null) ...[
+              const SizedBox(width: 6),
+              OverlayButton(icon: Icons.skip_next_rounded, tooltip: 'Épisode suivant (N)', onPressed: _playNextEpisode),
+            ],
+            const SizedBox(width: 6),
+            _volume(),
+            const Spacer(),
+            ..._trackMenus(withSpeed: true),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _liveBar() {
     final ch = _currentChannel;
     final now = ch == null ? null : _s.epg.now(ch);
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      Row(children: [
-        ChannelLogo(name: _item.title, url: _item.image, size: 56),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              if (ch?.number != null)
-                Padding(
-                  padding: const EdgeInsets.only(right: 10),
-                  child: Text('${ch!.number}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.accent)),
-                ),
-              Flexible(
-                child: Text(_item.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+    final next = ch == null ? null : _s.epg.next(ch);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            ChannelLogo(name: _item.title, url: _item.image, size: 64),
+            const SizedBox(width: 18),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      if (ch?.number != null)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 12),
+                          child: Text(
+                            '${ch!.number}',
+                            style: displayStyle(26, color: AppColors.accent).copyWith(fontFeatures: tabularFigures),
+                          ),
+                        ),
+                      Flexible(
+                        child: Text(_item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: displayStyle(26)),
+                      ),
+                      const SizedBox(width: 14),
+                      _liveStatus(),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  if (now != null) ...[
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${formatClock(now.start)} – ${formatClock(now.stop)}   ',
+                            style: const TextStyle(color: AppColors.muted, fontFeatures: tabularFigures),
+                          ),
+                          TextSpan(
+                            text: now.title,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        SizedBox(width: 360, child: ProgressLine(now.progressAt(DateTime.now()))),
+                        if (next != null) ...[
+                          const SizedBox(width: 16),
+                          Flexible(
+                            child: Text(
+                              'Ensuite ${formatClock(next.start)}  ${next.title}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 13.5, color: AppColors.muted),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ] else
+                    const Text('Pas de programme disponible', style: TextStyle(color: AppColors.muted)),
+                ],
               ),
-              const SizedBox(width: 12),
-              _liveStatus(),
-            ]),
-            const SizedBox(height: 4),
-            if (now != null) ...[
-              Text('${formatClock(now.start)} – ${formatClock(now.stop)}  ${now.title}',
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 6),
-              SizedBox(width: 360, child: ProgressLine(now.progressAt(DateTime.now()))),
-            ] else
-              const Text('Pas de programme disponible', style: TextStyle(color: Colors.white54)),
-          ]),
+            ),
+          ],
         ),
-      ]),
-      const SizedBox(height: 10),
-      Row(children: [
-        _playButton(big: true),
-        const SizedBox(width: 8),
-        if (_channels.isNotEmpty) ...[
-          OverlayButton(icon: Icons.keyboard_arrow_up_rounded, tooltip: 'Chaîne précédente (↑)', onPressed: () => _zap(-1)),
-          OverlayButton(icon: Icons.keyboard_arrow_down_rounded, tooltip: 'Chaîne suivante (↓)', onPressed: () => _zap(1)),
-          OverlayButton(icon: Icons.list_rounded, tooltip: 'Liste des chaînes (C)', onPressed: _toggleChannelPanel),
-        ],
-        const SizedBox(width: 8),
-        _volume(),
-        const Spacer(),
-        ..._trackMenus(withSpeed: false),
-      ]),
-    ]);
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            _playButton(),
+            const SizedBox(width: 6),
+            if (_channels.isNotEmpty) ...[
+              OverlayButton(
+                icon: Icons.keyboard_arrow_up_rounded,
+                tooltip: 'Chaîne précédente (↑)',
+                onPressed: () => _zap(-1),
+              ),
+              const SizedBox(width: 6),
+              OverlayButton(
+                icon: Icons.keyboard_arrow_down_rounded,
+                tooltip: 'Chaîne suivante (↓)',
+                onPressed: () => _zap(1),
+              ),
+              const SizedBox(width: 6),
+              OverlayButton(
+                icon: Icons.format_list_bulleted_rounded,
+                tooltip: 'Liste des chaînes (C)',
+                active: _channelPanel,
+                onPressed: _toggleChannelPanel,
+              ),
+              const SizedBox(width: 6),
+            ],
+            _volume(),
+            const Spacer(),
+            ..._trackMenus(withSpeed: false),
+          ],
+        ),
+      ],
+    );
   }
 
   /// "EN DIRECT" or "Retour au direct" when the user rewound in the cache.
@@ -921,20 +1104,27 @@ class _PlayerScreenState extends State<PlayerScreen> {
             return const LiveBadge();
           }
           return Material(
-            color: Colors.white12,
-            borderRadius: BorderRadius.circular(6),
+            color: Colors.white.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(8),
             child: InkWell(
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(8),
               onTap: () {
                 if (end != null) _ps.player.seek(end - const Duration(seconds: 2));
                 if (!_ps.player.state.playing) _ps.player.play();
                 setState(() => _timeshift = false);
               },
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Text(
-                  behind.inSeconds >= 20 ? 'Retour au direct (-${formatDuration(behind)})' : 'Retour au direct',
-                  style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.skip_next_rounded, size: 16, color: AppColors.live),
+                    const SizedBox(width: 4),
+                    Text(
+                      behind.inSeconds >= 20 ? 'Retour au direct (−${formatDuration(behind)})' : 'Retour au direct',
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -950,24 +1140,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
       initialData: _ps.player.state.volume,
       builder: (context, snap) {
         final v = snap.data ?? 100;
-        return Row(mainAxisSize: MainAxisSize.min, children: [
-          OverlayButton(
-            icon: v == 0 ? Icons.volume_off_rounded : (v < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
-            tooltip: 'Muet (M)',
-            onPressed: _toggleMute,
-          ),
-          SizedBox(
-            width: 110,
-            child: Slider(
-              value: v.clamp(0, 150),
-              max: 150,
-              onChanged: (x) {
-                _ps.player.setVolume(x);
-                _showControls();
-              },
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            OverlayButton(
+              icon: v == 0 ? Icons.volume_off_rounded : (v < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
+              tooltip: 'Muet (M)',
+              onPressed: _toggleMute,
             ),
-          ),
-        ]);
+            SizedBox(
+              width: 120,
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 4,
+                  inactiveTrackColor: Colors.white.withValues(alpha: 0.22),
+                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                ),
+                child: Slider(
+                  value: v.clamp(0, 150),
+                  max: 150,
+                  onChanged: (x) {
+                    _ps.player.setVolume(x);
+                    _showControls();
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
       },
     );
   }
@@ -985,62 +1186,88 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _focus.requestFocus();
     }
 
+    const gap = SizedBox(width: 6);
     return [
       ChoiceMenu<AudioTrack>(
-        icon: Icons.audiotrack_rounded,
+        icon: Icons.music_note_rounded,
         tooltip: 'Piste audio (A)',
+        header: 'PISTE AUDIO · A',
         onOpened: opened,
         onClosed: closed,
         items: () {
           final list = player.state.tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
           return [
             for (var i = 0; i < list.length; i++)
-              (list[i], audioTrackLabel(list[i], i), list[i].id == _aid),
+              ChoiceItem(
+                list[i],
+                audioTrackTitle(list[i], i),
+                detail: audioTrackDetail(list[i]),
+                selected: list[i].id == _aid,
+              ),
           ];
         },
         onSelected: _selectAudio,
       ),
+      gap,
       ChoiceMenu<SubtitleTrack>(
-        icon: Icons.subtitles_rounded,
+        icon: Icons.closed_caption_rounded,
         tooltip: 'Sous-titres (S)',
+        header: 'SOUS-TITRES · S',
         onOpened: opened,
         onClosed: closed,
         items: () {
           final list = player.state.tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no').toList();
           final none = !list.any((t) => t.id == _sid);
           return [
-            (SubtitleTrack.no(), 'Désactivés', none),
+            ChoiceItem(SubtitleTrack.no(), 'Désactivés', selected: none),
             for (var i = 0; i < list.length; i++)
-              (list[i], subtitleTrackLabel(list[i], i), list[i].id == _sid),
+              ChoiceItem(
+                list[i],
+                subtitleTrackTitle(list[i], i),
+                detail: subtitleTrackDetail(list[i]),
+                selected: list[i].id == _sid,
+              ),
           ];
         },
         onSelected: _selectSubtitle,
       ),
-      if (withSpeed)
+      gap,
+      if (withSpeed) ...[
         ChoiceMenu<double>(
           icon: Icons.speed_rounded,
-          tooltip: 'Vitesse',
+          tooltip: 'Vitesse de lecture',
+          header: 'VITESSE',
           onOpened: opened,
           onClosed: closed,
           items: () => [
             for (final r in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
-              (r, r == 1.0 ? 'Normale' : '×$r', (player.state.rate - r).abs() < 0.01),
+              ChoiceItem(
+                r,
+                r == 1.0 ? 'Normale' : '×${(r == r.roundToDouble() ? r.toInt() : r).toString().replaceAll('.', ',')}',
+                selected: (player.state.rate - r).abs() < 0.01,
+              ),
           ],
           onSelected: player.setRate,
         ),
+        gap,
+      ],
       ChoiceMenu<_Aspect>(
         icon: Icons.aspect_ratio_rounded,
         tooltip: "Format d'image (R)",
+        header: "FORMAT D'IMAGE · R",
         onOpened: opened,
         onClosed: closed,
-        items: () => [for (final a in _Aspect.values) (a, a.label, a == _aspect)],
+        items: () => [for (final a in _Aspect.values) ChoiceItem(a, a.label, selected: a == _aspect)],
         onSelected: (a) => setState(() => _aspect = a),
       ),
+      gap,
       OverlayButton(
-        icon: Icons.insights_rounded,
+        icon: Icons.bar_chart_rounded,
         tooltip: 'Statistiques (I)',
+        active: _showStats,
         onPressed: () => setState(() => _showStats = !_showStats),
       ),
+      gap,
       OverlayButton(
         icon: _fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
         tooltip: 'Plein écran (F)',
@@ -1055,72 +1282,102 @@ class _PlayerScreenState extends State<PlayerScreen> {
       curve: Curves.easeOutCubic,
       top: 0,
       bottom: 0,
-      right: _channelPanel ? 0 : -380,
-      width: 360,
+      right: _channelPanel ? 0 : -400,
+      width: 380,
       child: Material(
-        color: const Color(0xF20A0C11),
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 8, 8),
-            child: Row(children: [
-              const Expanded(
-                child: Text('Chaînes', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-              ),
-              IconButton(onPressed: _toggleChannelPanel, icon: const Icon(Icons.close)),
-            ]),
+        color: const Color(0xF507080B),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            border: Border(left: BorderSide(color: AppColors.border)),
           ),
-          Expanded(
-            child: _channelPanel
-                ? ListView.builder(
-                    controller: _panelScroll,
-                    itemExtent: 60,
-                    itemCount: _channels.length,
-                    itemBuilder: (context, i) {
-                      final c = _channels[i];
-                      final sel = i == _chIndex;
-                      final now = _s.epg.now(c);
-                      return InkWell(
-                        onTap: () => _playChannel(i),
-                        child: Container(
-                          color: sel ? AppColors.accent.withValues(alpha: 0.15) : null,
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Row(children: [
-                            SizedBox(
-                              width: 34,
-                              child: Text('${c.number ?? i + 1}',
-                                  style: TextStyle(
-                                      color: sel ? AppColors.accent : AppColors.faint,
-                                      fontWeight: FontWeight.w700)),
-                            ),
-                            ChannelLogo(name: c.name, url: c.logo, size: 38),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(c.name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: sel ? AppColors.accent : AppColors.text)),
-                                  if (now != null)
-                                    Text(now.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-                                ],
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 24, 12, 12),
+                child: Row(
+                  children: [
+                    Expanded(child: Text('Chaînes', style: displayStyle(24))),
+                    IconButton(
+                      tooltip: 'Fermer (C)',
+                      onPressed: _toggleChannelPanel,
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _channelPanel
+                    ? ListView.builder(
+                        controller: _panelScroll,
+                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                        itemExtent: 66,
+                        itemCount: _channels.length,
+                        itemBuilder: (context, i) {
+                          final c = _channels[i];
+                          final sel = i == _chIndex;
+                          final now = _s.epg.now(c);
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Material(
+                              color: sel ? AppColors.accentTint : Colors.transparent,
+                              borderRadius: BorderRadius.circular(12),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(12),
+                                onTap: () => _playChannel(i),
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                                  child: Row(
+                                    children: [
+                                      SizedBox(
+                                        width: 34,
+                                        child: Text(
+                                          '${c.number ?? i + 1}',
+                                          style: TextStyle(
+                                            color: sel ? AppColors.accent : AppColors.faint,
+                                            fontWeight: FontWeight.w700,
+                                            fontFeatures: tabularFigures,
+                                          ),
+                                        ),
+                                      ),
+                                      ChannelLogo(name: c.name, url: c.logo, size: 40),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              c.name,
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                                color: sel ? AppColors.accent : AppColors.text,
+                                              ),
+                                            ),
+                                            if (now != null)
+                                              Text(
+                                                now.title,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ]),
-                        ),
-                      );
-                    },
-                  )
-                : const SizedBox.shrink(),
+                          );
+                        },
+                      )
+                    : const SizedBox.shrink(),
+              ),
+            ],
           ),
-        ]),
+        ),
       ),
     );
   }
@@ -1130,40 +1387,80 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (next == null) return const SizedBox.shrink();
     return Positioned(
       right: 32,
-      bottom: 140,
+      bottom: 170,
       child: Container(
-        width: 340,
-        padding: const EdgeInsets.all(16),
+        width: 360,
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: AppColors.surface.withValues(alpha: 0.95),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: AppColors.border),
+          color: AppColors.surface2,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.borderStrong),
+          boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 60, offset: Offset(0, 24))],
         ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-          Text('Épisode suivant dans $_nextCountdown s',
-              style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-          const SizedBox(height: 4),
-          Text('${next.code} · ${next.displayTitle}',
-              maxLines: 2, overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-          const SizedBox(height: 12),
-          Row(children: [
-            FilledButton.icon(
-              onPressed: _playNextEpisode,
-              icon: const Icon(Icons.play_arrow_rounded),
-              label: const Text('Lancer'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('ÉPISODE SUIVANT DANS $_nextCountdown S', style: labelStyle(color: AppColors.accent)),
+            const SizedBox(height: 6),
+            Text(
+              '${next.code} · ${next.displayTitle}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: displayStyle(19, weight: FontWeight.w700),
             ),
-            const SizedBox(width: 8),
-            TextButton(
-              onPressed: () {
-                _nextTimer?.cancel();
-                setState(() => _nextCountdown = null);
-              },
-              child: const Text('Annuler'),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                FilledButton.icon(
+                  onPressed: _playNextEpisode,
+                  icon: const Icon(Icons.play_arrow_rounded),
+                  label: const Text('Lancer'),
+                ),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: () {
+                    _nextTimer?.cancel();
+                    setState(() => _nextCountdown = null);
+                  },
+                  child: const Text('Annuler'),
+                ),
+              ],
             ),
-          ]),
-        ]),
+          ],
+        ),
       ),
     );
   }
+}
+
+/// Dark glass used by the panels drawn over the video.
+const _glass = Color(0xD107080B);
+
+/// "⚡ +04:12 déjà en cache · saut instantané".
+class _CachePill extends StatelessWidget {
+  const _CachePill(this.ahead);
+  final Duration ahead;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(999)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.bolt_rounded, size: 15, color: AppColors.accent),
+        const SizedBox(width: 5),
+        Text(
+          '+${formatDuration(ahead)} déjà en cache · saut instantané',
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFDDE1E8),
+            fontFeatures: tabularFigures,
+          ),
+        ),
+      ],
+    ),
+  );
 }

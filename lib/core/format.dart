@@ -8,8 +8,7 @@ String formatDuration(Duration d, {bool forceHours = false}) {
   return neg ? '-$body' : body;
 }
 
-String formatClock(DateTime t) =>
-    '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+String formatClock(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
 String formatRuntime(int? seconds) {
   if (seconds == null || seconds <= 0) return '';
@@ -20,10 +19,7 @@ String formatRuntime(int? seconds) {
 }
 
 const _days = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
-const _months = [
-  'janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin',
-  'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'
-];
+const _months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
 String formatDay(DateTime t) {
   final now = DateTime.now();
@@ -58,10 +54,37 @@ String formatCount(int n) {
 }
 
 String formatBytes(num bytes) {
+  String n(double v, int digits) => v.toStringAsFixed(digits).replaceAll('.', ',');
   if (bytes < 1024) return '${bytes.toInt()} o';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} Ko';
-  if (bytes < 1024 * 1024 * 1024) {
-    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} Mo';
-  }
-  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)} Go';
+  if (bytes < 1024 * 1024) return '${n(bytes / 1024, 0)} Ko';
+  if (bytes < 1024 * 1024 * 1024) return '${n(bytes / (1024 * 1024), 1)} Mo';
+  return '${n(bytes / (1024 * 1024 * 1024), 2)} Go';
 }
+
+/// "5.1", "7.1", "Stéréo"… from a channel count.
+String channelLayoutLabel(int n) => switch (n) {
+  1 => 'Mono',
+  2 => 'Stéréo',
+  6 => '5.1',
+  8 => '7.1',
+  _ => '$n canaux',
+};
+
+/// Display name of an audio / subtitle codec ("eac3" → "E-AC3").
+String codecLabel(String c) => switch (c.toLowerCase()) {
+  'eac3' => 'E-AC3',
+  'ac3' => 'AC3',
+  'aac' => 'AAC',
+  'dts' => 'DTS',
+  'truehd' => 'TrueHD',
+  'opus' => 'Opus',
+  'mp3' => 'MP3',
+  'flac' => 'FLAC',
+  'subrip' || 'srt' => 'SRT',
+  'ass' || 'ssa' => 'ASS',
+  'hdmv_pgs_subtitle' || 'pgs' => 'PGS',
+  'dvb_subtitle' => 'DVB',
+  'mov_text' => 'Texte',
+  'webvtt' => 'WebVTT',
+  final other => other.toUpperCase(),
+};

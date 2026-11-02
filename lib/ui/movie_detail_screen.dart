@@ -23,6 +23,9 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   bool _loading = false;
   ProgressEntry? _progress;
   bool _fav = false;
+  String? _category;
+  List<Movie> _related = const [];
+  Set<String> _favs = const {};
 
   Movie get _m => widget.movie;
 
@@ -31,6 +34,13 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     super.initState();
     _s = AppScope.of(context);
     _s.library.addListener(_refreshUser);
+    _category = _s.repo.categoryName(_m.categoryId);
+    if (_m.categoryId != null) {
+      _related = _s.repo
+          .movies(_m.sourceId, categoryId: _m.categoryId, limit: 24)
+          .where((x) => x.extId != _m.extId)
+          .toList();
+    }
     _refreshUser();
     _loadDetails();
   }
@@ -45,6 +55,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     setState(() {
       _progress = _s.repo.progress(_m.sourceId, ContentKind.movie, _m.extId);
       _fav = _s.repo.isFavorite(_m.sourceId, ContentKind.movie, _m.extId);
+      _favs = _s.repo.favoriteKeys(_m.sourceId, ContentKind.movie);
     });
   }
 
@@ -70,47 +81,121 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     final p = _progress;
     final resumable = p != null && p.resumable;
     final rating = d?.rating ?? _m.rating;
-    final meta = <String>[
-      if (_m.year != null) '${_m.year}' else if (d?.releaseDate != null && d!.releaseDate!.length >= 4) d.releaseDate!.substring(0, 4),
-      if (d?.durationSec != null) formatRuntime(d!.durationSec),
-      if (d?.genre != null) d!.genre!,
-      if (_m.container != null) _m.container!.toUpperCase(),
+    final year =
+        _m.year?.toString() ??
+        ((d?.releaseDate != null && d!.releaseDate!.length >= 4) ? d.releaseDate!.substring(0, 4) : null);
+    final meta = <String>[?year, if (d?.durationSec != null) formatRuntime(d!.durationSec), ?d?.genre];
+    final image = d?.backdrop ?? _m.poster;
+
+    final video = <String>[
+      if (d?.videoCodec != null || d?.videoHeight != null)
+        [
+          ?d?.videoCodec,
+          if (d?.videoWidth != null && d?.videoHeight != null) '${d!.videoWidth}×${d.videoHeight}',
+          ?d?.hdr,
+        ].join(' · '),
+      if (_m.container != null) 'Conteneur ${_m.container!.toUpperCase()}',
+    ];
+    final audio = <String>[
+      if (d?.audioCodec != null)
+        [d!.audioCodec!, if (d.audioChannels != null) channelLayoutLabel(d.audioChannels!)].join(' · '),
+      'Toutes les pistes sont proposées pendant la lecture',
     ];
 
     return DetailLayout(
+      breadcrumb: _category == null ? 'Films' : 'Films  ›  $_category',
       backdrop: d?.backdrop,
       poster: d?.poster ?? _m.poster,
       title: _m.name,
       rating: rating,
       meta: meta,
+      tags: d?.qualityTags ?? const [],
       loading: _loading,
+      progress: resumable ? p.fraction : null,
+      progressLabel: resumable ? 'reste ${formatRuntime((p.duration - p.position).inSeconds)}' : null,
       actions: [
         FilledButton.icon(
-          onPressed: () => Launch.movie(context, _m, image: d?.backdrop ?? _m.poster),
-          icon: const Icon(Icons.play_arrow_rounded),
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 54)),
+          onPressed: () => Launch.movie(context, _m, image: image),
+          icon: const Icon(Icons.play_arrow_rounded, size: 24),
           label: Text(resumable ? 'Reprendre à ${formatDuration(p.position)}' : 'Lecture'),
         ),
         if (resumable)
-          OutlinedButton.icon(
-            onPressed: () => Launch.movie(context, _m, restart: true, image: d?.backdrop ?? _m.poster),
-            icon: const Icon(Icons.replay_rounded),
-            label: const Text('Depuis le début'),
+          OutlinedButton(
+            style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54)),
+            onPressed: () => Launch.movie(context, _m, restart: true, image: image),
+            child: const Text('Depuis le début'),
           ),
-        OutlinedButton.icon(
+        IconButton(
+          tooltip: _fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
           onPressed: () => _s.toggleFavorite(ContentKind.movie, _m.extId, _m.sourceId),
-          icon: Icon(_fav ? Icons.favorite : Icons.favorite_border,
-              color: _fav ? AppColors.accent2 : null),
-          label: Text(_fav ? 'Dans mes favoris' : 'Favori'),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(54, 54),
+            backgroundColor: Colors.white.withValues(alpha: 0.06),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          icon: Icon(
+            _fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            color: _fav ? AppColors.cueSeries : AppColors.text,
+          ),
         ),
       ],
-      progress: resumable ? p.fraction : null,
+      bottom: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (d?.videoCodec != null || d?.audioCodec != null)
+            DetailSection(
+              title: 'Pistes et qualité',
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: InfoCard(label: 'VIDÉO', lines: video),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: InfoCard(label: 'AUDIO', lines: audio),
+                  ),
+                ],
+              ),
+            ),
+          if (_related.isNotEmpty)
+            DetailSection(
+              title: _category == null ? 'Dans la même catégorie' : 'Dans $_category',
+              child: SizedBox(
+                height: 324,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  clipBehavior: Clip.none,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  itemCount: _related.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 18),
+                  itemBuilder: (context, i) {
+                    final m = _related[i];
+                    return PosterCard(
+                      title: m.name,
+                      subtitle: m.year?.toString(),
+                      image: m.poster,
+                      rating: m.rating,
+                      favorite: _favs.contains(m.extId),
+                      onTap: () =>
+                          Navigator.of(context)
+                              .pushReplacement(MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m))),
+                    );
+                  },
+                ),
+              ),
+            ),
+        ],
+      ),
       children: [
         if (d?.plot != null) DetailParagraph(d!.plot!),
         if (d?.director != null) DetailField('Réalisation', d!.director!),
         if (d?.cast != null) DetailField('Avec', d!.cast!),
         if (p != null && p.finished)
           const Padding(
-            padding: EdgeInsets.only(top: 12),
+            padding: EdgeInsets.only(top: 8),
             child: Pill('Déjà vu', icon: Icons.check_rounded, color: Color(0x223DDC97), textColor: AppColors.success),
           ),
       ],

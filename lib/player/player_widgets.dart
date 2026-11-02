@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
@@ -6,21 +8,41 @@ import '../core/theme.dart';
 import 'player_service.dart';
 
 const Map<String, String> _languages = {
-  'fr': 'Français', 'fre': 'Français', 'fra': 'Français',
-  'en': 'Anglais', 'eng': 'Anglais',
-  'es': 'Espagnol', 'spa': 'Espagnol',
-  'de': 'Allemand', 'ger': 'Allemand', 'deu': 'Allemand',
-  'it': 'Italien', 'ita': 'Italien',
-  'pt': 'Portugais', 'por': 'Portugais',
-  'ar': 'Arabe', 'ara': 'Arabe',
-  'tr': 'Turc', 'tur': 'Turc',
-  'nl': 'Néerlandais', 'dut': 'Néerlandais', 'nld': 'Néerlandais',
-  'ja': 'Japonais', 'jpn': 'Japonais',
-  'ko': 'Coréen', 'kor': 'Coréen',
-  'zh': 'Chinois', 'chi': 'Chinois', 'zho': 'Chinois',
-  'ru': 'Russe', 'rus': 'Russe',
-  'pl': 'Polonais', 'pol': 'Polonais',
-  'und': 'Indéterminée', 'qaa': 'VO', 'mul': 'Multiple',
+  'fr': 'Français',
+  'fre': 'Français',
+  'fra': 'Français',
+  'en': 'Anglais',
+  'eng': 'Anglais',
+  'es': 'Espagnol',
+  'spa': 'Espagnol',
+  'de': 'Allemand',
+  'ger': 'Allemand',
+  'deu': 'Allemand',
+  'it': 'Italien',
+  'ita': 'Italien',
+  'pt': 'Portugais',
+  'por': 'Portugais',
+  'ar': 'Arabe',
+  'ara': 'Arabe',
+  'tr': 'Turc',
+  'tur': 'Turc',
+  'nl': 'Néerlandais',
+  'dut': 'Néerlandais',
+  'nld': 'Néerlandais',
+  'ja': 'Japonais',
+  'jpn': 'Japonais',
+  'ko': 'Coréen',
+  'kor': 'Coréen',
+  'zh': 'Chinois',
+  'chi': 'Chinois',
+  'zho': 'Chinois',
+  'ru': 'Russe',
+  'rus': 'Russe',
+  'pl': 'Polonais',
+  'pol': 'Polonais',
+  'und': 'Indéterminée',
+  'qaa': 'VO',
+  'mul': 'Multiple',
 };
 
 String languageName(String? code) {
@@ -28,35 +50,47 @@ String languageName(String? code) {
   return _languages[code.toLowerCase()] ?? code.toUpperCase();
 }
 
-String channelLayout(int n) => switch (n) {
-      1 => 'Mono',
-      2 => 'Stéréo',
-      6 => '5.1',
-      8 => '7.1',
-      _ => '$n canaux',
-    };
+/// Main line of an audio track: "Français (VF)".
+String audioTrackTitle(AudioTrack t, int index) {
+  final lang = languageName(t.language);
+  final title = t.title?.trim();
+  if (lang.isNotEmpty && title != null && title.isNotEmpty && title.toLowerCase() != lang.toLowerCase()) {
+    return '$lang ($title)';
+  }
+  if (lang.isNotEmpty) return lang;
+  if (title != null && title.isNotEmpty) return title;
+  return 'Piste ${index + 1}';
+}
 
+/// Second line of an audio track: "E-AC3 · 5.1".
+String audioTrackDetail(AudioTrack t) => [
+  if (t.codec != null) codecLabel(t.codec!),
+  if (t.channelscount != null) channelLayoutLabel(t.channelscount!),
+].join(' · ');
+
+String subtitleTrackTitle(SubtitleTrack t, int index) {
+  final lang = languageName(t.language);
+  final title = t.title?.trim();
+  if (lang.isNotEmpty && title != null && title.isNotEmpty && title.toLowerCase() != lang.toLowerCase()) {
+    return '$lang ($title)';
+  }
+  if (lang.isNotEmpty) return lang;
+  if (title != null && title.isNotEmpty) return title;
+  return 'Sous-titres ${index + 1}';
+}
+
+String subtitleTrackDetail(SubtitleTrack t) => t.codec == null ? '' : codecLabel(t.codec!);
+
+/// One-line labels (used by the on-screen messages).
 String audioTrackLabel(AudioTrack t, int index) {
-  if (t.id == 'auto') return 'Automatique';
-  if (t.id == 'no') return 'Désactivé';
-  final parts = <String>[
-    if (t.title != null && t.title!.isNotEmpty) t.title!,
-    if (languageName(t.language).isNotEmpty) languageName(t.language),
-    if (t.codec != null) t.codec!.toUpperCase(),
-    if (t.channelscount != null) channelLayout(t.channelscount!),
-  ];
-  return parts.isEmpty ? 'Piste ${index + 1}' : parts.toSet().join(' · ');
+  final d = audioTrackDetail(t);
+  return d.isEmpty ? audioTrackTitle(t, index) : '${audioTrackTitle(t, index)} · $d';
 }
 
 String subtitleTrackLabel(SubtitleTrack t, int index) {
-  if (t.id == 'auto') return 'Automatique';
   if (t.id == 'no') return 'Désactivés';
-  final parts = <String>[
-    if (t.title != null && t.title!.isNotEmpty) t.title!,
-    if (languageName(t.language).isNotEmpty) languageName(t.language),
-    if (t.codec != null) t.codec!.toUpperCase(),
-  ];
-  return parts.isEmpty ? 'Sous-titres ${index + 1}' : parts.toSet().join(' · ');
+  final d = subtitleTrackDetail(t);
+  return d.isEmpty ? subtitleTrackTitle(t, index) : '${subtitleTrackTitle(t, index)} · $d';
 }
 
 /// Seek bar that shows every cached range (what can be reached instantly).
@@ -86,70 +120,80 @@ class _SeekBarState extends State<SeekBar> {
 
   double get _total => widget.duration.inMilliseconds.toDouble();
 
-  Duration _at(double fraction) =>
-      Duration(milliseconds: (fraction.clamp(0.0, 1.0) * _total).round());
+  Duration _at(double fraction) => Duration(milliseconds: (fraction.clamp(0.0, 1.0) * _total).round());
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) {
-      final w = c.maxWidth;
-      double frac(double dx) => (dx / w).clamp(0.0, 1.0);
-      final shown = _drag ?? (_total <= 0 ? 0.0 : widget.position.inMilliseconds / _total);
-      final active = _drag != null || _hover != null;
-      final tip = _drag ?? _hover;
-      return MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onHover: (e) => setState(() => _hover = frac(e.localPosition.dx)),
-        onExit: (_) => setState(() => _hover = null),
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapUp: (d) {
-            widget.onInteraction?.call();
-            widget.onSeek(_at(frac(d.localPosition.dx)));
-          },
-          onHorizontalDragStart: (d) => setState(() => _drag = frac(d.localPosition.dx)),
-          onHorizontalDragUpdate: (d) {
-            widget.onInteraction?.call();
-            setState(() => _drag = frac(d.localPosition.dx));
-          },
-          onHorizontalDragEnd: (_) {
-            if (_drag != null) widget.onSeek(_at(_drag!));
-            setState(() => _drag = null);
-          },
-          child: SizedBox(
-            height: 34,
-            child: Stack(clipBehavior: Clip.none, children: [
-              Positioned.fill(
-                child: CustomPaint(
-                  painter: _SeekPainter(
-                    played: shown.toDouble(),
-                    ranges: widget.ranges,
-                    total: _total,
-                    thick: active,
-                  ),
-                ),
-              ),
-              if (tip != null && _total > 0)
-                Positioned(
-                  left: (tip * w - 32).clamp(0.0, w - 64),
-                  top: -26,
-                  child: Container(
-                    width: 64,
-                    alignment: Alignment.center,
-                    padding: const EdgeInsets.symmetric(vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.surface3,
-                      borderRadius: BorderRadius.circular(6),
+    return LayoutBuilder(
+      builder: (context, c) {
+        final w = c.maxWidth;
+        double frac(double dx) => (dx / w).clamp(0.0, 1.0);
+        final shown = _drag ?? (_total <= 0 ? 0.0 : widget.position.inMilliseconds / _total);
+        final active = _drag != null || _hover != null;
+        final tip = _drag ?? _hover;
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onHover: (e) => setState(() => _hover = frac(e.localPosition.dx)),
+          onExit: (_) => setState(() => _hover = null),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: (d) {
+              widget.onInteraction?.call();
+              widget.onSeek(_at(frac(d.localPosition.dx)));
+            },
+            onHorizontalDragStart: (d) => setState(() => _drag = frac(d.localPosition.dx)),
+            onHorizontalDragUpdate: (d) {
+              widget.onInteraction?.call();
+              setState(() => _drag = frac(d.localPosition.dx));
+            },
+            onHorizontalDragEnd: (_) {
+              if (_drag != null) widget.onSeek(_at(_drag!));
+              setState(() => _drag = null);
+            },
+            child: SizedBox(
+              height: 34,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Positioned.fill(
+                    child: CustomPaint(
+                      painter: _SeekPainter(
+                        played: shown.toDouble(),
+                        ranges: widget.ranges,
+                        total: _total,
+                        thick: active,
+                      ),
                     ),
-                    child: Text(formatDuration(_at(tip)),
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
                   ),
-                ),
-            ]),
+                  if (tip != null && _total > 0)
+                    Positioned(
+                      left: (tip * w - 34).clamp(0.0, w - 68),
+                      top: -28,
+                      child: Container(
+                        width: 68,
+                        alignment: Alignment.center,
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF20242E),
+                          borderRadius: BorderRadius.circular(7),
+                        ),
+                        child: Text(
+                          formatDuration(_at(tip)),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: tabularFigures,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
           ),
-        ),
-      );
-    });
+        );
+      },
+    );
   }
 }
 
@@ -162,24 +206,25 @@ class _SeekPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final h = thick ? 6.0 : 4.0;
+    final h = thick ? 8.0 : 7.0;
     final y = size.height / 2;
     final r = Radius.circular(h / 2);
-    RRect bar(double from, double to) =>
-        RRect.fromLTRBR(from * size.width, y - h / 2, to * size.width, y + h / 2, r);
+    RRect bar(double from, double to) => RRect.fromLTRBR(from * size.width, y - h / 2, to * size.width, y + h / 2, r);
 
-    canvas.drawRRect(bar(0, 1), Paint()..color = const Color(0x33FFFFFF));
+    canvas.drawRRect(bar(0, 1), Paint()..color = const Color(0x2EFFFFFF));
     if (total > 0) {
-      final cached = Paint()..color = const Color(0x66FFFFFF);
+      final cached = Paint()..color = const Color(0x6BFFFFFF);
       for (final c in ranges) {
         final a = (c.start.inMilliseconds / total).clamp(0.0, 1.0);
         final b = (c.end.inMilliseconds / total).clamp(0.0, 1.0);
         if (b > a) canvas.drawRRect(bar(a, b), cached);
       }
     }
-    canvas.drawRRect(bar(0, played.clamp(0.0, 1.0)), Paint()..color = AppColors.accent);
-    canvas.drawCircle(Offset(played.clamp(0.0, 1.0) * size.width, y), thick ? 8 : 6,
-        Paint()..color = AppColors.accent);
+    final p = played.clamp(0.0, 1.0);
+    canvas.drawRRect(bar(0, p), Paint()..color = AppColors.accent);
+    final cx = p * size.width;
+    canvas.drawCircle(Offset(cx, y), thick ? 15 : 14, Paint()..color = const Color(0x59000000));
+    canvas.drawCircle(Offset(cx, y), thick ? 10 : 9, Paint()..color = AppColors.accent);
   }
 
   @override
@@ -187,45 +232,71 @@ class _SeekPainter extends CustomPainter {
       old.played != played || old.ranges != ranges || old.total != total || old.thick != thick;
 }
 
-/// Round translucent icon button used on the video.
+/// Icon button used on the video (48 px; [big] = round accent play button).
 class OverlayButton extends StatelessWidget {
   const OverlayButton({
     super.key,
     required this.icon,
     required this.onPressed,
     this.tooltip,
-    this.size = 24,
     this.big = false,
+    this.active = false,
   });
   final IconData icon;
   final VoidCallback? onPressed;
   final String? tooltip;
-  final double size;
   final bool big;
+
+  /// Pressed / open state (light background).
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
-    final button = IconButton(
-      onPressed: onPressed,
-      iconSize: big ? 34 : size,
-      padding: EdgeInsets.all(big ? 10 : 8),
-      color: Colors.white,
-      disabledColor: Colors.white24,
-      style: IconButton.styleFrom(
-        backgroundColor: big ? Colors.white.withValues(alpha: 0.12) : Colors.transparent,
-      ),
-      icon: Icon(icon),
-    );
+    final button = big
+        ? IconButton(
+            onPressed: onPressed,
+            iconSize: 32,
+            style: IconButton.styleFrom(
+              backgroundColor: AppColors.accent,
+              foregroundColor: AppColors.onAccent,
+              fixedSize: const Size(60, 60),
+              shape: const CircleBorder(),
+            ),
+            icon: Icon(icon),
+          )
+        : IconButton(
+            onPressed: onPressed,
+            iconSize: 24,
+            style: IconButton.styleFrom(
+              foregroundColor: AppColors.text,
+              disabledForegroundColor: Colors.white24,
+              backgroundColor: active ? Colors.white.withValues(alpha: 0.14) : Colors.transparent,
+              fixedSize: const Size(48, 48),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: Icon(icon),
+          );
     return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
   }
 }
 
-/// Popup menu with a check mark on the selected entry.
-class ChoiceMenu<T> extends StatelessWidget {
+/// One entry of a [ChoiceMenu].
+class ChoiceItem<T> {
+  const ChoiceItem(this.value, this.title, {this.detail, this.selected = false});
+  final T value;
+  final String title;
+  final String? detail;
+  final bool selected;
+}
+
+/// Popup menu of choices (tracks, speed, format): two-line entries, the
+/// selected one highlighted with a check.
+class ChoiceMenu<T> extends StatefulWidget {
   const ChoiceMenu({
     super.key,
     required this.icon,
     required this.tooltip,
+    required this.header,
     required this.items,
     required this.onSelected,
     this.onOpened,
@@ -233,54 +304,108 @@ class ChoiceMenu<T> extends StatelessWidget {
   });
   final IconData icon;
   final String tooltip;
-  final List<(T value, String label, bool selected)> Function() items;
+
+  /// Upper-case header ("PISTE AUDIO · A").
+  final String header;
+  final List<ChoiceItem<T>> Function() items;
   final ValueChanged<T> onSelected;
   final VoidCallback? onOpened;
   final VoidCallback? onClosed;
 
   @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<T>(
-      tooltip: tooltip,
-      icon: Icon(icon, color: Colors.white),
-      position: PopupMenuPosition.over,
-      onOpened: onOpened,
-      onCanceled: onClosed,
-      onSelected: (v) {
-        onClosed?.call();
-        onSelected(v);
-      },
-      constraints: const BoxConstraints(minWidth: 220, maxWidth: 420, maxHeight: 460),
-      itemBuilder: (context) {
-        final list = items();
-        if (list.isEmpty) {
-          return [
-            const PopupMenuItem(enabled: false, child: Text('Aucune piste disponible')),
-          ];
-        }
-        return [
-          PopupMenuItem<T>(enabled: false, height: 32, child: Text(tooltip,
-              style: const TextStyle(color: AppColors.muted, fontSize: 12, fontWeight: FontWeight.w700))),
-          for (final (value, label, selected) in list)
-            PopupMenuItem<T>(
-              value: value,
-              height: 40,
-              child: Row(children: [
-                SizedBox(
-                  width: 26,
-                  child: selected ? const Icon(Icons.check, size: 18, color: AppColors.accent) : null,
-                ),
-                Expanded(
-                  child: Text(label,
+  State<ChoiceMenu<T>> createState() => _ChoiceMenuState<T>();
+}
+
+class _ChoiceMenuState<T> extends State<ChoiceMenu<T>> {
+  bool _open = false;
+
+  static const _headerHeight = 34.0;
+  static const _maxHeight = 480.0;
+
+  static double _itemHeight(ChoiceItem item) => (item.detail?.isNotEmpty ?? false) ? 60 : 46;
+
+  /// Opens the menu just above the button, right-aligned with it.
+  Future<void> _show() async {
+    final box = context.findRenderObject() as RenderBox?;
+    final overlay = Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+    if (box == null || overlay == null) return;
+    final rect = box.localToGlobal(Offset.zero, ancestor: overlay) & box.size;
+    final list = widget.items();
+    final content = list.isEmpty ? 48.0 : list.fold(0.0, (sum, i) => sum + _itemHeight(i));
+    final height = math.min(_maxHeight, 16 + _headerHeight + content);
+    final top = math.max(8.0, rect.top - 10 - height);
+
+    setState(() => _open = true);
+    widget.onOpened?.call();
+    final value = await showMenu<T>(
+      context: context,
+      position: RelativeRect.fromLTRB(rect.left, top, overlay.size.width - rect.right, overlay.size.height - top),
+      color: AppColors.surface2,
+      elevation: 12,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: const BorderSide(color: AppColors.borderStrong),
+      ),
+      menuPadding: const EdgeInsets.all(8),
+      constraints: const BoxConstraints(minWidth: 300, maxWidth: 420, maxHeight: _maxHeight),
+      items: _entries(list),
+    );
+    if (mounted) setState(() => _open = false);
+    widget.onClosed?.call();
+    if (value != null) widget.onSelected(value);
+  }
+
+  List<PopupMenuEntry<T>> _entries(List<ChoiceItem<T>> list) => [
+    PopupMenuItem<T>(
+      enabled: false,
+      height: _headerHeight,
+      child: Text(widget.header, style: labelStyle()),
+    ),
+    if (list.isEmpty) const PopupMenuItem(enabled: false, child: Text('Aucune piste disponible')),
+    for (final item in list)
+      PopupMenuItem<T>(
+        value: item.value,
+        padding: EdgeInsets.zero,
+        height: _itemHeight(item),
+        child: Container(
+          margin: const EdgeInsets.symmetric(vertical: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: item.selected ? AppColors.accentTint : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 30,
+                child: item.selected ? const Icon(Icons.check_rounded, size: 20, color: AppColors.accent) : null,
+              ),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.title,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                          fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                          color: selected ? AppColors.accent : AppColors.text)),
+                        fontSize: 15,
+                        fontWeight: item.selected ? FontWeight.w700 : FontWeight.w600,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    if (item.detail?.isNotEmpty ?? false)
+                      Text(item.detail!, style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                  ],
                 ),
-              ]),
-            ),
-        ];
-      },
-    );
-  }
+              ),
+            ],
+          ),
+        ),
+      ),
+  ];
+
+  @override
+  Widget build(BuildContext context) =>
+      OverlayButton(icon: widget.icon, tooltip: widget.tooltip, active: _open, onPressed: _show);
 }

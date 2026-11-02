@@ -116,7 +116,14 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     ];
     final plot = d?.plot ?? _sr.plot;
 
+    final category = _s.repo.categoryName(_sr.categoryId);
+    final lastProgress = target != null && target.$2 ? _progress[target.$1.extId] : null;
     return DetailLayout(
+      breadcrumb: category == null ? 'Séries' : 'Séries  ›  $category',
+      progress: lastProgress?.fraction,
+      progressLabel: lastProgress == null
+          ? null
+          : '${target!.$1.code} · reste ${formatRuntime((lastProgress.duration - lastProgress.position).inSeconds)}',
       backdrop: d?.backdrop ?? _sr.backdrop,
       poster: _sr.poster ?? d?.poster,
       title: _sr.name,
@@ -126,32 +133,41 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       actions: [
         if (target != null)
           FilledButton.icon(
+            style: FilledButton.styleFrom(minimumSize: const Size(0, 54)),
             onPressed: () => Launch.episode(context, _sr, target.$1, _episodes),
-            icon: const Icon(Icons.play_arrow_rounded),
+            icon: const Icon(Icons.play_arrow_rounded, size: 24),
             label: Text('${target.$2 ? 'Reprendre' : 'Lecture'} ${target.$1.code}'),
           ),
-        OutlinedButton.icon(
+        IconButton(
+          tooltip: _fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
           onPressed: () => _s.toggleFavorite(ContentKind.series, _sr.extId, _sr.sourceId),
-          icon: Icon(_fav ? Icons.favorite : Icons.favorite_border, color: _fav ? AppColors.accent2 : null),
-          label: Text(_fav ? 'Dans mes favoris' : 'Favori'),
+          style: IconButton.styleFrom(
+            minimumSize: const Size(54, 54),
+            backgroundColor: Colors.white.withValues(alpha: 0.06),
+            side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          ),
+          icon: Icon(_fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              color: _fav ? AppColors.cueSeries : AppColors.text),
         ),
       ],
       bottom: _episodes.isEmpty
           ? (_loading
               ? const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
               : null)
-          : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
+          : DetailSection(
+              title: 'Épisodes',
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final s in seasons)
                     ChoiceChip(
                       label: Text('Saison $s'),
                       selected: s == _season,
+                      side: BorderSide(color: s == _season ? AppColors.accent : AppColors.borderStrong),
                       onSelected: (_) => setState(() => _season = s),
                     ),
                 ]),
-                const SizedBox(height: 16),
+                const SizedBox(height: 18),
                 for (final e in _episodes.where((e) => e.season == _season))
                   _EpisodeTile(
                     episode: e,
