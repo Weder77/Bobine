@@ -39,8 +39,7 @@ class ShellNavigation extends InheritedWidget {
   const ShellNavigation({super.key, required this.goTo, required super.child});
   final ValueChanged<int> goTo;
 
-  static ShellNavigation? of(BuildContext context) =>
-      context.getInheritedWidgetOfExactType<ShellNavigation>();
+  static ShellNavigation? of(BuildContext context) => context.getInheritedWidgetOfExactType<ShellNavigation>();
 
   @override
   bool updateShouldNotify(ShellNavigation oldWidget) => false;
@@ -64,12 +63,26 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     _s = AppScope.of(context);
     _s.imports.addListener(_onImports);
+    HardwareKeyboard.instance.addHandler(_onKey);
   }
 
   @override
   void dispose() {
+    HardwareKeyboard.instance.removeHandler(_onKey);
     _s.imports.removeListener(_onImports);
     super.dispose();
+  }
+
+  /// Ctrl/Cmd + K opens the search from anywhere in the shell. A global
+  /// handler rather than Shortcuts: after closing the player or a dialog, the
+  /// keyboard focus is not always inside the shell's widget tree.
+  bool _onKey(KeyEvent e) {
+    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.keyK) return false;
+    final keys = HardwareKeyboard.instance;
+    if (!keys.isControlPressed && !keys.isMetaPressed) return false;
+    if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    _go(ShellTab.search);
+    return true;
   }
 
   void _onImports() {
@@ -89,40 +102,38 @@ class _AppShellState extends State<AppShell> {
   }
 
   Widget _page(int i) => switch (i) {
-        ShellTab.home => const HomeScreen(),
-        ShellTab.live => LiveScreen(active: _index == ShellTab.live),
-        ShellTab.guide => LiveScreen(active: _index == ShellTab.guide, guide: true),
-        ShellTab.movies => const CatalogScreen(series: false),
-        ShellTab.series => const CatalogScreen(series: true),
-        ShellTab.search => SearchScreen(active: _index == ShellTab.search),
-        _ => const SettingsScreen(),
-      };
+    ShellTab.home => const HomeScreen(),
+    ShellTab.live => LiveScreen(active: _index == ShellTab.live),
+    ShellTab.guide => LiveScreen(active: _index == ShellTab.guide, guide: true),
+    ShellTab.movies => const CatalogScreen(series: false),
+    ShellTab.series => const CatalogScreen(series: true),
+    ShellTab.search => SearchScreen(active: _index == ShellTab.search),
+    _ => const SettingsScreen(),
+  };
 
   @override
   Widget build(BuildContext context) {
     return ShellNavigation(
       goTo: _go,
-      child: CallbackShortcuts(
-        bindings: {
-          const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => _go(ShellTab.search),
-          const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => _go(ShellTab.search),
-        },
-        child: Scaffold(
-        body: Column(children: [
-          _TopBar(index: _index, onSelect: _go),
-          Expanded(
-            child: Stack(children: [
-              for (var i = 0; i < ShellTab.count; i++)
-                if (_built.contains(i))
-                  Offstage(
-                    key: ValueKey(i), // keeps each tab's state when others get built
-                    offstage: i != _index,
-                    child: TickerMode(enabled: i == _index, child: _page(i)),
-                  ),
-            ]),
-          ),
-          const _ImportBanner(),
-        ]),
+      child: Scaffold(
+        body: Column(
+          children: [
+            _TopBar(index: _index, onSelect: _go),
+            Expanded(
+              child: Stack(
+                children: [
+                  for (var i = 0; i < ShellTab.count; i++)
+                    if (_built.contains(i))
+                      Offstage(
+                        key: ValueKey(i), // keeps each tab's state when others get built
+                        offstage: i != _index,
+                        child: TickerMode(enabled: i == _index, child: _page(i)),
+                      ),
+                ],
+              ),
+            ),
+            const _ImportBanner(),
+          ],
         ),
       ),
     );
@@ -140,50 +151,55 @@ class _TopBar extends StatelessWidget {
       height: 80,
       padding: const EdgeInsets.symmetric(horizontal: 48),
       color: AppColors.bg,
-      child: Row(children: [
-        // Logo
-        Semantics(
-          button: true,
-          label: 'Lumen, accueil',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: () => onSelect(ShellTab.home),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
-              child: Row(children: [
-                const LumenMark(size: 34),
-                const SizedBox(width: 12),
-                Text('LUMEN',
-                    style: displayStyle(21, weight: FontWeight.w800).copyWith(letterSpacing: 4.2)),
-              ]),
+      child: Row(
+        children: [
+          // Logo
+          Semantics(
+            button: true,
+            label: 'Lumen, accueil',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => onSelect(ShellTab.home),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+                child: Row(
+                  children: [
+                    const LumenMark(size: 34),
+                    const SizedBox(width: 12),
+                    Text('LUMEN', style: displayStyle(21, weight: FontWeight.w800).copyWith(letterSpacing: 4.2)),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 40),
-        // Text tabs
-        Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(children: [
-              for (final (tab, label) in _textTabs)
-                _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
-            ]),
+          const SizedBox(width: 40),
+          // Text tabs
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (final (tab, label) in _textTabs)
+                    _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
+                ],
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 16),
-        _SearchPill(selected: index == ShellTab.search, onTap: () => onSelect(ShellTab.search)),
-        const SizedBox(width: 12),
-        _IconAction(
-          icon: Icons.tune_rounded,
-          tooltip: 'Réglages',
-          selected: index == ShellTab.settings,
-          onTap: () => onSelect(ShellTab.settings),
-        ),
-        const SizedBox(width: 12),
-        _SourceAvatar(onManage: () => onSelect(ShellTab.settings)),
-        const SizedBox(width: 28),
-        const _Clock(),
-      ]),
+          const SizedBox(width: 16),
+          _SearchPill(selected: index == ShellTab.search, onTap: () => onSelect(ShellTab.search)),
+          const SizedBox(width: 12),
+          _IconAction(
+            icon: Icons.tune_rounded,
+            tooltip: 'Réglages',
+            selected: index == ShellTab.settings,
+            onTap: () => onSelect(ShellTab.settings),
+          ),
+          const SizedBox(width: 12),
+          _SourceAvatar(onManage: () => onSelect(ShellTab.settings)),
+          const SizedBox(width: 28),
+          const _Clock(),
+        ],
+      ),
     );
   }
 }
@@ -208,21 +224,19 @@ class _TabButton extends StatelessWidget {
             margin: const EdgeInsets.symmetric(horizontal: 2),
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: selected ? AppColors.accent : Colors.transparent, width: 3),
-              ),
+              border: Border(bottom: BorderSide(color: selected ? AppColors.accent : Colors.transparent, width: 3)),
             ),
             alignment: Alignment.center,
             child: Padding(
               padding: const EdgeInsets.only(top: 3),
-              child: Text(label,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: selected
-                        ? AppColors.text
-                        : (hover ? AppColors.textSoft : AppColors.muted),
-                  )),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: selected ? AppColors.text : (hover ? AppColors.textSoft : AppColors.muted),
+                ),
+              ),
             ),
           ),
         ),
@@ -256,23 +270,27 @@ class _SearchPill extends StatelessWidget {
             width: 300,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: Row(children: [
-                const Icon(Icons.search_rounded, size: 19, color: AppColors.muted),
-                const SizedBox(width: 10),
-                const Expanded(
-                  child: Text('Chaînes, films, séries…',
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded, size: 19, color: AppColors.muted),
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'Chaînes, films, séries…',
                       overflow: TextOverflow.ellipsis,
-                      style: TextStyle(fontSize: 14, color: AppColors.muted)),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: AppColors.borderStrong),
+                      style: TextStyle(fontSize: 14, color: AppColors.muted),
+                    ),
                   ),
-                  child: const Text('Ctrl K', style: TextStyle(fontSize: 12, color: AppColors.muted)),
-                ),
-              ]),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.borderStrong),
+                    ),
+                    child: const Text('Ctrl K', style: TextStyle(fontSize: 12, color: AppColors.muted)),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -290,14 +308,12 @@ class _IconAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => IconButton(
-        tooltip: tooltip,
-        onPressed: onTap,
-        iconSize: 24,
-        style: IconButton.styleFrom(
-          backgroundColor: selected ? AppColors.accentTint : Colors.transparent,
-        ),
-        icon: Icon(icon, color: selected ? AppColors.accent : AppColors.textSoft),
-      );
+    tooltip: tooltip,
+    onPressed: onTap,
+    iconSize: 24,
+    style: IconButton.styleFrom(backgroundColor: selected ? AppColors.accentTint : Colors.transparent),
+    icon: Icon(icon, color: selected ? AppColors.accent : AppColors.textSoft),
+  );
 }
 
 /// Active source as an avatar; its menu switches source.
@@ -322,12 +338,17 @@ class _SourceAvatar extends StatelessWidget {
             for (final src in sources)
               PopupMenuItem(
                 value: src.id,
-                child: Row(children: [
-                  Icon(src.id == active?.id ? Icons.radio_button_checked : Icons.radio_button_off,
-                      size: 18, color: src.id == active?.id ? AppColors.accent : AppColors.muted),
-                  const SizedBox(width: 10),
-                  Text(src.name),
-                ]),
+                child: Row(
+                  children: [
+                    Icon(
+                      src.id == active?.id ? Icons.radio_button_checked : Icons.radio_button_off,
+                      size: 18,
+                      color: src.id == active?.id ? AppColors.accent : AppColors.muted,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(src.name),
+                  ],
+                ),
               ),
             const PopupMenuDivider(),
             const PopupMenuItem(value: -1, child: Text('Gérer les sources…')),
@@ -377,10 +398,9 @@ class _ClockState extends State<_Clock> {
 
   @override
   Widget build(BuildContext context) => Text(
-        formatClock(DateTime.now()),
-        style: displayStyle(26, weight: FontWeight.w600, color: AppColors.textSoft)
-            .copyWith(fontFeatures: tabularFigures),
-      );
+    formatClock(DateTime.now()),
+    style: displayStyle(26, weight: FontWeight.w600, color: AppColors.textSoft).copyWith(fontFeatures: tabularFigures),
+  );
 }
 
 /// App logo: an "L" on a solid accent square.
@@ -390,15 +410,15 @@ class LumenMark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          color: AppColors.accent,
-          borderRadius: BorderRadius.circular(size * 0.29),
-        ),
-        alignment: Alignment.center,
-        child: Text('L', style: displayStyle(size * 0.6, weight: FontWeight.w800, color: AppColors.onAccent)),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(size * 0.29)),
+    alignment: Alignment.center,
+    child: Text(
+      'L',
+      style: displayStyle(size * 0.6, weight: FontWeight.w800, color: AppColors.onAccent),
+    ),
+  );
 }
 
 class _ImportBanner extends StatelessWidget {
@@ -421,16 +441,20 @@ class _ImportBanner extends StatelessWidget {
             color: AppColors.surface,
             border: Border(top: BorderSide(color: AppColors.border)),
           ),
-          child: Row(children: [
-            const SizedBox(
-              width: 14,
-              height: 14,
-              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
-            ),
-            const SizedBox(width: 12),
-            Text('Mise à jour de « $name » — ${st.label}',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-          ]),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                'Mise à jour de « $name » — ${st.label}',
+                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+              ),
+            ],
+          ),
         );
       },
     );

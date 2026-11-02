@@ -18,11 +18,11 @@ class _HoverBuilderState extends State<HoverBuilder> {
 
   @override
   Widget build(BuildContext context) => MouseRegion(
-        cursor: widget.cursor,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: widget.builder(context, _hover),
-      );
+    cursor: widget.cursor,
+    onEnter: (_) => setState(() => _hover = true),
+    onExit: (_) => setState(() => _hover = false),
+    child: widget.builder(context, _hover),
+  );
 }
 
 /// Thin progress bar (accent on a translucent track).
@@ -35,29 +35,30 @@ class ProgressLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ClipRRect(
-        borderRadius: BorderRadius.circular(height),
-        child: SizedBox(
-          height: height,
-          child: Stack(fit: StackFit.expand, children: [
-            ColoredBox(color: track ?? Colors.white.withValues(alpha: 0.14)),
-            FractionallySizedBox(
-              alignment: Alignment.centerLeft,
-              widthFactor: value.clamp(0.0, 1.0),
-              child: ColoredBox(color: color),
-            ),
-          ]),
-        ),
-      );
+    borderRadius: BorderRadius.circular(height),
+    child: SizedBox(
+      height: height,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ColoredBox(color: track ?? Colors.white.withValues(alpha: 0.14)),
+          FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: value.clamp(0.0, 1.0),
+            child: ColoredBox(color: color),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Focus / hover ring used by cards: a light outline plus a soft halo.
 BoxDecoration focusRing({required bool on, double radius = 14, Color? halo}) => BoxDecoration(
-      borderRadius: BorderRadius.circular(radius),
-      border: Border.all(color: on ? AppColors.text : Colors.transparent, width: 2),
-      boxShadow: on
-          ? [BoxShadow(color: (halo ?? AppColors.accent).withValues(alpha: 0.22), spreadRadius: 4)]
-          : null,
-    );
+  borderRadius: BorderRadius.circular(radius),
+  border: Border.all(color: on ? AppColors.text : Colors.transparent, width: 2),
+  boxShadow: on ? [BoxShadow(color: (halo ?? AppColors.accent).withValues(alpha: 0.22), spreadRadius: 4)] : null,
+);
 
 /// Poster (2:3) card for movies and series.
 class PosterCard extends StatelessWidget {
@@ -85,61 +86,73 @@ class PosterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: HoverBuilder(builder: (context, hover) {
-        return Semantics(
-          button: true,
-          label: title,
-          child: GestureDetector(
-            onTap: onTap,
-            child: SizedBox(
-              width: width,
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                AspectRatio(
-                  aspectRatio: 2 / 3,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 160),
-                    decoration: focusRing(on: hover, radius: 16),
-                    padding: const EdgeInsets.all(2),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(13),
-                      child: Stack(fit: StackFit.expand, children: [
-                        NetImage(image, decodeWidth: width, placeholder: _TitlePlaceholder(title)),
-                        if (rating != null && rating! > 0)
-                          Positioned(top: 8, left: 8, child: RatingBadge(rating!)),
-                        if (favorite)
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Container(
-                              padding: const EdgeInsets.all(5),
-                              decoration: BoxDecoration(
-                                color: AppColors.bg.withValues(alpha: 0.72),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Icon(Icons.favorite_rounded, color: AppColors.cueSeries, size: 15),
-                            ),
+      child: HoverBuilder(
+        builder: (context, hover) {
+          return Semantics(
+            button: true,
+            label: title,
+            child: GestureDetector(
+              onTap: onTap,
+              child: SizedBox(
+                width: width,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 2 / 3,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 160),
+                        decoration: focusRing(on: hover, radius: 16),
+                        padding: const EdgeInsets.all(2),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(13),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              NetImage(image, decodeWidth: width, placeholder: _TitlePlaceholder(title)),
+                              if (rating != null && rating! > 0)
+                                Positioned(top: 8, left: 8, child: RatingBadge(rating!)),
+                              if (favorite)
+                                Positioned(
+                                  top: 8,
+                                  right: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.all(5),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.bg.withValues(alpha: 0.72),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Icon(Icons.favorite_rounded, color: AppColors.cueSeries, size: 15),
+                                  ),
+                                ),
+                              if (progress != null && progress! > 0)
+                                Positioned(left: 10, right: 10, bottom: 10, child: ProgressLine(progress!)),
+                            ],
                           ),
-                        if (progress != null && progress! > 0)
-                          Positioned(left: 10, right: 10, bottom: 10, child: ProgressLine(progress!)),
-                      ]),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-                if (subtitle != null && subtitle!.isNotEmpty)
-                  Text(subtitle!,
+                    const SizedBox(height: 8),
+                    Text(
+                      title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 13, color: AppColors.muted)),
-              ]),
+                      style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                    ),
+                    if (subtitle != null && subtitle!.isNotEmpty)
+                      Text(
+                        subtitle!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                      ),
+                  ],
+                ),
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        },
+      ),
     );
   }
 }
@@ -150,18 +163,20 @@ class _TitlePlaceholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ColoredBox(
-        color: AppColors.surface3,
-        child: Align(
-          alignment: Alignment.bottomLeft,
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Text(title,
-                maxLines: 4,
-                overflow: TextOverflow.ellipsis,
-                style: displayStyle(20, color: AppColors.textSoft)),
-          ),
+    color: AppColors.surface3,
+    child: Align(
+      alignment: Alignment.bottomLeft,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Text(
+          title,
+          maxLines: 4,
+          overflow: TextOverflow.ellipsis,
+          style: displayStyle(20, color: AppColors.textSoft),
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class RatingBadge extends StatelessWidget {
@@ -170,18 +185,20 @@ class RatingBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        decoration: BoxDecoration(
-          color: AppColors.bg.withValues(alpha: 0.72),
-          borderRadius: BorderRadius.circular(7),
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(color: AppColors.bg.withValues(alpha: 0.72), borderRadius: BorderRadius.circular(7)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const Icon(Icons.star_rounded, size: 14, color: AppColors.accent),
+        const SizedBox(width: 3),
+        Text(
+          rating.toStringAsFixed(1).replaceAll('.', ','),
+          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.star_rounded, size: 14, color: AppColors.accent),
-          const SizedBox(width: 3),
-          Text(rating.toStringAsFixed(1).replaceAll('.', ','),
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-        ]),
-      );
+      ],
+    ),
+  );
 }
 
 /// Wide 16:9 card used for "Continuer à regarder".
@@ -208,77 +225,91 @@ class LandscapeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
-      child: HoverBuilder(builder: (context, hover) {
-        return GestureDetector(
-          onTap: onTap,
-          child: SizedBox(
-            width: width,
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              AspectRatio(
-                aspectRatio: 16 / 9,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 160),
-                  decoration: focusRing(on: hover, radius: 16),
-                  padding: const EdgeInsets.all(2),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(13),
-                    child: Stack(fit: StackFit.expand, children: [
-                      NetImage(image,
-                          decodeWidth: width,
-                          alignment: Alignment.topCenter,
-                          placeholder: const ColoredBox(color: AppColors.surface3)),
-                      const DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [Colors.transparent, Color(0xB3000000)],
-                            begin: Alignment(0, 0.2),
-                            end: Alignment.bottomCenter,
-                          ),
+      child: HoverBuilder(
+        builder: (context, hover) {
+          return GestureDetector(
+            onTap: onTap,
+            child: SizedBox(
+              width: width,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 160),
+                      decoration: focusRing(on: hover, radius: 16),
+                      padding: const EdgeInsets.all(2),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(13),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            NetImage(
+                              image,
+                              decodeWidth: width,
+                              alignment: Alignment.topCenter,
+                              placeholder: const ColoredBox(color: AppColors.surface3),
+                            ),
+                            const DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.transparent, Color(0xB3000000)],
+                                  begin: Alignment(0, 0.2),
+                                  end: Alignment.bottomCenter,
+                                ),
+                              ),
+                            ),
+                            Center(
+                              child: AnimatedOpacity(
+                                opacity: hover ? 1 : 0,
+                                duration: const Duration(milliseconds: 150),
+                                child: Container(
+                                  width: 52,
+                                  height: 52,
+                                  decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+                                  child: const Icon(Icons.play_arrow_rounded, color: AppColors.onAccent, size: 30),
+                                ),
+                              ),
+                            ),
+                            if (onRemove != null && hover)
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: IconButton.filledTonal(
+                                  iconSize: 16,
+                                  tooltip: 'Retirer',
+                                  onPressed: onRemove,
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ),
+                            if (progress != null)
+                              Positioned(left: 12, right: 12, bottom: 12, child: ProgressLine(progress!)),
+                          ],
                         ),
                       ),
-                      Center(
-                        child: AnimatedOpacity(
-                          opacity: hover ? 1 : 0,
-                          duration: const Duration(milliseconds: 150),
-                          child: Container(
-                            width: 52,
-                            height: 52,
-                            decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
-                            child: const Icon(Icons.play_arrow_rounded, color: AppColors.onAccent, size: 30),
-                          ),
-                        ),
-                      ),
-                      if (onRemove != null && hover)
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: IconButton.filledTonal(
-                            iconSize: 16,
-                            tooltip: 'Retirer',
-                            onPressed: onRemove,
-                            icon: const Icon(Icons.close),
-                          ),
-                        ),
-                      if (progress != null)
-                        Positioned(left: 12, right: 12, bottom: 12, child: ProgressLine(progress!)),
-                    ]),
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
-              if (subtitle != null)
-                Text(subtitle!,
+                  const SizedBox(height: 10),
+                  Text(
+                    title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13, color: AppColors.muted)),
-            ]),
-          ),
-        );
-      }),
+                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 15),
+                  ),
+                  if (subtitle != null)
+                    Text(
+                      subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                    ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }
@@ -302,17 +333,16 @@ class ChannelLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final placeholder = Center(
-      child: Text(initials(name),
-          style: TextStyle(fontSize: size * 0.3, fontWeight: FontWeight.w800, color: AppColors.textSoft)),
+      child: Text(
+        initials(name),
+        style: TextStyle(fontSize: size * 0.3, fontWeight: FontWeight.w800, color: AppColors.textSoft),
+      ),
     );
     return Container(
       width: size,
       height: size,
       padding: EdgeInsets.all(size * 0.12),
-      decoration: BoxDecoration(
-        color: AppColors.surface3,
-        borderRadius: BorderRadius.circular(size * 0.24),
-      ),
+      decoration: BoxDecoration(color: AppColors.surface3, borderRadius: BorderRadius.circular(size * 0.24)),
       child: NetImage(url, fit: BoxFit.contain, decodeWidth: size, placeholder: placeholder),
     );
   }
@@ -326,11 +356,13 @@ class SectionHeader extends StatelessWidget {
   final VoidCallback? onAction;
 
   @override
-  Widget build(BuildContext context) => Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-        Expanded(child: Text(title, style: displayStyle(24))),
-        if (actionLabel != null && onAction != null)
-          TextButton(onPressed: onAction, child: Text(actionLabel!)),
-      ]);
+  Widget build(BuildContext context) => Row(
+    crossAxisAlignment: CrossAxisAlignment.center,
+    children: [
+      Expanded(child: Text(title, style: displayStyle(24))),
+      if (actionLabel != null && onAction != null) TextButton(onPressed: onAction, child: Text(actionLabel!)),
+    ],
+  );
 }
 
 /// Section title + horizontally scrolling list with arrow buttons (mouse friendly).
@@ -378,36 +410,43 @@ class _SectionRowState extends State<SectionRow> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Padding(
-        padding: const EdgeInsets.fromLTRB(48, 0, 48, 14),
-        child: Row(children: [
-          Expanded(child: Text(widget.title, style: displayStyle(24))),
-          ?widget.trailing,
-        ]),
-      ),
-      SizedBox(
-        height: widget.height,
-        child: HoverBuilder(
-          cursor: MouseCursor.defer,
-          builder: (context, hover) => Stack(children: [
-            ListView.separated(
-              controller: _controller,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 6),
-              clipBehavior: Clip.none,
-              itemCount: widget.itemCount,
-              separatorBuilder: (_, _) => SizedBox(width: widget.gap),
-              itemBuilder: widget.itemBuilder,
-            ),
-            if (hover) ...[
-              Positioned(left: 8, top: 0, bottom: 40, child: _Arrow(Icons.chevron_left_rounded, () => _page(-1))),
-              Positioned(right: 8, top: 0, bottom: 40, child: _Arrow(Icons.chevron_right_rounded, () => _page(1))),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(48, 0, 48, 14),
+          child: Row(
+            children: [
+              Expanded(child: Text(widget.title, style: displayStyle(24))),
+              ?widget.trailing,
             ],
-          ]),
+          ),
         ),
-      ),
-    ]);
+        SizedBox(
+          height: widget.height,
+          child: HoverBuilder(
+            cursor: MouseCursor.defer,
+            builder: (context, hover) => Stack(
+              children: [
+                ListView.separated(
+                  controller: _controller,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 6),
+                  clipBehavior: Clip.none,
+                  itemCount: widget.itemCount,
+                  separatorBuilder: (_, _) => SizedBox(width: widget.gap),
+                  itemBuilder: widget.itemBuilder,
+                ),
+                if (hover) ...[
+                  Positioned(left: 8, top: 0, bottom: 40, child: _Arrow(Icons.chevron_left_rounded, () => _page(-1))),
+                  Positioned(right: 8, top: 0, bottom: 40, child: _Arrow(Icons.chevron_right_rounded, () => _page(1))),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -418,16 +457,16 @@ class _Arrow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Material(
-          color: AppColors.surface2.withValues(alpha: 0.92),
-          shape: const CircleBorder(side: BorderSide(color: AppColors.borderStrong)),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onTap,
-            child: Padding(padding: const EdgeInsets.all(10), child: Icon(icon, size: 26)),
-          ),
-        ),
-      );
+    child: Material(
+      color: AppColors.surface2.withValues(alpha: 0.92),
+      shape: const CircleBorder(side: BorderSide(color: AppColors.borderStrong)),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Padding(padding: const EdgeInsets.all(10), child: Icon(icon, size: 26)),
+      ),
+    ),
+  );
 }
 
 class EmptyState extends StatelessWidget {
@@ -439,29 +478,35 @@ class EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
-              child: Icon(icon, size: 34, color: AppColors.muted),
-            ),
-            const SizedBox(height: 18),
-            Text(title, textAlign: TextAlign.center, style: displayStyle(22)),
-            if (message != null) ...[
-              const SizedBox(height: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Text(message!,
-                    textAlign: TextAlign.center, style: const TextStyle(color: AppColors.muted, height: 1.45)),
+    child: Padding(
+      padding: const EdgeInsets.all(32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(20)),
+            child: Icon(icon, size: 34, color: AppColors.muted),
+          ),
+          const SizedBox(height: 18),
+          Text(title, textAlign: TextAlign.center, style: displayStyle(22)),
+          if (message != null) ...[
+            const SizedBox(height: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: AppColors.muted, height: 1.45),
               ),
-            ],
-            if (action != null) ...[const SizedBox(height: 22), action!],
-          ]),
-        ),
-      );
+            ),
+          ],
+          if (action != null) ...[const SizedBox(height: 22), action!],
+        ],
+      ),
+    ),
+  );
 }
 
 /// Entry of a category rail.
@@ -476,9 +521,8 @@ class CategoryEntry {
 /// Copy of [entries] with the "fav" entry showing [count] (the counters are
 /// otherwise only computed when the screen loads).
 List<CategoryEntry> withFavoriteCount(List<CategoryEntry> entries, int count) => [
-      for (final e in entries)
-        e.id == 'fav' ? CategoryEntry(id: e.id, label: e.label, count: count, icon: e.icon) : e,
-    ];
+  for (final e in entries) e.id == 'fav' ? CategoryEntry(id: e.id, label: e.label, count: count, icon: e.icon) : e,
+];
 
 /// Left category rail used by Live / Films / Séries.
 class CategoryPane extends StatefulWidget {
@@ -513,81 +557,90 @@ class _CategoryPaneState extends State<CategoryPane> {
       width: widget.width,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(36, 8, 8, 16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-            child: Text('CATÉGORIES', style: labelStyle()),
-          ),
-          TextField(
-            onChanged: (v) => setState(() => _filter = v),
-            style: const TextStyle(fontSize: 14),
-            decoration: const InputDecoration(
-              hintText: 'Filtrer',
-              prefixIcon: Icon(Icons.search_rounded, size: 18),
-              contentPadding: EdgeInsets.symmetric(vertical: 11),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+              child: Text('CATÉGORIES', style: labelStyle()),
             ),
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: Scrollbar(
-              child: ListView.builder(
-                padding: const EdgeInsets.only(right: 6, bottom: 12),
-                itemCount: list.length,
-                itemBuilder: (context, i) {
-                  final e = list[i];
-                  final sel = e.id == widget.selected;
-                  final tile = SizedBox(
-                    height: 44,
-                    child: Material(
-                      color: sel ? AppColors.selected : Colors.transparent,
-                      borderRadius: BorderRadius.circular(10),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: () => widget.onSelect(e.id),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Row(children: [
-                            if (e.icon != null) ...[
-                              Icon(e.icon, size: 18, color: sel ? AppColors.accent : AppColors.muted),
-                              const SizedBox(width: 10),
-                            ],
-                            Expanded(
-                              child: Text(e.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: sel ? FontWeight.w600 : FontWeight.w500,
-                                    color: sel ? AppColors.text : AppColors.textSoft,
-                                  )),
-                            ),
-                            if (e.count != null)
-                              Text('${e.count}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: sel ? AppColors.accent : AppColors.faint,
-                                    fontFeatures: tabularFigures,
-                                  )),
-                          ]),
-                        ),
-                      ),
-                    ),
-                  );
-                  if (i == firstCategory && i > 0) {
-                    return Column(mainAxisSize: MainAxisSize.min, children: [
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                        child: Divider(),
-                      ),
-                      tile,
-                    ]);
-                  }
-                  return tile;
-                },
+            TextField(
+              onChanged: (v) => setState(() => _filter = v),
+              style: const TextStyle(fontSize: 14),
+              decoration: const InputDecoration(
+                hintText: 'Filtrer',
+                prefixIcon: Icon(Icons.search_rounded, size: 18),
+                contentPadding: EdgeInsets.symmetric(vertical: 11),
               ),
             ),
-          ),
-        ]),
+            const SizedBox(height: 10),
+            Expanded(
+              child: Scrollbar(
+                child: ListView.builder(
+                  padding: const EdgeInsets.only(right: 6, bottom: 12),
+                  itemCount: list.length,
+                  itemBuilder: (context, i) {
+                    final e = list[i];
+                    final sel = e.id == widget.selected;
+                    final tile = SizedBox(
+                      height: 44,
+                      child: Material(
+                        color: sel ? AppColors.selected : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(10),
+                          onTap: () => widget.onSelect(e.id),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            child: Row(
+                              children: [
+                                if (e.icon != null) ...[
+                                  Icon(e.icon, size: 18, color: sel ? AppColors.accent : AppColors.muted),
+                                  const SizedBox(width: 10),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    e.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14.5,
+                                      fontWeight: sel ? FontWeight.w600 : FontWeight.w500,
+                                      color: sel ? AppColors.text : AppColors.textSoft,
+                                    ),
+                                  ),
+                                ),
+                                if (e.count != null)
+                                  Text(
+                                    '${e.count}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: sel ? AppColors.accent : AppColors.faint,
+                                      fontFeatures: tabularFigures,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                    if (i == firstCategory && i > 0) {
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Padding(padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12), child: Divider()),
+                          tile,
+                        ],
+                      );
+                    }
+                    return tile;
+                  },
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -603,13 +656,19 @@ class Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (icon != null) ...[Icon(icon, size: 14, color: textColor), const SizedBox(width: 5)],
-          Text(text, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor)),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[Icon(icon, size: 14, color: textColor), const SizedBox(width: 5)],
+        Text(
+          text,
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Outlined quality tag ("4K", "5.1").
@@ -619,13 +678,13 @@ class QualityTag extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: const Color(0xFF3A3F4B)),
-        ),
-        child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: const Color(0xFF3A3F4B)),
+    ),
+    child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+  );
 }
 
 /// Red "EN DIRECT" badge with a white dot.
@@ -634,13 +693,22 @@ class LiveBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(color: AppColors.liveBadge, borderRadius: BorderRadius.circular(8)),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 6, height: 6, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          const Text('EN DIRECT',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.7, color: Colors.white)),
-        ]),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(color: AppColors.liveBadge, borderRadius: BorderRadius.circular(8)),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 6),
+        const Text(
+          'EN DIRECT',
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, letterSpacing: 0.7, color: Colors.white),
+        ),
+      ],
+    ),
+  );
 }

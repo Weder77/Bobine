@@ -60,113 +60,135 @@ class _SearchScreenState extends State<SearchScreen> {
   @override
   Widget build(BuildContext context) {
     final r = _results;
-    return ListView(padding: const EdgeInsets.only(top: 32, bottom: 40), children: [
-      Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: TextField(
-          controller: _controller,
-          focusNode: _focus,
-          onChanged: _onChanged,
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-          decoration: InputDecoration(
-            hintText: 'Chaînes, films, séries…',
-            prefixIcon: const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 14),
-              child: Icon(Icons.search_rounded, size: 26),
+    return ListView(
+      padding: const EdgeInsets.only(top: 24, bottom: 48),
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          child: Text('Recherche', style: displayStyle(30)),
+        ),
+        const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 48),
+          child: TextField(
+            controller: _controller,
+            focusNode: _focus,
+            onChanged: _onChanged,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            cursorColor: AppColors.accent,
+            decoration: InputDecoration(
+              hintText: 'Chaînes, films, séries…',
+              prefixIcon: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 14),
+                child: Icon(Icons.search_rounded, size: 26, color: AppColors.accent),
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 22),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: AppColors.borderStrong),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(18),
+                borderSide: const BorderSide(color: AppColors.accent, width: 1.5),
+              ),
+              suffixIcon: _query.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        _controller.clear();
+                        _onChanged('');
+                      },
+                      icon: const Icon(Icons.close_rounded),
+                    ),
             ),
-            contentPadding: const EdgeInsets.symmetric(vertical: 20),
-            suffixIcon: _query.isEmpty
-                ? null
-                : IconButton(
-                    onPressed: () {
-                      _controller.clear();
-                      _onChanged('');
-                    },
-                    icon: const Icon(Icons.close),
-                  ),
           ),
         ),
-      ),
-      const SizedBox(height: 28),
-      if (r == null)
-        const EmptyState(
-          icon: Icons.manage_search_rounded,
-          title: 'Que veux-tu regarder ?',
-          message: 'La recherche ignore les accents et la casse. Tape au moins 2 caractères.',
-        )
-      else if (r.isEmpty)
-        EmptyState(icon: Icons.search_off_rounded, title: 'Aucun résultat pour « $_query »')
-      else ...[
-        if (r.channels.isNotEmpty) ...[
-          SectionRow(
-            title: 'Chaînes (${r.channels.length})',
-            height: 84,
-            itemCount: r.channels.length,
-            itemBuilder: (context, i) {
-              final c = r.channels[i];
-              return HoverBuilder(
-                builder: (context, hover) => GestureDetector(
-                  onTap: () => Launch.channel(context, c, r.channels),
-                  child: Container(
-                    width: 260,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: hover ? AppColors.surface3 : AppColors.surface2,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: hover ? AppColors.accent : AppColors.border),
-                    ),
-                    child: Row(children: [
-                      ChannelLogo(name: c.name, url: c.logo, size: 44),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(c.name,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 28),
+        if (r == null)
+          const EmptyState(
+            icon: Icons.manage_search_rounded,
+            title: 'Que veux-tu regarder ?',
+            message: 'La recherche ignore les accents et la casse. Tape au moins 2 caractères.',
+          )
+        else if (r.isEmpty)
+          EmptyState(icon: Icons.search_off_rounded, title: 'Aucun résultat pour « $_query »')
+        else ...[
+          if (r.channels.isNotEmpty) ...[
+            SectionRow(
+              title: 'Chaînes (${r.channels.length})',
+              height: 88,
+              itemCount: r.channels.length,
+              itemBuilder: (context, i) {
+                final c = r.channels[i];
+                return HoverBuilder(
+                  builder: (context, hover) => GestureDetector(
+                    onTap: () => Launch.channel(context, c, r.channels),
+                    child: Container(
+                      width: 280,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: hover ? AppColors.surface2 : AppColors.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: hover ? AppColors.accent : AppColors.border),
                       ),
-                    ]),
+                      child: Row(
+                        children: [
+                          ChannelLogo(name: c.name, url: c.logo, size: 48),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              c.name,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 28),
+                );
+              },
+            ),
+            const SizedBox(height: 28),
+          ],
+          if (r.movies.isNotEmpty) ...[
+            SectionRow(
+              title: 'Films (${r.movies.length})',
+              height: 300,
+              itemCount: r.movies.length,
+              itemBuilder: (context, i) {
+                final m = r.movies[i];
+                return PosterCard(
+                  title: m.name,
+                  subtitle: m.year?.toString(),
+                  image: m.poster,
+                  rating: m.rating,
+                  onTap: () => Launch.openMovie(context, m),
+                );
+              },
+            ),
+            const SizedBox(height: 28),
+          ],
+          if (r.series.isNotEmpty)
+            SectionRow(
+              title: 'Séries (${r.series.length})',
+              height: 300,
+              itemCount: r.series.length,
+              itemBuilder: (context, i) {
+                final sr = r.series[i];
+                return PosterCard(
+                  title: sr.name,
+                  subtitle: sr.year?.toString(),
+                  image: sr.poster,
+                  rating: sr.rating,
+                  onTap: () => Launch.openSeries(context, sr),
+                );
+              },
+            ),
         ],
-        if (r.movies.isNotEmpty) ...[
-          SectionRow(
-            title: 'Films (${r.movies.length})',
-            height: 300,
-            itemCount: r.movies.length,
-            itemBuilder: (context, i) {
-              final m = r.movies[i];
-              return PosterCard(
-                title: m.name,
-                subtitle: m.year?.toString(),
-                image: m.poster,
-                rating: m.rating,
-                onTap: () => Launch.openMovie(context, m),
-              );
-            },
-          ),
-          const SizedBox(height: 28),
-        ],
-        if (r.series.isNotEmpty)
-          SectionRow(
-            title: 'Séries (${r.series.length})',
-            height: 300,
-            itemCount: r.series.length,
-            itemBuilder: (context, i) {
-              final sr = r.series[i];
-              return PosterCard(
-                title: sr.name,
-                subtitle: sr.year?.toString(),
-                image: sr.poster,
-                rating: sr.rating,
-                onTap: () => Launch.openSeries(context, sr),
-              );
-            },
-          ),
       ],
-    ]);
+    );
   }
 }

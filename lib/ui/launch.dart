@@ -9,8 +9,7 @@ import 'series_detail_screen.dart';
 
 /// Entry points used by every screen to start playback or open details.
 class Launch {
-  static Future<void> channel(BuildContext context, Channel c, List<Channel> list,
-      {bool keepAlive = false}) async {
+  static Future<void> channel(BuildContext context, Channel c, List<Channel> list, {bool keepAlive = false}) async {
     final s = AppScope.of(context);
     final source = s.repo.source(c.sourceId);
     if (source == null) return;
@@ -19,12 +18,7 @@ class Launch {
     if (index < 0) index = 0;
     await PlayerScreen.open(
       context,
-      PlayerSession(
-        item: channelItem(source, c),
-        channels: channels,
-        channelIndex: index,
-        keepAlive: keepAlive,
-      ),
+      PlayerSession(item: channelItem(source, c), channels: channels, channelIndex: index, keepAlive: keepAlive),
     );
   }
 
@@ -42,8 +36,13 @@ class Launch {
     );
   }
 
-  static Future<void> episode(BuildContext context, Series? series, Episode e, List<Episode> all,
-      {bool restart = false}) async {
+  static Future<void> episode(
+    BuildContext context,
+    Series? series,
+    Episode e,
+    List<Episode> all, {
+    bool restart = false,
+  }) async {
     final s = AppScope.of(context);
     final source = s.repo.source(e.sourceId);
     if (source == null) return;
@@ -73,14 +72,14 @@ class Launch {
       if (series != null && context.mounted) return openSeries(context, series);
     }
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Ce contenu n'est plus disponible chez le fournisseur.")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Ce contenu n'est plus disponible chez le fournisseur.")));
     }
   }
 
-  static Future<void> openMovie(BuildContext context, Movie m) => Navigator.of(context)
-      .push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)));
+  static Future<void> openMovie(BuildContext context, Movie m) =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)));
 
-  static Future<void> openSeries(BuildContext context, Series sr) => Navigator.of(context)
-      .push(MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: sr)));
+  static Future<void> openSeries(BuildContext context, Series sr) =>
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: sr)));
 }

@@ -40,9 +40,12 @@ class ImageFetcher {
     }
     // Note: the whenComplete callback must not return the removed future,
     // otherwise the returned future would wait on itself forever.
-    return _inflight.putIfAbsent(url, () => _load(url).whenComplete(() {
-          _inflight.remove(url);
-        }));
+    return _inflight.putIfAbsent(
+      url,
+      () => _load(url).whenComplete(() {
+        _inflight.remove(url);
+      }),
+    );
   }
 
   Future<Uint8List> _load(String url) async {
@@ -108,8 +111,7 @@ class DiskCachedImage extends ImageProvider<DiskCachedImage> {
   final String url;
 
   @override
-  Future<DiskCachedImage> obtainKey(ImageConfiguration configuration) =>
-      SynchronousFuture(this);
+  Future<DiskCachedImage> obtainKey(ImageConfiguration configuration) => SynchronousFuture(this);
 
   @override
   ImageStreamCompleter loadImage(DiskCachedImage key, ImageDecoderCallback decode) =>
@@ -128,8 +130,7 @@ class DiskCachedImage extends ImageProvider<DiskCachedImage> {
   int get hashCode => url.hashCode;
 }
 
-bool _isHttp(String? url) =>
-    url != null && (url.startsWith('http://') || url.startsWith('https://'));
+bool _isHttp(String? url) => url != null && (url.startsWith('http://') || url.startsWith('https://'));
 
 /// Network image decoded at display size (low memory) with a fade-in and a
 /// graceful placeholder.
@@ -161,8 +162,7 @@ class NetImage extends StatelessWidget {
     if (!_isHttp(url)) return SizedBox(width: width, height: height, child: ph);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final dw = decodeWidth ?? width;
-    final provider = ResizeImage.resizeIfNeeded(
-        dw == null ? null : (dw * dpr).round(), null, DiskCachedImage(url!));
+    final provider = ResizeImage.resizeIfNeeded(dw == null ? null : (dw * dpr).round(), null, DiskCachedImage(url!));
     return Image(
       image: provider,
       width: width,
@@ -174,14 +174,13 @@ class NetImage extends StatelessWidget {
       errorBuilder: (_, _, _) => SizedBox(width: width, height: height, child: ph),
       frameBuilder: (context, child, frame, sync) {
         if (sync) return child;
-        return Stack(fit: StackFit.passthrough, children: [
-          if (frame == null) SizedBox(width: width, height: height, child: ph),
-          AnimatedOpacity(
-            opacity: frame == null ? 0 : 1,
-            duration: const Duration(milliseconds: 220),
-            child: child,
-          ),
-        ]);
+        return Stack(
+          fit: StackFit.passthrough,
+          children: [
+            if (frame == null) SizedBox(width: width, height: height, child: ph),
+            AnimatedOpacity(opacity: frame == null ? 0 : 1, duration: const Duration(milliseconds: 220), child: child),
+          ],
+        );
       },
     );
   }

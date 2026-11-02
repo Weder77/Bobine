@@ -83,15 +83,18 @@ class _SourceFormState extends State<SourceForm> {
   void _onM3uChanged(String v) {
     final creds = XtreamCredentials.tryParse(v);
     if (creds != null && v.contains('get.php')) {
-      setState(() => _info =
-          'Ce lien vient d\'un serveur Xtream : l\'onglet « Xtream Codes » donne accès aux films, séries et au guide TV.');
+      setState(
+        () => _info = 'Ce lien vient d\'un serveur Xtream : l\'onglet « Xtream Codes » donne accès aux films, séries et au guide TV.',
+      );
     }
   }
 
   Future<void> _pickFile() async {
-    final file = await openFile(acceptedTypeGroups: const [
-      XTypeGroup(label: 'Playlists', extensions: ['m3u', 'm3u8', 'txt']),
-    ]);
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Playlists', extensions: ['m3u', 'm3u8', 'txt']),
+      ],
+    );
     if (file != null) {
       _m3u.text = file.path;
       if (_name.text.isEmpty) _name.text = file.name.replaceAll(RegExp(r'\.(m3u8?|txt)$'), '');
@@ -176,34 +179,39 @@ class _SourceFormState extends State<SourceForm> {
     final isX = _type == SourceType.xtream;
     var name = _name.text.trim();
     if (name.isEmpty) {
-      final host = Uri.tryParse(isX ? (_server.text.contains('://') ? _server.text : 'http://${_server.text}') : _m3u.text)?.host;
+      final host = Uri.tryParse(
+        isX ? (_server.text.contains('://') ? _server.text : 'http://${_server.text}') : _m3u.text,
+      )?.host;
       name = (host == null || host.isEmpty) ? (isX ? 'Mon IPTV' : 'Ma playlist') : host;
     }
     final url = isX ? _server.text.trim() : _m3u.text.trim();
     int id;
     if (_editing) {
       id = widget.initial!.id;
-      s.repo.updateSource(id,
-          name: name,
-          url: url,
-          username: isX ? _user.text.trim() : null,
-          password: isX ? _pass.text : null,
-          epgUrl: _epg.text,
-          userAgent: _ua.text,
-          liveFormat: _liveFormat,
-          epgOffset: _epgOffset);
+      s.repo.updateSource(
+        id,
+        name: name,
+        url: url,
+        username: isX ? _user.text.trim() : null,
+        password: isX ? _pass.text : null,
+        epgUrl: _epg.text,
+        userAgent: _ua.text,
+        liveFormat: _liveFormat,
+        epgOffset: _epgOffset,
+      );
       s.library.contentChanged();
     } else {
       id = s.repo.insertSource(
-          name: name,
-          type: _type,
-          url: url,
-          username: isX ? _user.text.trim() : null,
-          password: isX ? _pass.text : null,
-          epgUrl: _epg.text,
-          userAgent: _ua.text,
-          liveFormat: _liveFormat,
-          epgOffset: _epgOffset);
+        name: name,
+        type: _type,
+        url: url,
+        username: isX ? _user.text.trim() : null,
+        password: isX ? _pass.text : null,
+        epgUrl: _epg.text,
+        userAgent: _ua.text,
+        liveFormat: _liveFormat,
+        epgOffset: _epgOffset,
+      );
       s.selectSource(id);
     }
     final source = s.repo.source(id)!;
@@ -224,181 +232,212 @@ class _SourceFormState extends State<SourceForm> {
   @override
   Widget build(BuildContext context) {
     final isX = _type == SourceType.xtream;
-    return Column(crossAxisAlignment: CrossAxisAlignment.stretch, mainAxisSize: MainAxisSize.min, children: [
-      if (!_editing)
-        SegmentedButton<SourceType>(
-          segments: const [
-            ButtonSegment(value: SourceType.xtream, icon: Icon(Icons.dns_rounded), label: Text('Xtream Codes')),
-            ButtonSegment(value: SourceType.m3u, icon: Icon(Icons.playlist_play_rounded), label: Text('Playlist M3U')),
-          ],
-          selected: {_type},
-          showSelectedIcon: false,
-          onSelectionChanged: (v) => setState(() {
-            _type = v.first;
-            _error = null;
-            _info = null;
-          }),
-        ),
-      const SizedBox(height: 18),
-      TextField(
-        controller: _name,
-        decoration: const InputDecoration(labelText: 'Nom (facultatif)', hintText: 'Ex. : Mon abonnement'),
-      ),
-      const SizedBox(height: 12),
-      if (isX) ...[
-        TextField(
-          controller: _server,
-          onChanged: _onServerChanged,
-          decoration: const InputDecoration(
-            labelText: 'Serveur',
-            hintText: 'http://exemple.com:8080  (ou colle un lien get.php)',
-            prefixIcon: Icon(Icons.public, size: 20),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!_editing)
+          SegmentedButton<SourceType>(
+            segments: const [
+              ButtonSegment(value: SourceType.xtream, icon: Icon(Icons.dns_rounded), label: Text('Xtream Codes')),
+              ButtonSegment(
+                value: SourceType.m3u,
+                icon: Icon(Icons.playlist_play_rounded),
+                label: Text('Playlist M3U'),
+              ),
+            ],
+            selected: {_type},
+            showSelectedIcon: false,
+            onSelectionChanged: (v) => setState(() {
+              _type = v.first;
+              _error = null;
+              _info = null;
+            }),
           ),
+        const SizedBox(height: 18),
+        TextField(
+          controller: _name,
+          decoration: const InputDecoration(labelText: 'Nom (facultatif)', hintText: 'Ex. : Mon abonnement'),
         ),
         const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _user,
-              decoration: const InputDecoration(labelText: 'Identifiant', prefixIcon: Icon(Icons.person_outline, size: 20)),
+        if (isX) ...[
+          TextField(
+            controller: _server,
+            onChanged: _onServerChanged,
+            decoration: const InputDecoration(
+              labelText: 'Serveur',
+              hintText: 'http://exemple.com:8080  (ou colle un lien get.php)',
+              prefixIcon: Icon(Icons.public, size: 20),
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: TextField(
-              controller: _pass,
-              obscureText: _obscure,
-              decoration: InputDecoration(
-                labelText: 'Mot de passe',
-                prefixIcon: const Icon(Icons.lock_outline, size: 20),
-                suffixIcon: IconButton(
-                  icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
-                  onPressed: () => setState(() => _obscure = !_obscure),
-                ),
-              ),
-            ),
-          ),
-        ]),
-      ] else
-        Row(children: [
-          Expanded(
-            child: TextField(
-              controller: _m3u,
-              onChanged: _onM3uChanged,
-              decoration: const InputDecoration(
-                labelText: 'URL ou fichier de la playlist',
-                hintText: 'https://… .m3u / .m3u8',
-                prefixIcon: Icon(Icons.link, size: 20),
-              ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          OutlinedButton.icon(onPressed: _pickFile, icon: const Icon(Icons.folder_open), label: const Text('Parcourir')),
-        ]),
-      const SizedBox(height: 6),
-      Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: EdgeInsets.zero,
-          title: const Text('Options avancées', style: TextStyle(fontSize: 14, color: AppColors.muted)),
-          childrenPadding: const EdgeInsets.only(bottom: 8),
-          children: [
-            TextField(
-              controller: _epg,
-              decoration: InputDecoration(
-                labelText: 'URL du guide TV (XMLTV)',
-                hintText: isX ? 'Automatique avec Xtream (laisser vide)' : 'Détectée dans la playlist si disponible',
-              ),
-            ),
-            const SizedBox(height: 12),
-            Row(children: [
+          const SizedBox(height: 12),
+          Row(
+            children: [
               Expanded(
                 child: TextField(
-                  controller: _ua,
+                  controller: _user,
                   decoration: const InputDecoration(
-                    labelText: 'User-Agent',
-                    hintText: 'Laisser vide sauf si le fournisseur en exige un',
+                    labelText: 'Identifiant',
+                    prefixIcon: Icon(Icons.person_outline, size: 20),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              PopupMenuButton<String>(
-                tooltip: 'Préréglages',
-                icon: const Icon(Icons.tune),
-                onSelected: (v) => setState(() => _ua.text = v),
-                itemBuilder: (_) => [
-                  for (final e in kUserAgentPresets.entries) PopupMenuItem(value: e.value, child: Text(e.key)),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextField(
+                  controller: _pass,
+                  obscureText: _obscure,
+                  decoration: InputDecoration(
+                    labelText: 'Mot de passe',
+                    prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                    suffixIcon: IconButton(
+                      icon: Icon(_obscure ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 20),
+                      onPressed: () => setState(() => _obscure = !_obscure),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ] else
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _m3u,
+                  onChanged: _onM3uChanged,
+                  decoration: const InputDecoration(
+                    labelText: 'URL ou fichier de la playlist',
+                    hintText: 'https://… .m3u / .m3u8',
+                    prefixIcon: Icon(Icons.link, size: 20),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              OutlinedButton.icon(
+                onPressed: _pickFile,
+                icon: const Icon(Icons.folder_open),
+                label: const Text('Parcourir'),
+              ),
+            ],
+          ),
+        const SizedBox(height: 6),
+        Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            title: const Text('Options avancées', style: TextStyle(fontSize: 14, color: AppColors.muted)),
+            childrenPadding: const EdgeInsets.only(bottom: 8),
+            children: [
+              TextField(
+                controller: _epg,
+                decoration: InputDecoration(
+                  labelText: 'URL du guide TV (XMLTV)',
+                  hintText: isX ? 'Automatique avec Xtream (laisser vide)' : 'Détectée dans la playlist si disponible',
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _ua,
+                      decoration: const InputDecoration(
+                        labelText: 'User-Agent',
+                        hintText: 'Laisser vide sauf si le fournisseur en exige un',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  PopupMenuButton<String>(
+                    tooltip: 'Préréglages',
+                    icon: const Icon(Icons.tune),
+                    onSelected: (v) => setState(() => _ua.text = v),
+                    itemBuilder: (_) => [
+                      for (final e in kUserAgentPresets.entries) PopupMenuItem(value: e.value, child: Text(e.key)),
+                    ],
+                  ),
                 ],
               ),
-            ]),
-            const SizedBox(height: 14),
-            Row(children: [
-              const Expanded(
-                child: Text(
-                  'Décalage du guide TV\n'
-                  'À ajuster si les programmes affichés sont en avance ou en retard.',
-                  style: TextStyle(color: AppColors.muted, fontSize: 13),
-                ),
-              ),
-              IconButton.outlined(
-                tooltip: '-30 min',
-                onPressed: _epgOffset <= -720 ? null : () => setState(() => _epgOffset -= 30),
-                icon: const Icon(Icons.remove, size: 18),
-              ),
-              SizedBox(
-                width: 104,
-                child: Text(_offsetLabel(_epgOffset),
-                    textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.w700)),
-              ),
-              IconButton.outlined(
-                tooltip: '+30 min',
-                onPressed: _epgOffset >= 720 ? null : () => setState(() => _epgOffset += 30),
-                icon: const Icon(Icons.add, size: 18),
-              ),
-            ]),
-            if (isX) ...[
               const SizedBox(height: 14),
-              Row(children: [
-                const Expanded(
-                  child: Text('Format des chaînes en direct',
-                      style: TextStyle(color: AppColors.muted, fontSize: 13)),
-                ),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'ts', label: Text('MPEG-TS (conseillé)')),
-                    ButtonSegment(value: 'm3u8', label: Text('HLS')),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Décalage du guide TV\n'
+                      'À ajuster si les programmes affichés sont en avance ou en retard.',
+                      style: TextStyle(color: AppColors.muted, fontSize: 13),
+                    ),
+                  ),
+                  IconButton.outlined(
+                    tooltip: '-30 min',
+                    onPressed: _epgOffset <= -720 ? null : () => setState(() => _epgOffset -= 30),
+                    icon: const Icon(Icons.remove, size: 18),
+                  ),
+                  SizedBox(
+                    width: 104,
+                    child: Text(
+                      _offsetLabel(_epgOffset),
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                  IconButton.outlined(
+                    tooltip: '+30 min',
+                    onPressed: _epgOffset >= 720 ? null : () => setState(() => _epgOffset += 30),
+                    icon: const Icon(Icons.add, size: 18),
+                  ),
+                ],
+              ),
+              if (isX) ...[
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Format des chaînes en direct',
+                        style: TextStyle(color: AppColors.muted, fontSize: 13),
+                      ),
+                    ),
+                    SegmentedButton<String>(
+                      segments: const [
+                        ButtonSegment(value: 'ts', label: Text('MPEG-TS (conseillé)')),
+                        ButtonSegment(value: 'm3u8', label: Text('HLS')),
+                      ],
+                      selected: {_liveFormat},
+                      showSelectedIcon: false,
+                      onSelectionChanged: (v) => setState(() => _liveFormat = v.first),
+                    ),
                   ],
-                  selected: {_liveFormat},
-                  showSelectedIcon: false,
-                  onSelectionChanged: (v) => setState(() => _liveFormat = v.first),
                 ),
-              ]),
+              ],
             ],
+          ),
+        ),
+        if (_error != null) _Message(_error!, error: true),
+        if (_info != null && _error == null) _Message(_info!),
+        const SizedBox(height: 14),
+        Row(
+          children: [
+            if (widget.onCancel != null) TextButton(onPressed: widget.onCancel, child: const Text('Annuler')),
+            const Spacer(),
+            OutlinedButton.icon(
+              onPressed: _busy ? null : _test,
+              icon: _busy
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.network_check),
+              label: const Text('Tester'),
+            ),
+            const SizedBox(width: 10),
+            FilledButton.icon(
+              onPressed: _busy ? null : _save,
+              icon: const Icon(Icons.check),
+              label: Text(_editing ? 'Enregistrer' : 'Ajouter et importer'),
+            ),
           ],
         ),
-      ),
-      if (_error != null) _Message(_error!, error: true),
-      if (_info != null && _error == null) _Message(_info!),
-      const SizedBox(height: 14),
-      Row(children: [
-        if (widget.onCancel != null)
-          TextButton(onPressed: widget.onCancel, child: const Text('Annuler')),
-        const Spacer(),
-        OutlinedButton.icon(
-          onPressed: _busy ? null : _test,
-          icon: _busy
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Icon(Icons.network_check),
-          label: const Text('Tester'),
-        ),
-        const SizedBox(width: 10),
-        FilledButton.icon(
-          onPressed: _busy ? null : _save,
-          icon: const Icon(Icons.check),
-          label: Text(_editing ? 'Enregistrer' : 'Ajouter et importer'),
-        ),
-      ]),
-    ]);
+      ],
+    );
   }
 }
 
@@ -409,19 +448,24 @@ class _Message extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: (error ? AppColors.live : AppColors.success).withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(10),
+    margin: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: (error ? AppColors.live : AppColors.success).withValues(alpha: 0.12),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(
+      children: [
+        Icon(
+          error ? Icons.error_outline : Icons.info_outline,
+          size: 18,
+          color: error ? AppColors.live : AppColors.success,
         ),
-        child: Row(children: [
-          Icon(error ? Icons.error_outline : Icons.info_outline,
-              size: 18, color: error ? AppColors.live : AppColors.success),
-          const SizedBox(width: 10),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
-        ]),
-      );
+        const SizedBox(width: 10),
+        Expanded(child: Text(text, style: const TextStyle(fontSize: 13))),
+      ],
+    ),
+  );
 }
 
 /// Opens the form in a dialog.
@@ -433,16 +477,19 @@ Future<void> showSourceDialog(BuildContext context, {Source? initial}) {
         constraints: const BoxConstraints(maxWidth: 620),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(28),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
-            Text(initial == null ? 'Ajouter une source' : 'Modifier « ${initial.name} »',
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 18),
-            SourceForm(
-              initial: initial,
-              onSaved: (_) => Navigator.of(ctx).pop(),
-              onCancel: () => Navigator.of(ctx).pop(),
-            ),
-          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(initial == null ? 'Ajouter une source' : 'Modifier « ${initial.name} »', style: displayStyle(24)),
+              const SizedBox(height: 18),
+              SourceForm(
+                initial: initial,
+                onSaved: (_) => Navigator.of(ctx).pop(),
+                onCancel: () => Navigator.of(ctx).pop(),
+              ),
+            ],
+          ),
         ),
       ),
     ),

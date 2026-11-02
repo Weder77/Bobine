@@ -147,35 +147,47 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           ),
-          icon: Icon(_fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-              color: _fav ? AppColors.cueSeries : AppColors.text),
+          icon: Icon(
+            _fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+            color: _fav ? AppColors.cueSeries : AppColors.text,
+          ),
         ),
       ],
       bottom: _episodes.isEmpty
           ? (_loading
-              ? const Padding(padding: EdgeInsets.all(40), child: Center(child: CircularProgressIndicator()))
-              : null)
+                ? const Padding(
+                    padding: EdgeInsets.all(40),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : null)
           : DetailSection(
               title: 'Épisodes',
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Wrap(spacing: 8, runSpacing: 8, children: [
-                  for (final s in seasons)
-                    ChoiceChip(
-                      label: Text('Saison $s'),
-                      selected: s == _season,
-                      side: BorderSide(color: s == _season ? AppColors.accent : AppColors.borderStrong),
-                      onSelected: (_) => setState(() => _season = s),
-                    ),
-                ]),
-                const SizedBox(height: 18),
-                for (final e in _episodes.where((e) => e.season == _season))
-                  _EpisodeTile(
-                    episode: e,
-                    progress: _progress[e.extId],
-                    fallbackImage: d?.backdrop ?? _sr.backdrop ?? _sr.poster,
-                    onTap: () => Launch.episode(context, _sr, e, _episodes),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final s in seasons)
+                        ChoiceChip(
+                          label: Text('Saison $s'),
+                          selected: s == _season,
+                          side: BorderSide(color: s == _season ? AppColors.accent : AppColors.borderStrong),
+                          onSelected: (_) => setState(() => _season = s),
+                        ),
+                    ],
                   ),
-              ]),
+                  const SizedBox(height: 18),
+                  for (final e in _episodes.where((e) => e.season == _season))
+                    _EpisodeTile(
+                      episode: e,
+                      progress: _progress[e.extId],
+                      fallbackImage: d?.backdrop ?? _sr.backdrop ?? _sr.poster,
+                      onTap: () => Launch.episode(context, _sr, e, _episodes),
+                    ),
+                ],
+              ),
             ),
       children: [
         if (plot != null) DetailParagraph(plot),
@@ -198,73 +210,97 @@ class _EpisodeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final e = episode;
     final p = progress;
-    return HoverBuilder(builder: (context, hover) {
-      return GestureDetector(
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          margin: const EdgeInsets.only(bottom: 10),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: hover ? AppColors.surface2 : AppColors.surface,
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: hover ? AppColors.accent.withValues(alpha: 0.6) : AppColors.border),
-          ),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: SizedBox(
-                width: 210,
-                height: 118,
-                child: Stack(fit: StackFit.expand, children: [
-                  NetImage(e.image ?? fallbackImage, decodeWidth: 210),
-                  if (hover)
-                    const ColoredBox(
-                      color: Color(0x66000000),
-                      child: Icon(Icons.play_circle_fill_rounded, size: 44, color: AppColors.accent),
+    return HoverBuilder(
+      builder: (context, hover) {
+        return GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            margin: const EdgeInsets.only(bottom: 10),
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: hover ? AppColors.surface2 : AppColors.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: hover ? AppColors.accent.withValues(alpha: 0.6) : AppColors.border),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: SizedBox(
+                    width: 210,
+                    height: 118,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        NetImage(e.image ?? fallbackImage, decodeWidth: 210),
+                        if (hover)
+                          const ColoredBox(
+                            color: Color(0x66000000),
+                            child: Icon(Icons.play_circle_fill_rounded, size: 44, color: AppColors.accent),
+                          ),
+                        if (p != null)
+                          Positioned(left: 8, right: 8, bottom: 8, child: ProgressLine(p.finished ? 1 : p.fraction)),
+                      ],
                     ),
-                  if (p != null)
-                    Positioned(left: 8, right: 8, bottom: 8, child: ProgressLine(p.finished ? 1 : p.fraction)),
-                ]),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const SizedBox(height: 4),
-                Row(children: [
-                  Text('${e.episode}. ',
-                      style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.accent)),
-                  Expanded(
-                    child: Text(e.displayTitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                   ),
-                  if (p != null && p.finished)
-                    const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.success),
-                  if (e.durationSec != null) ...[
-                    const SizedBox(width: 10),
-                    Text(formatRuntime(e.durationSec), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                  ],
-                ]),
-                const SizedBox(height: 6),
-                if (e.plot != null)
-                  Text(e.plot!,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: AppColors.muted, height: 1.4, fontSize: 13)),
-                if (p != null && !p.finished && p.position.inSeconds > 30)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('Arrêté à ${formatDuration(p.position)}',
-                        style: const TextStyle(color: AppColors.accent, fontSize: 12.5)),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Text(
+                            '${e.episode}. ',
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: AppColors.accent),
+                          ),
+                          Expanded(
+                            child: Text(
+                              e.displayTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                            ),
+                          ),
+                          if (p != null && p.finished)
+                            const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.success),
+                          if (e.durationSec != null) ...[
+                            const SizedBox(width: 10),
+                            Text(
+                              formatRuntime(e.durationSec),
+                              style: const TextStyle(color: AppColors.muted, fontSize: 12.5),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      if (e.plot != null)
+                        Text(
+                          e.plot!,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: AppColors.muted, height: 1.4, fontSize: 13),
+                        ),
+                      if (p != null && !p.finished && p.position.inSeconds > 30)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            'Arrêté à ${formatDuration(p.position)}',
+                            style: const TextStyle(color: AppColors.accent, fontSize: 12.5),
+                          ),
+                        ),
+                    ],
                   ),
-              ]),
+                ),
+              ],
             ),
-          ]),
-        ),
-      );
-    });
+          ),
+        );
+      },
+    );
   }
 }

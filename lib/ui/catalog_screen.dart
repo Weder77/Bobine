@@ -21,7 +21,16 @@ class CatalogScreen extends StatefulWidget {
 }
 
 class _Item {
-  _Item({required this.extId, required this.name, required this.key, this.poster, this.year, this.rating, this.movie, this.show});
+  _Item({
+    required this.extId,
+    required this.name,
+    required this.key,
+    this.poster,
+    this.year,
+    this.rating,
+    this.movie,
+    this.show,
+  });
   final String extId;
   final String name;
   final String key;
@@ -99,8 +108,12 @@ class _CatalogScreenState extends State<CatalogScreen> {
     _loadUserData();
     final cats = _s.repo.categories(src.id, _kind);
     _entries = [
-      CategoryEntry(id: 'all', label: widget.series ? 'Toutes les séries' : 'Tous les films',
-          count: _s.repo.count(src.id, _kind), icon: Icons.apps_rounded),
+      CategoryEntry(
+        id: 'all',
+        label: widget.series ? 'Toutes les séries' : 'Tous les films',
+        count: _s.repo.count(src.id, _kind),
+        icon: Icons.apps_rounded,
+      ),
       CategoryEntry(id: 'fav', label: 'Mes favoris', count: _favs.length, icon: Icons.favorite_rounded),
       for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count),
     ];
@@ -119,8 +132,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           : _s.repo.series(src.id, categoryId: catId, sort: _sort);
       _items = [
         for (final x in list)
-          _Item(extId: x.extId, name: x.name, key: x.search, poster: x.poster,
-              year: x.year, rating: x.rating, show: x),
+          _Item(extId: x.extId, name: x.name, key: x.search, poster: x.poster, year: x.year, rating: x.rating, show: x),
       ];
     } else {
       final list = _cat == 'fav'
@@ -128,8 +140,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
           : _s.repo.movies(src.id, categoryId: catId, sort: _sort);
       _items = [
         for (final x in list)
-          _Item(extId: x.extId, name: x.name, key: x.search, poster: x.poster,
-              year: x.year, rating: x.rating, movie: x),
+          _Item(
+            extId: x.extId,
+            name: x.name,
+            key: x.search,
+            poster: x.poster,
+            year: x.year,
+            rating: x.rating,
+            movie: x,
+          ),
       ];
     }
     _applyFilter();
@@ -151,110 +170,127 @@ class _CatalogScreenState extends State<CatalogScreen> {
   @override
   Widget build(BuildContext context) {
     final label = _entries.where((e) => e.id == _cat).firstOrNull?.label ?? '';
-    return Row(children: [
-      CategoryPane(entries: _entries, selected: _cat, onSelect: _select),
-      Expanded(
-        child: Column(children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(28, 16, 28, 12),
-            child: Row(children: [
-              Expanded(
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-                  Text('${formatCount(_visible.length)} ${widget.series ? 'séries' : 'films'}',
-                      style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                ]),
-              ),
-              SizedBox(
-                width: 260,
-                child: TextField(
-                  onChanged: (v) {
-                    _debounce?.cancel();
-                    _debounce = Timer(const Duration(milliseconds: 180), () {
-                      setState(() {
-                        _filter = v;
-                        _applyFilter();
-                      });
-                    });
-                  },
-                  decoration: InputDecoration(
-                    hintText: widget.series ? 'Filtrer les séries' : 'Filtrer les films',
-                    prefixIcon: const Icon(Icons.search, size: 18),
-                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              PopupMenuButton<CatalogSort>(
-                tooltip: 'Trier',
-                initialValue: _sort,
-                onSelected: (v) {
-                  _s.repo.kvSet('catalog.sort.${_kind.db}', v.name);
-                  setState(() {
-                    _sort = v;
-                    _loadItems();
-                  });
-                },
-                itemBuilder: (_) => [
-                  for (final v in CatalogSort.values)
-                    PopupMenuItem(value: v, child: Text(v.label)),
-                ],
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(12)),
-                  child: Row(children: [
-                    const Icon(Icons.sort_rounded, size: 18, color: AppColors.muted),
-                    const SizedBox(width: 8),
-                    Text(_sort.label, style: const TextStyle(fontSize: 13)),
-                  ]),
-                ),
-              ),
-            ]),
-          ),
-          Expanded(
-            child: _visible.isEmpty
-                ? EmptyState(
-                    icon: _cat == 'fav' ? Icons.favorite_outline : Icons.movie_filter_outlined,
-                    title: _cat == 'fav' ? 'Aucun favori' : 'Rien à afficher',
-                    message: _cat == 'fav' ? 'Ajoute des favoris depuis la fiche d\'un titre.' : null,
-                  )
-                : Scrollbar(
-                    controller: _scroll,
-                    child: GridView.builder(
-                      controller: _scroll,
-                      padding: const EdgeInsets.fromLTRB(28, 6, 28, 32),
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 190,
-                        mainAxisSpacing: 22,
-                        crossAxisSpacing: 18,
-                        childAspectRatio: 0.54,
-                      ),
-                      itemCount: _visible.length,
-                      itemBuilder: (context, i) {
-                        final it = _visible[i];
-                        return LayoutBuilder(
-                          builder: (context, c) => PosterCard(
-                            width: c.maxWidth,
-                            title: it.name,
-                            subtitle: it.year?.toString(),
-                            image: it.poster,
-                            rating: it.rating,
-                            favorite: _favs.contains(it.extId),
-                            progress: _progress[it.extId],
-                            onTap: () => it.movie != null
-                                ? Launch.openMovie(context, it.movie!)
-                                : Launch.openSeries(context, it.show!),
+    return Row(
+      children: [
+        CategoryPane(entries: _entries, selected: _cat, onSelect: _select),
+        Expanded(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(28, 20, 48, 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: displayStyle(30)),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${formatCount(_visible.length)} ${widget.series ? 'séries' : 'films'}',
+                            style: const TextStyle(color: AppColors.muted, fontSize: 14),
                           ),
-                        );
-                      },
+                        ],
+                      ),
                     ),
-                  ),
+                    SizedBox(
+                      width: 300,
+                      child: TextField(
+                        onChanged: (v) {
+                          _debounce?.cancel();
+                          _debounce = Timer(const Duration(milliseconds: 180), () {
+                            setState(() {
+                              _filter = v;
+                              _applyFilter();
+                            });
+                          });
+                        },
+                        decoration: InputDecoration(
+                          hintText: widget.series ? 'Filtrer les séries' : 'Filtrer les films',
+                          prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    PopupMenuButton<CatalogSort>(
+                      tooltip: 'Trier',
+                      initialValue: _sort,
+                      onSelected: (v) {
+                        _s.repo.kvSet('catalog.sort.${_kind.db}', v.name);
+                        setState(() {
+                          _sort = v;
+                          _loadItems();
+                        });
+                      },
+                      itemBuilder: (_) => [
+                        for (final v in CatalogSort.values) PopupMenuItem(value: v, child: Text(v.label)),
+                      ],
+                      child: Container(
+                        height: 46,
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: AppColors.field,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.borderStrong),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.sort_rounded, size: 18, color: AppColors.muted),
+                            const SizedBox(width: 8),
+                            Text(_sort.label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: AppColors.muted),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: _visible.isEmpty
+                    ? EmptyState(
+                        icon: _cat == 'fav' ? Icons.favorite_outline : Icons.movie_filter_outlined,
+                        title: _cat == 'fav' ? 'Aucun favori' : 'Rien à afficher',
+                        message: _cat == 'fav' ? 'Ajoute des favoris depuis la fiche d\'un titre.' : null,
+                      )
+                    : Scrollbar(
+                        controller: _scroll,
+                        child: GridView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(28, 6, 48, 40),
+                          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: 190,
+                            mainAxisSpacing: 22,
+                            crossAxisSpacing: 18,
+                            childAspectRatio: 0.54,
+                          ),
+                          itemCount: _visible.length,
+                          itemBuilder: (context, i) {
+                            final it = _visible[i];
+                            return LayoutBuilder(
+                              builder: (context, c) => PosterCard(
+                                width: c.maxWidth,
+                                title: it.name,
+                                subtitle: it.year?.toString(),
+                                image: it.poster,
+                                rating: it.rating,
+                                favorite: _favs.contains(it.extId),
+                                progress: _progress[it.extId],
+                                onTap: () => it.movie != null
+                                    ? Launch.openMovie(context, it.movie!)
+                                    : Launch.openSeries(context, it.show!),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+              ),
+            ],
           ),
-        ]),
-      ),
-    ]);
+        ),
+      ],
+    );
   }
 }
