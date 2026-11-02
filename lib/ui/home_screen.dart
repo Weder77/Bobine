@@ -122,6 +122,8 @@ class _HomeScreenState extends State<HomeScreen> {
           _MovieHero(movie: heroMovie)
         else
           const SizedBox(height: 32),
+        _QuickTiles(data: _d, onOpen: (tab) => nav?.goTo(tab)),
+        const SizedBox(height: 34),
         if (_d.continueWatching.isNotEmpty) ...[
           SectionRow(
             title: 'Continuer à regarder',
@@ -151,12 +153,12 @@ class _HomeScreenState extends State<HomeScreen> {
           _ChannelRow(
             title: _d.favChannels.isNotEmpty ? 'Mes chaînes' : 'Chaînes récentes',
             channels: _d.favChannels.isNotEmpty ? _d.favChannels : _d.recentChannels,
-            onMore: () => nav?.goTo(1),
+            onMore: () => nav?.goTo(ShellTab.live),
           ),
           const SizedBox(height: 28),
         ],
         if (_d.recentMovies.isNotEmpty) ...[
-          _movieRow('Films ajoutés récemment', _d.recentMovies, favMovieIds, () => nav?.goTo(2)),
+          _movieRow('Films ajoutés récemment', _d.recentMovies, favMovieIds, () => nav?.goTo(ShellTab.movies)),
           const SizedBox(height: 28),
         ],
         if (_d.favMovies.isNotEmpty) ...[
@@ -164,7 +166,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(height: 28),
         ],
         if (_d.recentSeries.isNotEmpty) ...[
-          _seriesRow('Séries récentes', _d.recentSeries, () => nav?.goTo(3)),
+          _seriesRow('Séries récentes', _d.recentSeries, () => nav?.goTo(ShellTab.series)),
           const SizedBox(height: 28),
         ],
         if (_d.favSeries.isNotEmpty) ...[
@@ -420,6 +422,130 @@ class _MovieHero extends StatelessWidget {
           label: const Text("Plus d'infos"),
         ),
       ],
+    );
+  }
+}
+
+/// Big shortcut tiles under the banner: Live TV, Films, Séries, Recherche.
+class _QuickTiles extends StatelessWidget {
+  const _QuickTiles({required this.data, required this.onOpen});
+  final _HomeData data;
+  final ValueChanged<int> onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final tiles = [
+      _Tile(
+        icon: Icons.live_tv_outlined,
+        title: 'Live TV',
+        subtitle: '${formatCount(data.liveCount)} chaînes',
+        colors: const [Color(0xFF3D73F5), Color(0xFF2346C2)],
+        onTap: () => onOpen(ShellTab.live),
+      ),
+      _Tile(
+        icon: Icons.movie_outlined,
+        title: 'Films',
+        subtitle: '${formatCount(data.movieCount)} films',
+        colors: const [Color(0xFF8A5CF6), Color(0xFF5427B0)],
+        onTap: () => onOpen(ShellTab.movies),
+      ),
+      _Tile(
+        icon: Icons.video_library_outlined,
+        title: 'Séries',
+        subtitle: '${formatCount(data.seriesCount)} séries',
+        colors: const [Color(0xFFF0435E), Color(0xFFA9173A)],
+        onTap: () => onOpen(ShellTab.series),
+      ),
+      _Tile(
+        icon: Icons.search_rounded,
+        title: 'Recherche',
+        subtitle: 'Chaînes, films, séries',
+        colors: const [AppColors.surface3, AppColors.surface2],
+        onTap: () => onOpen(ShellTab.search),
+      ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      child: Row(children: [
+        for (var i = 0; i < tiles.length; i++) ...[
+          if (i > 0) const SizedBox(width: 18),
+          Expanded(child: tiles[i]),
+        ],
+      ]),
+    );
+  }
+}
+
+class _Tile extends StatefulWidget {
+  const _Tile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.colors,
+    required this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final List<Color> colors;
+  final VoidCallback onTap;
+
+  @override
+  State<_Tile> createState() => _TileState();
+}
+
+class _TileState extends State<_Tile> {
+  bool _hover = false;
+  bool _focus = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final lit = _hover || _focus;
+    return AnimatedScale(
+      scale: lit ? 1.03 : 1,
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        height: 176,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: widget.colors,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: lit ? Colors.white.withValues(alpha: 0.85) : Colors.transparent, width: 2.5),
+          boxShadow: lit
+              ? [BoxShadow(color: widget.colors.first.withValues(alpha: 0.45), blurRadius: 26, spreadRadius: 1)]
+              : null,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: widget.onTap,
+            onHover: (v) => setState(() => _hover = v),
+            onFocusChange: (v) => setState(() => _focus = v),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(26, 24, 20, 22),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Icon(widget.icon, size: 40, color: Colors.white),
+                const Spacer(),
+                Text(widget.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
+                const SizedBox(height: 2),
+                Text(widget.subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 15.5, color: Colors.white.withValues(alpha: 0.82))),
+              ]),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

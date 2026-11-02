@@ -29,6 +29,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - User-Agent personnalisable avec des préréglages (VLC, Kodi, IPTV Smarters…) pour les fournisseurs qui l'exigent.
 
 **TV en direct**
+- Navigation par une barre en haut : Accueil, Live TV, Guide TV, Films, Séries, plus recherche, réglages, source active et heure. L'accueil propose des tuiles d'accès rapide avec le nombre de chaînes, films et séries.
 - Catégories, favoris, chaînes récemment regardées, recherche instantanée.
 - Programme en cours et progression directement dans la liste.
 - **Aperçu intégré** : un clic lance la chaîne dans le panneau de droite, *Entrée* ou double-clic passe en plein écran **sans recharger le flux**.

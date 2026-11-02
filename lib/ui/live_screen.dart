@@ -13,13 +13,17 @@ import '../player/play_items.dart';
 import '../services.dart';
 import 'epg_grid.dart';
 import 'launch.dart';
+import 'shell.dart';
 import 'widgets/common.dart';
 
 class LiveScreen extends StatefulWidget {
-  const LiveScreen({super.key, required this.active});
+  const LiveScreen({super.key, required this.active, this.guide = false});
 
   /// Whether the tab is visible (the preview stops when leaving the tab).
   final bool active;
+
+  /// "Guide TV" tab: same categories, shown as a programme grid.
+  final bool guide;
 
   @override
   State<LiveScreen> createState() => _LiveScreenState();
@@ -35,7 +39,6 @@ class _LiveScreenState extends State<LiveScreen> {
   Set<String> _favs = const {};
   int _selected = -1;
   String _filter = '';
-  bool _guide = false;
   int _contentVersion = -1;
 
   final _listScroll = ScrollController();
@@ -66,7 +69,7 @@ class _LiveScreenState extends State<LiveScreen> {
     super.didUpdateWidget(old);
     // Deferred: stopping notifies listeners, not allowed during this build.
     if (old.active && !widget.active) scheduleMicrotask(_stopPreview);
-    if (!old.active && widget.active) _listFocus.requestFocus();
+    if (!old.active && widget.active && !widget.guide) _listFocus.requestFocus();
   }
 
   @override
@@ -202,9 +205,11 @@ class _LiveScreenState extends State<LiveScreen> {
     final i = index ?? _selected;
     if (i < 0 || i >= _visible.length) return;
     _previewDebounce?.cancel();
-    await Launch.channel(context, _visible[i], _visible, keepAlive: true);
+    // From the list the stream keeps playing in the preview afterwards; the
+    // guide has no preview, so playback stops when leaving the player.
+    await Launch.channel(context, _visible[i], _visible, keepAlive: !widget.guide);
     if (mounted) {
-      _listFocus.requestFocus();
+      if (!widget.guide) _listFocus.requestFocus();
       setState(() {});
     }
   }
@@ -303,17 +308,12 @@ class _LiveScreenState extends State<LiveScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              SegmentedButton<bool>(
-                segments: const [
-                  ButtonSegment(value: false, icon: Icon(Icons.view_list_rounded), label: Text('Chaînes')),
-                  ButtonSegment(value: true, icon: Icon(Icons.calendar_view_week_rounded), label: Text('Guide TV')),
-                ],
-                selected: {_guide},
-                showSelectedIcon: false,
-                onSelectionChanged: (v) {
-                  setState(() => _guide = v.first);
-                  if (_guide) _stopPreview();
-                },
+              OutlinedButton.icon(
+                onPressed: () => ShellNavigation.of(context)
+                    ?.goTo(widget.guide ? ShellTab.live : ShellTab.guide),
+                icon: Icon(widget.guide ? Icons.view_list_rounded : Icons.calendar_view_week_rounded,
+                    size: 18),
+                label: Text(widget.guide ? 'Liste des chaînes' : 'Guide TV'),
               ),
             ]),
           ),
@@ -324,7 +324,7 @@ class _LiveScreenState extends State<LiveScreen> {
                     title: _cat == 'fav' ? 'Aucune chaîne favorite' : 'Aucune chaîne',
                     message: _cat == 'fav' ? "Clique sur l'étoile d'une chaîne pour l'ajouter ici." : null,
                   )
-                : _guide
+                : widget.guide
                     ? EpgGrid(
                         channels: _visible,
                         epgVersion: _s.library.epg,
