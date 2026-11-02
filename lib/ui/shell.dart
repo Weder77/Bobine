@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
@@ -101,7 +102,12 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) {
     return ShellNavigation(
       goTo: _go,
-      child: Scaffold(
+      child: CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.keyK, control: true): () => _go(ShellTab.search),
+          const SingleActivator(LogicalKeyboardKey.keyK, meta: true): () => _go(ShellTab.search),
+        },
+        child: Scaffold(
         body: Column(children: [
           _TopBar(index: _index, onSelect: _go),
           Expanded(
@@ -117,6 +123,7 @@ class _AppShellState extends State<AppShell> {
           ),
           const _ImportBanner(),
         ]),
+        ),
       ),
     );
   }
@@ -130,25 +137,29 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 76,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      height: 80,
+      padding: const EdgeInsets.symmetric(horizontal: 48),
       color: AppColors.bg,
       child: Row(children: [
         // Logo
-        InkWell(
-          borderRadius: BorderRadius.circular(10),
-          onTap: () => onSelect(ShellTab.home),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-            child: Row(children: [
-              LumenMark(size: 36),
-              SizedBox(width: 12),
-              Text('LUMEN',
-                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 3)),
-            ]),
+        Semantics(
+          button: true,
+          label: 'Lumen, accueil',
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: () => onSelect(ShellTab.home),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
+              child: Row(children: [
+                const LumenMark(size: 34),
+                const SizedBox(width: 12),
+                Text('LUMEN',
+                    style: displayStyle(21, weight: FontWeight.w800).copyWith(letterSpacing: 4.2)),
+              ]),
+            ),
           ),
         ),
-        const SizedBox(width: 44),
+        const SizedBox(width: 40),
         // Text tabs
         Expanded(
           child: SingleChildScrollView(
@@ -159,21 +170,16 @@ class _TopBar extends StatelessWidget {
             ]),
           ),
         ),
-        // Actions
-        _IconAction(
-          icon: Icons.search_rounded,
-          tooltip: 'Recherche',
-          selected: index == ShellTab.search,
-          onTap: () => onSelect(ShellTab.search),
-        ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 16),
+        _SearchPill(selected: index == ShellTab.search, onTap: () => onSelect(ShellTab.search)),
+        const SizedBox(width: 12),
         _IconAction(
           icon: Icons.tune_rounded,
           tooltip: 'Réglages',
           selected: index == ShellTab.settings,
           onTap: () => onSelect(ShellTab.settings),
         ),
-        const SizedBox(width: 14),
+        const SizedBox(width: 12),
         _SourceAvatar(onManage: () => onSelect(ShellTab.settings)),
         const SizedBox(width: 28),
         const _Clock(),
@@ -191,38 +197,83 @@ class _TabButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return HoverBuilder(
-      builder: (context, hover) => GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 18),
+      builder: (context, hover) => Semantics(
+        button: true,
+        selected: selected,
+        child: GestureDetector(
+          onTap: onTap,
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            height: 48,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: selected ? AppColors.accent : Colors.transparent, width: 3),
+              ),
+            ),
+            alignment: Alignment.center,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(label,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: selected
+                        ? AppColors.text
+                        : (hover ? AppColors.textSoft : AppColors.muted),
+                  )),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Search entry point styled as a field ("Ctrl K" opens it from anywhere).
+class _SearchPill extends StatelessWidget {
+  const _SearchPill({required this.selected, required this.onTap});
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: 'Rechercher',
+      child: Material(
+        color: AppColors.field,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: selected ? AppColors.accent : const Color(0xFF23262F)),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
           child: SizedBox(
-            height: 76,
-            child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              const SizedBox(height: 6),
-              AnimatedDefaultTextStyle(
-                duration: const Duration(milliseconds: 150),
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.w600,
-                  color: selected
-                      ? AppColors.text
-                      : (hover ? const Color(0xFFD5DAE3) : AppColors.muted),
+            height: 44,
+            width: 300,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14),
+              child: Row(children: [
+                const Icon(Icons.search_rounded, size: 19, color: AppColors.muted),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text('Chaînes, films, séries…',
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 14, color: AppColors.muted)),
                 ),
-                child: Text(label),
-              ),
-              const SizedBox(height: 7),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeOutCubic,
-                width: selected ? 26 : 0,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: AppColors.accent,
-                  borderRadius: BorderRadius.circular(2),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.borderStrong),
+                  ),
+                  child: const Text('Ctrl K', style: TextStyle(fontSize: 12, color: AppColors.muted)),
                 ),
-              ),
-            ]),
+              ]),
+            ),
           ),
         ),
       ),
@@ -241,11 +292,11 @@ class _IconAction extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(
         tooltip: tooltip,
         onPressed: onTap,
-        iconSize: 26,
+        iconSize: 24,
         style: IconButton.styleFrom(
-          backgroundColor: selected ? AppColors.accent.withValues(alpha: 0.14) : Colors.transparent,
+          backgroundColor: selected ? AppColors.accentTint : Colors.transparent,
         ),
-        icon: Icon(icon, color: selected ? AppColors.accent : const Color(0xFFC4CAD4)),
+        icon: Icon(icon, color: selected ? AppColors.accent : AppColors.textSoft),
       );
 }
 
@@ -282,13 +333,17 @@ class _SourceAvatar extends StatelessWidget {
             const PopupMenuItem(value: -1, child: Text('Gérer les sources…')),
           ],
           child: Container(
-            width: 46,
-            height: 46,
+            width: 44,
+            height: 44,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(shape: BoxShape.circle, gradient: AppColors.accentGradient),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: AppColors.surface3,
+              border: Border.all(color: AppColors.borderStrong, width: 2),
+            ),
             child: Text(
               (active?.name.isNotEmpty ?? false) ? active!.name.characters.first.toUpperCase() : '?',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1B1204)),
+              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.accent),
             ),
           ),
         );
@@ -323,16 +378,12 @@ class _ClockState extends State<_Clock> {
   @override
   Widget build(BuildContext context) => Text(
         formatClock(DateTime.now()),
-        style: const TextStyle(
-          fontSize: 28,
-          fontWeight: FontWeight.w600,
-          color: Color(0xFFB9C0CC),
-          fontFeatures: [FontFeature.tabularFigures()],
-        ),
+        style: displayStyle(26, weight: FontWeight.w600, color: AppColors.textSoft)
+            .copyWith(fontFeatures: tabularFigures),
       );
 }
 
-/// App logo: a glowing "L".
+/// App logo: an "L" on a solid accent square.
 class LumenMark extends StatelessWidget {
   const LumenMark({super.key, this.size = 40});
   final double size;
@@ -342,16 +393,11 @@ class LumenMark extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          gradient: AppColors.accentGradient,
-          borderRadius: BorderRadius.circular(size * 0.3),
-          boxShadow: [
-            BoxShadow(color: AppColors.accent.withValues(alpha: 0.35), blurRadius: size * 0.5),
-          ],
+          color: AppColors.accent,
+          borderRadius: BorderRadius.circular(size * 0.29),
         ),
         alignment: Alignment.center,
-        child: Text('L',
-            style: TextStyle(
-                fontSize: size * 0.56, fontWeight: FontWeight.w900, color: const Color(0xFF1B1204))),
+        child: Text('L', style: displayStyle(size * 0.6, weight: FontWeight.w800, color: AppColors.onAccent)),
       );
 }
 

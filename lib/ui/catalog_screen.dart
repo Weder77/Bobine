@@ -73,6 +73,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     } else {
       setState(() {
         _loadUserData();
+        _entries = withFavoriteCount(_entries, _favs.length);
         if (_cat == 'fav') _loadItems();
       });
     }

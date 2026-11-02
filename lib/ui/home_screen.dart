@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -22,14 +23,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeData {
   Source? source;
   List<ProgressEntry> continueWatching = const [];
-  List<Channel> favChannels = const [];
-  List<Channel> recentChannels = const [];
+  List<Channel> liveChannels = const [];
+  bool liveAreFavorites = false;
   List<Movie> favMovies = const [];
   List<Movie> recentMovies = const [];
   List<Movie> topMovies = const [];
   List<Series> recentSeries = const [];
   List<Series> favSeries = const [];
-  int liveCount = 0, movieCount = 0, seriesCount = 0;
+  int liveCount = 0, liveCategories = 0, movieCount = 0, seriesCount = 0;
 
   bool get empty => liveCount == 0 && movieCount == 0 && seriesCount == 0;
 }
@@ -62,11 +63,16 @@ class _HomeScreenState extends State<HomeScreen> {
       final r = _s.repo;
       final id = src.id;
       d.liveCount = r.count(id, ContentKind.live);
+      d.liveCategories = r.categories(id, ContentKind.live).length;
       d.movieCount = r.count(id, ContentKind.movie);
       d.seriesCount = r.count(id, ContentKind.series);
       d.continueWatching = r.continueWatching(id);
-      d.favChannels = r.favoriteChannels(id);
-      d.recentChannels = r.recentChannels(id, limit: 20);
+      final favs = r.favoriteChannels(id);
+      final recent = r.recentChannels(id, limit: 20);
+      d.liveAreFavorites = favs.isNotEmpty;
+      d.liveChannels = favs.isNotEmpty
+          ? favs
+          : (recent.isNotEmpty ? recent : r.channels(id).take(12).toList());
       d.favMovies = r.favoriteMovies(id);
       d.favSeries = r.favoriteSeries(id);
       d.recentMovies = r.movies(id, sort: CatalogSort.added, limit: 30);
@@ -74,6 +80,41 @@ class _HomeScreenState extends State<HomeScreen> {
       d.recentSeries = r.series(id, sort: CatalogSort.added, limit: 30);
     }
     if (mounted) setState(() => _d = d);
+  }
+
+  List<_HeroItem> _heroItems() {
+    final items = <_HeroItem>[];
+    for (final p in _d.continueWatching.take(2)) {
+      final isEpisode = p.kind == ContentKind.episode;
+      items.add(_HeroItem(
+        kicker: isEpisode ? 'REPRENDRE · SÉRIE' : 'REPRENDRE · FILM',
+        title: p.title,
+        meta: p.subtitle ?? '',
+        image: p.image,
+        landscape: true,
+        progress: p.fraction,
+        progressLabel: 'reste ${formatRuntime((p.duration - p.position).inSeconds)}',
+        primaryLabel: 'Reprendre',
+        onPrimary: (c) => Launch.resume(c, p),
+      ));
+    }
+    for (final m in _d.recentMovies.where((m) => m.poster != null).take(4 - items.length)) {
+      items.add(_HeroItem(
+        kicker: 'NOUVEAU · FILM',
+        title: m.name,
+        meta: [
+          if (m.year != null) '${m.year}',
+          if (m.rating != null) '★ ${m.rating!.toStringAsFixed(1).replaceAll('.', ',')}',
+        ].join(' · '),
+        image: m.poster,
+        landscape: false,
+        primaryLabel: 'Lecture',
+        onPrimary: (c) => Launch.movie(c, m),
+        secondaryLabel: "Plus d'infos",
+        onSecondary: (c) => Launch.openMovie(c, m),
+      ));
+    }
+    return items;
   }
 
   @override
@@ -109,25 +150,20 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final nav = ShellNavigation.of(context);
-    final heroMovie = _d.recentMovies.where((m) => m.poster != null).firstOrNull ??
-        _d.topMovies.where((m) => m.poster != null).firstOrNull;
     final favMovieIds = _d.favMovies.map((m) => m.extId).toSet();
+    final hero = _heroItems();
 
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-      child: ListView(padding: const EdgeInsets.only(bottom: 40), children: [
-        if (_d.continueWatching.isNotEmpty)
-          _ResumeHero(entry: _d.continueWatching.first)
-        else if (heroMovie != null)
-          _MovieHero(movie: heroMovie)
-        else
-          const SizedBox(height: 32),
+      child: ListView(padding: const EdgeInsets.only(top: 8, bottom: 56), children: [
+        if (hero.isNotEmpty) _HeroCarousel(items: hero),
+        const SizedBox(height: 28),
         _QuickTiles(data: _d, onOpen: (tab) => nav?.goTo(tab)),
-        const SizedBox(height: 34),
+        const SizedBox(height: 44),
         if (_d.continueWatching.isNotEmpty) ...[
           SectionRow(
             title: 'Continuer à regarder',
-            height: 230,
+            height: 250,
             itemCount: _d.continueWatching.length,
             itemBuilder: (context, i) {
               final p = _d.continueWatching[i];
@@ -135,7 +171,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 title: p.title,
                 subtitle: [
                   if (p.subtitle != null) p.subtitle!,
-                  'reste ${formatDuration(p.duration - p.position)}',
+                  'reste ${formatRuntime((p.duration - p.position).inSeconds)}',
                 ].join(' · '),
                 image: p.image,
                 progress: p.fraction,
@@ -147,31 +183,31 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             },
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 40),
         ],
-        if (_d.favChannels.isNotEmpty || _d.recentChannels.isNotEmpty) ...[
-          _ChannelRow(
-            title: _d.favChannels.isNotEmpty ? 'Mes chaînes' : 'Chaînes récentes',
-            channels: _d.favChannels.isNotEmpty ? _d.favChannels : _d.recentChannels,
-            onMore: () => nav?.goTo(ShellTab.live),
+        if (_d.liveChannels.isNotEmpty) ...[
+          _LiveRow(
+            title: _d.liveAreFavorites ? 'En direct sur tes chaînes' : 'En direct maintenant',
+            channels: _d.liveChannels,
+            onGuide: () => nav?.goTo(ShellTab.guide),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 40),
         ],
         if (_d.recentMovies.isNotEmpty) ...[
           _movieRow('Films ajoutés récemment', _d.recentMovies, favMovieIds, () => nav?.goTo(ShellTab.movies)),
-          const SizedBox(height: 28),
+          const SizedBox(height: 40),
         ],
         if (_d.favMovies.isNotEmpty) ...[
           _movieRow('Mes films', _d.favMovies, favMovieIds, null),
-          const SizedBox(height: 28),
+          const SizedBox(height: 40),
         ],
         if (_d.recentSeries.isNotEmpty) ...[
           _seriesRow('Séries récentes', _d.recentSeries, () => nav?.goTo(ShellTab.series)),
-          const SizedBox(height: 28),
+          const SizedBox(height: 40),
         ],
         if (_d.favSeries.isNotEmpty) ...[
           _seriesRow('Mes séries', _d.favSeries, null),
-          const SizedBox(height: 28),
+          const SizedBox(height: 40),
         ],
         if (_d.topMovies.isNotEmpty && _d.topMovies.first.rating != null)
           _movieRow('Les mieux notés', _d.topMovies, favMovieIds, null),
@@ -179,14 +215,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _more(VoidCallback? onMore) => onMore == null
-      ? const SizedBox.shrink()
-      : TextButton(onPressed: onMore, child: const Text('Tout voir'));
+  Widget? _more(VoidCallback? onMore) =>
+      onMore == null ? null : TextButton(onPressed: onMore, child: const Text('Tout voir'));
 
   Widget _movieRow(String title, List<Movie> list, Set<String> favs, VoidCallback? onMore) {
     return SectionRow(
       title: title,
-      height: 300,
+      height: 324,
       trailing: _more(onMore),
       itemCount: list.length,
       itemBuilder: (context, i) {
@@ -206,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _seriesRow(String title, List<Series> list, VoidCallback? onMore) {
     return SectionRow(
       title: title,
-      height: 300,
+      height: 324,
       trailing: _more(onMore),
       itemCount: list.length,
       itemBuilder: (context, i) {
@@ -223,210 +258,234 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class _ChannelRow extends StatelessWidget {
-  const _ChannelRow({required this.title, required this.channels, this.onMore});
-  final String title;
-  final List<Channel> channels;
-  final VoidCallback? onMore;
+// ---------------------------------------------------------------- banner
 
-  @override
-  Widget build(BuildContext context) {
-    final s = AppScope.of(context);
-    return SectionRow(
-      title: title,
-      height: 150,
-      trailing: onMore == null ? null : TextButton(onPressed: onMore, child: const Text('Toutes les chaînes')),
-      itemCount: channels.length,
-      itemBuilder: (context, i) {
-        final c = channels[i];
-        final now = s.epg.now(c);
-        return HoverBuilder(
-          builder: (context, hover) => GestureDetector(
-            onTap: () => Launch.channel(context, c, channels),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 150),
-              width: 230,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: hover ? AppColors.surface3 : AppColors.surface2,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: hover ? AppColors.accent : AppColors.border),
-              ),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Row(children: [
-                  ChannelLogo(name: c.name, url: c.logo, size: 44),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(c.name,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w700)),
-                  ),
-                ]),
-                const Spacer(),
-                Text(now?.title ?? 'En direct',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
-                const SizedBox(height: 6),
-                ProgressLine(now?.progressAt(DateTime.now()) ?? 0),
-              ]),
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// Large banner with a blurred background.
-class _Hero extends StatelessWidget {
-  const _Hero({
-    required this.image,
+class _HeroItem {
+  const _HeroItem({
+    required this.kicker,
     required this.title,
     required this.meta,
-    required this.actions,
-    this.kicker,
-    this.landscape = false,
+    required this.image,
+    required this.landscape,
+    required this.primaryLabel,
+    required this.onPrimary,
+    this.progress,
+    this.progressLabel,
+    this.secondaryLabel,
+    this.onSecondary,
   });
-  final String? image;
+  final String kicker;
   final String title;
   final String meta;
-  final String? kicker;
-  final List<Widget> actions;
+  final String? image;
   final bool landscape;
+  final double? progress;
+  final String? progressLabel;
+  final String primaryLabel;
+  final void Function(BuildContext) onPrimary;
+  final String? secondaryLabel;
+  final void Function(BuildContext)? onSecondary;
+}
+
+/// Rotating banner (auto-advance, dots to pick an item).
+class _HeroCarousel extends StatefulWidget {
+  const _HeroCarousel({required this.items});
+  final List<_HeroItem> items;
+
+  @override
+  State<_HeroCarousel> createState() => _HeroCarouselState();
+}
+
+class _HeroCarouselState extends State<_HeroCarousel> {
+  int _index = 0;
+  Timer? _timer;
+  bool _hover = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 9), (_) {
+      if (!mounted || _hover || widget.items.length < 2) return;
+      setState(() => _index = (_index + 1) % widget.items.length);
+    });
+  }
+
+  @override
+  void didUpdateWidget(_HeroCarousel old) {
+    super.didUpdateWidget(old);
+    if (_index >= widget.items.length) _index = 0;
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  /// Cross-fading children fill the banner (the default layout centers them).
+  static Widget _fill(Widget? current, List<Widget> previous) =>
+      Stack(fit: StackFit.expand, children: [...previous, ?current]);
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 440,
-      child: Stack(fit: StackFit.expand, children: [
-        ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: landscape ? 0 : 28, sigmaY: landscape ? 0 : 28),
-          child: Opacity(
-            opacity: landscape ? 0.85 : 0.55,
-            child: NetImage(image, decodeWidth: landscape ? 1280 : 300, alignment: Alignment.topCenter),
-          ),
-        ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [AppColors.bg, Color(0xAA0A0C11), Colors.transparent],
-              stops: [0, 0.45, 1],
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-            ),
-          ),
-        ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Colors.transparent, AppColors.bg],
-              begin: Alignment(0, 0.2),
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(48, 40, 48, 36),
-          child: Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Expanded(
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.end, children: [
-                if (kicker != null)
-                  Text(kicker!.toUpperCase(),
-                      style: const TextStyle(
-                          color: AppColors.accent, fontWeight: FontWeight.w800, letterSpacing: 1.4, fontSize: 12)),
-                const SizedBox(height: 8),
-                Text(title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 42, fontWeight: FontWeight.w900, letterSpacing: -1, height: 1.05)),
-                const SizedBox(height: 10),
-                Text(meta, style: const TextStyle(color: AppColors.muted, fontSize: 15)),
-                const SizedBox(height: 22),
-                Wrap(spacing: 12, runSpacing: 12, children: actions),
-              ]),
-            ),
-            if (!landscape && image != null)
-              Padding(
-                padding: const EdgeInsets.only(left: 32),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: NetImage(image, width: 220, height: 330, decodeWidth: 220),
+    final item = widget.items[_index];
+    return MouseRegion(
+      onEnter: (_) => _hover = true,
+      onExit: (_) => _hover = false,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 48),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: SizedBox(
+            height: 500,
+            child: Stack(fit: StackFit.expand, children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 450),
+                layoutBuilder: _fill,
+                child: _HeroBackground(key: ValueKey(_index), item: item),
+              ),
+              // Legibility gradient (left).
+              const DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xEB07080B), Color(0x9907080B), Color(0x0007080B)],
+                    stops: [0, 0.45, 0.78],
+                  ),
                 ),
               ),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                layoutBuilder: _fill,
+                child: _HeroContent(key: ValueKey('c$_index'), item: item),
+              ),
+              if (widget.items.length > 1)
+                Positioned(
+                  right: 32,
+                  bottom: 32,
+                  child: Row(children: [
+                    for (var i = 0; i < widget.items.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Semantics(
+                          button: true,
+                          label: 'À la une ${i + 1}',
+                          child: GestureDetector(
+                            onTap: () => setState(() => _index = i),
+                            child: MouseRegion(
+                              cursor: SystemMouseCursors.click,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                width: i == _index ? 28 : 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: i == _index ? AppColors.accent : Colors.white.withValues(alpha: 0.35),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ]),
+                ),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HeroBackground extends StatelessWidget {
+  const _HeroBackground({super.key, required this.item});
+  final _HeroItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    if (item.landscape) {
+      return NetImage(item.image,
+          decodeWidth: 1400,
+          alignment: Alignment.topCenter,
+          placeholder: const ColoredBox(color: Color(0xFF141A26)));
+    }
+    // Portrait poster: blurred backdrop + the poster itself on the right.
+    return Stack(fit: StackFit.expand, children: [
+      ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 32, sigmaY: 32),
+        child: Opacity(
+          opacity: 0.55,
+          child: NetImage(item.image, decodeWidth: 300, placeholder: const ColoredBox(color: Color(0xFF141A26))),
+        ),
+      ),
+      Align(
+        alignment: const Alignment(0.86, 0),
+        child: Container(
+          width: 250,
+          height: 375,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [BoxShadow(color: Color(0x80000000), blurRadius: 40, offset: Offset(0, 20))],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: NetImage(item.image, decodeWidth: 250),
+        ),
+      ),
+    ]);
+  }
+}
+
+class _HeroContent extends StatelessWidget {
+  const _HeroContent({super.key, required this.item});
+  final _HeroItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(56),
+      child: Align(
+        alignment: Alignment.bottomLeft,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(item.kicker, style: labelStyle(color: AppColors.accent, size: 13)),
+            const SizedBox(height: 14),
+            Text(item.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: displayStyle(68, weight: FontWeight.w800, height: 0.98)),
+            if (item.meta.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(item.meta, style: const TextStyle(fontSize: 17, color: AppColors.textSoft)),
+            ],
+            if (item.progress != null) ...[
+              const SizedBox(height: 16),
+              Row(children: [
+                SizedBox(width: 280, child: ProgressLine(item.progress!, height: 5)),
+                const SizedBox(width: 14),
+                Text(item.progressLabel ?? '',
+                    style: const TextStyle(fontSize: 14, color: AppColors.muted, fontFeatures: tabularFigures)),
+              ]),
+            ],
+            const SizedBox(height: 26),
+            Wrap(spacing: 12, runSpacing: 12, children: [
+              FilledButton.icon(
+                onPressed: () => item.onPrimary(context),
+                icon: const Icon(Icons.play_arrow_rounded, size: 24),
+                label: Text(item.primaryLabel),
+              ),
+              if (item.secondaryLabel != null && item.onSecondary != null)
+                OutlinedButton(onPressed: () => item.onSecondary!(context), child: Text(item.secondaryLabel!)),
+            ]),
           ]),
         ),
-      ]),
+      ),
     );
   }
 }
 
-class _ResumeHero extends StatelessWidget {
-  const _ResumeHero({required this.entry});
-  final ProgressEntry entry;
+// ----------------------------------------------------------- quick tiles
 
-  @override
-  Widget build(BuildContext context) {
-    final p = entry;
-    return _Hero(
-      image: p.image,
-      kicker: 'Reprendre',
-      title: p.title,
-      // Progress entries store a backdrop / episode still: show it wide.
-      landscape: true,
-      meta: [
-        if (p.subtitle != null) p.subtitle!,
-        '${formatDuration(p.position)} / ${formatDuration(p.duration)}',
-      ].join('  ·  '),
-      actions: [
-        FilledButton.icon(
-          onPressed: () => Launch.resume(context, p),
-          icon: const Icon(Icons.play_arrow_rounded),
-          label: Text('Reprendre à ${formatDuration(p.position)}'),
-        ),
-        SizedBox(width: 200, child: Padding(
-          padding: const EdgeInsets.only(top: 22),
-          child: ProgressLine(p.fraction, height: 4),
-        )),
-      ],
-    );
-  }
-}
-
-class _MovieHero extends StatelessWidget {
-  const _MovieHero({required this.movie});
-  final Movie movie;
-
-  @override
-  Widget build(BuildContext context) {
-    final m = movie;
-    return _Hero(
-      image: m.poster,
-      kicker: 'Nouveauté',
-      title: m.name,
-      meta: [
-        if (m.year != null) '${m.year}',
-        if (m.rating != null) '★ ${m.rating!.toStringAsFixed(1)}',
-        if (m.added != null) 'ajouté ${formatRelative(m.added)}',
-      ].join('  ·  '),
-      actions: [
-        FilledButton.icon(
-          onPressed: () => Launch.movie(context, m),
-          icon: const Icon(Icons.play_arrow_rounded),
-          label: const Text('Lecture'),
-        ),
-        OutlinedButton.icon(
-          onPressed: () => Launch.openMovie(context, m),
-          icon: const Icon(Icons.info_outline),
-          label: const Text("Plus d'infos"),
-        ),
-      ],
-    );
-  }
-}
-
-/// Big shortcut tiles under the banner: Live TV, Films, Séries, Recherche.
+/// Shortcut tiles under the banner: Live TV, Films, Séries, Recherche.
 class _QuickTiles extends StatelessWidget {
   const _QuickTiles({required this.data, required this.onOpen});
   final _HomeData data;
@@ -436,36 +495,37 @@ class _QuickTiles extends StatelessWidget {
   Widget build(BuildContext context) {
     final tiles = [
       _Tile(
-        icon: Icons.live_tv_outlined,
+        icon: Icons.live_tv_rounded,
+        cue: AppColors.cueLive,
         title: 'Live TV',
-        subtitle: '${formatCount(data.liveCount)} chaînes',
-        colors: const [Color(0xFF3D73F5), Color(0xFF2346C2)],
+        subtitle: '${formatCount(data.liveCount)} chaînes · ${data.liveCategories} catégories',
+        live: true,
         onTap: () => onOpen(ShellTab.live),
       ),
       _Tile(
         icon: Icons.movie_outlined,
+        cue: AppColors.cueFilms,
         title: 'Films',
         subtitle: '${formatCount(data.movieCount)} films',
-        colors: const [Color(0xFF8A5CF6), Color(0xFF5427B0)],
         onTap: () => onOpen(ShellTab.movies),
       ),
       _Tile(
         icon: Icons.video_library_outlined,
+        cue: AppColors.cueSeries,
         title: 'Séries',
         subtitle: '${formatCount(data.seriesCount)} séries',
-        colors: const [Color(0xFFF0435E), Color(0xFFA9173A)],
         onTap: () => onOpen(ShellTab.series),
       ),
       _Tile(
         icon: Icons.search_rounded,
+        cue: AppColors.accent,
         title: 'Recherche',
-        subtitle: 'Chaînes, films, séries',
-        colors: const [AppColors.surface3, AppColors.surface2],
+        subtitle: 'Sans accents, mots dans le désordre',
         onTap: () => onOpen(ShellTab.search),
       ),
     ];
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: const EdgeInsets.symmetric(horizontal: 48),
       child: Row(children: [
         for (var i = 0; i < tiles.length; i++) ...[
           if (i > 0) const SizedBox(width: 18),
@@ -479,16 +539,18 @@ class _QuickTiles extends StatelessWidget {
 class _Tile extends StatefulWidget {
   const _Tile({
     required this.icon,
+    required this.cue,
     required this.title,
     required this.subtitle,
-    required this.colors,
     required this.onTap,
+    this.live = false,
   });
   final IconData icon;
+  final Color cue;
   final String title;
   final String subtitle;
-  final List<Color> colors;
   final VoidCallback onTap;
+  final bool live;
 
   @override
   State<_Tile> createState() => _TileState();
@@ -501,51 +563,126 @@ class _TileState extends State<_Tile> {
   @override
   Widget build(BuildContext context) {
     final lit = _hover || _focus;
-    return AnimatedScale(
-      scale: lit ? 1.03 : 1,
+    return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOut,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
-        height: 176,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: widget.colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: lit ? Colors.white.withValues(alpha: 0.85) : Colors.transparent, width: 2.5),
-          boxShadow: lit
-              ? [BoxShadow(color: widget.colors.first.withValues(alpha: 0.45), blurRadius: 26, spreadRadius: 1)]
-              : null,
-        ),
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: widget.onTap,
-            onHover: (v) => setState(() => _hover = v),
-            onFocusChange: (v) => setState(() => _focus = v),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(26, 24, 20, 22),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(widget.icon, size: 40, color: Colors.white),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: lit ? AppColors.text : AppColors.border, width: 2),
+        boxShadow: lit ? [BoxShadow(color: widget.cue.withValues(alpha: 0.2), spreadRadius: 6)] : null,
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: widget.onTap,
+          onHover: (v) => setState(() => _hover = v),
+          onFocusChange: (v) => setState(() => _focus = v),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: widget.cue.withValues(alpha: 0.16),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(widget.icon, color: widget.cue, size: 25),
+                ),
                 const Spacer(),
-                Text(widget.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: Colors.white)),
-                const SizedBox(height: 2),
-                Text(widget.subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(fontSize: 15.5, color: Colors.white.withValues(alpha: 0.82))),
+                if (widget.live)
+                  Row(children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(color: AppColors.live, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 6),
+                    Text('EN DIRECT', style: labelStyle(color: const Color(0xFFFF8A96)).copyWith(letterSpacing: 1)),
+                  ]),
               ]),
-            ),
+              const SizedBox(height: 22),
+              Text(widget.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: displayStyle(26)),
+              const SizedBox(height: 4),
+              Text(widget.subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(color: AppColors.muted, fontSize: 15)),
+            ]),
           ),
         ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------- live cards
+
+class _LiveRow extends StatelessWidget {
+  const _LiveRow({required this.title, required this.channels, required this.onGuide});
+  final String title;
+  final List<Channel> channels;
+  final VoidCallback onGuide;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return SectionRow(
+      title: title,
+      height: 160,
+      trailing: TextButton(onPressed: onGuide, child: const Text('Ouvrir le guide')),
+      itemCount: channels.length,
+      itemBuilder: (context, i) {
+        final c = channels[i];
+        final now = s.epg.now(c);
+        return HoverBuilder(
+          builder: (context, hover) => GestureDetector(
+            onTap: () => Launch.channel(context, c, channels),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 150),
+              width: 300,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: AppColors.surface,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: hover ? AppColors.text : AppColors.border, width: hover ? 2 : 1),
+              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  ChannelLogo(name: c.name, url: c.logo, size: 44),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(c.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(now == null ? 'En direct' : '${formatClock(now.start)} – ${formatClock(now.stop)}',
+                          style: const TextStyle(fontSize: 13, color: AppColors.muted, fontFeatures: tabularFigures)),
+                    ]),
+                  ),
+                  if (c.number != null)
+                    Text('${c.number}',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.muted)),
+                ]),
+                const Spacer(),
+                Text(now?.title ?? 'Programme non disponible',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: now == null ? AppColors.muted : AppColors.text,
+                    )),
+                const SizedBox(height: 10),
+                ProgressLine(now?.progressAt(DateTime.now()) ?? 0),
+              ]),
+            ),
+          ),
+        );
+      },
     );
   }
 }

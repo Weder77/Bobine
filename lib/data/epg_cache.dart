@@ -11,10 +11,12 @@ class EpgCache {
 
   final Map<String, String?> _keys = {};
   final Map<String, _NowEntry> _now = {};
+  final Map<String, _NowEntry> _next = {};
 
   void clear() {
     _keys.clear();
     _now.clear();
+    _next.clear();
   }
 
   String _id(Channel c) => '${c.sourceId}:${c.extId}';
@@ -44,6 +46,20 @@ class EpgCache {
     final key = keyFor(c);
     final p = key == null ? null : _repo.programAt(c.sourceId, key, t);
     _now[id] = _NowEntry(p, p?.stop ?? t.add(const Duration(minutes: 5)));
+    return p;
+  }
+
+  /// Programme following the current one (cached until the current one ends).
+  Program? next(Channel c) {
+    final id = _id(c);
+    final t = DateTime.now();
+    final cached = _next[id];
+    if (cached != null && t.isBefore(cached.validUntil)) return cached.program;
+    final key = keyFor(c);
+    final current = now(c);
+    Program? p;
+    if (key != null && current != null) p = _repo.programAt(c.sourceId, key, current.stop);
+    _next[id] = _NowEntry(p, current?.stop ?? t.add(const Duration(minutes: 5)));
     return p;
   }
 
