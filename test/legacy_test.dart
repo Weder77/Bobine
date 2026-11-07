@@ -12,8 +12,9 @@ void main() {
   test('Windows and Linux folders of the former name are found', () {
     final win = legacyDataDirs(p.join('C:', 'Users', 'me', 'AppData', 'Roaming', 'com.bobine', 'Bobine'));
     expect(win.first, p.join('C:', 'Users', 'me', 'AppData', 'Roaming', 'com.lumen', 'Lumen'));
-    final linux = legacyDataDirs('/home/me/.local/share/com.bobine.bobine');
-    expect(linux.last, '/home/me/.local/share/com.lumen.lumen');
+    // Built with the platform's separator, like the real folders.
+    final linux = legacyDataDirs(p.join('home', 'me', '.local', 'share', 'com.bobine.bobine'));
+    expect(linux.last, p.join('home', 'me', '.local', 'share', 'com.lumen.lumen'));
   });
 
   test("Lumen's database, WAL and log move into Bobine's folder once", () async {
