@@ -136,8 +136,8 @@ Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVe
 #### 2. Récupérer et lancer le projet
 
 ```powershell
-git clone https://github.com/Weder77/IpTv.git
-cd IpTv
+git clone https://github.com/Weder77/IpiTivi.git
+cd IpiTivi
 git checkout claude/iptv-app-optimized-x5x5g8
 flutter pub get
 flutter run -d windows          # lance l'app en mode développement
