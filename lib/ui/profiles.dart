@@ -54,6 +54,9 @@ Future<bool> switchToProfile(BuildContext context, Profile p) async {
     }
   }
   s.switchProfile(p.id);
+  // From the top bar or the settings: start again from Accueil, with the
+  // new profile's favourites and progress ("Qui regarde ?" has no shell).
+  if (context.mounted) ShellNavigation.of(context)?.goTo(ShellTab.home);
   return true;
 }
 
@@ -297,29 +300,17 @@ class ProfileMenuButton extends StatelessWidget {
       height: 32,
       child: Text(text, style: labelStyle(color: AppColors.faint, size: 11)),
     );
-    return FocusRing(
-      child: PopupMenuButton<String>(
-        tooltip: active == null ? 'Profil : ${current.name}' : 'Profil : ${current.name} · Source : ${active.name}',
-        position: PopupMenuPosition.under,
-        offset: const Offset(0, 10),
-        onSelected: (v) async {
-          if (v.startsWith('p:')) {
-            final p = profiles.firstWhere((x) => x.id == int.parse(v.substring(2)));
-            await switchToProfile(context, p);
-          } else if (v == 'unlock') {
-            final pin = await askPin(context, title: 'Catégories protégées', message: 'Tape le code parental.');
-            if (pin != null && !s.unlockParental(pin) && context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
-            }
-          } else if (v == 'lock') {
-            s.lockParental();
-          } else if (v.startsWith('s:')) {
-            s.selectSource(int.parse(v.substring(2)));
-          } else if (v == 'manage') {
-            onManage();
-          }
-        },
-        itemBuilder: (_) => [
+    Future<void> open(BuildContext anchor) async {
+      final box = anchor.findRenderObject() as RenderBox;
+      final overlay = Navigator.of(anchor).overlay!.context.findRenderObject() as RenderBox;
+      final rect = Rect.fromPoints(
+        box.localToGlobal(Offset(0, box.size.height + 10), ancestor: overlay),
+        box.localToGlobal(box.size.bottomRight(const Offset(0, 10)), ancestor: overlay),
+      );
+      final v = await showMenu<String>(
+        context: anchor,
+        position: RelativeRect.fromRect(rect, Offset.zero & overlay.size),
+        items: [
           header('PROFIL'),
           for (final p in profiles)
             PopupMenuItem(
@@ -367,7 +358,45 @@ class ProfileMenuButton extends StatelessWidget {
           const PopupMenuDivider(),
           const PopupMenuItem(value: 'manage', child: Text('Gérer les profils et les sources…')),
         ],
-        child: ProfileAvatar(profile: current, size: 46, round: true),
+      );
+      if (v == null || !context.mounted) return;
+      if (v.startsWith('p:')) {
+        final p = profiles.firstWhere((x) => x.id == int.parse(v.substring(2)));
+        await switchToProfile(context, p);
+      } else if (v == 'unlock') {
+        final pin = await askPin(context, title: 'Catégories protégées', message: 'Tape le code parental.');
+        if (pin != null && !s.unlockParental(pin) && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+        }
+      } else if (v == 'lock') {
+        s.lockParental();
+      } else if (v.startsWith('s:')) {
+        s.selectSource(int.parse(v.substring(2)));
+      } else if (v == 'manage') {
+        onManage();
+      }
+    }
+
+    return Tooltip(
+      message: active == null ? 'Profil : ${current.name}' : 'Profil : ${current.name} · Source : ${active.name}',
+      waitDuration: const Duration(milliseconds: 500),
+      child: Builder(
+        builder: (anchor) => HoverBuilder(
+          onActivate: () => open(anchor),
+          builder: (context, hover) => GestureDetector(
+            onTap: () => open(anchor),
+            // Hover: a white ring around the avatar.
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 160),
+              padding: const EdgeInsets.all(2.5),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: hover ? AppColors.text : const Color(0x00FFFFFF), width: 2),
+              ),
+              child: ProfileAvatar(profile: current, size: 42, round: true),
+            ),
+          ),
+        ),
       ),
     );
   }

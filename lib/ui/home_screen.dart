@@ -9,6 +9,7 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import '../services.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'shell.dart';
 import 'widgets/common.dart';
 import 'widgets/live_card.dart';
@@ -196,6 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   image: p.image,
                   progress: p.fraction,
                   onTap: () => Launch.resume(context, p),
+                  onContextMenu: (at) => showProgressActions(context, p, at),
                   onRemove: () {
                     _s.repo.removeProgress(p.sourceId, p.kind, p.extId);
                     _s.library.userChanged();
@@ -255,6 +257,7 @@ class _HomeScreenState extends State<HomeScreen> {
           rating: m.rating,
           favorite: favs.contains(m.extId),
           onTap: () => Launch.openMovie(context, m),
+          onContextMenu: (at) => showMovieActions(context, m, at),
         );
       },
     );
@@ -275,6 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
           image: sr.poster,
           rating: sr.rating,
           onTap: () => Launch.openSeries(context, sr),
+          onContextMenu: (at) => showSeriesActions(context, sr, at),
         );
       },
     );
@@ -634,8 +638,11 @@ class _LiveRow extends StatelessWidget {
       gap: 12,
       trailing: TextButton(onPressed: onGuide, child: const Text('Ouvrir le guide')),
       itemCount: channels.length,
-      itemBuilder: (context, i) =>
-          LiveCard(channel: channels[i], onTap: () => Launch.channel(context, channels[i], channels)),
+      itemBuilder: (context, i) => LiveCard(
+        channel: channels[i],
+        onTap: () => Launch.channel(context, channels[i], channels),
+        onContextMenu: (at) => showChannelActions(context, channels[i], channels, at),
+      ),
     );
   }
 }

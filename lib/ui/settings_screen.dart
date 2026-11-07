@@ -21,6 +21,8 @@ class SettingsScreen extends StatelessWidget {
       listenable: Listenable.merge([s.settings, s.library, s.imports]),
       builder: (context, _) {
         final st = s.settings;
+        // The sections are not const: they must rebuild with this builder
+        // (e.g. « Profil actuel » after switching profile).
         return ListView(
           padding: settingsPadding(context),
           children: [
@@ -35,9 +37,9 @@ class SettingsScreen extends StatelessWidget {
               ),
               children: [for (final src in s.repo.sources()) _SourceTile(source: src)],
             ),
-            const ProfilesSection(),
-            const ParentalSection(),
-            const CategoriesSection(),
+            ProfilesSection(),
+            ParentalSection(),
+            CategoriesSection(),
             SettingsSection(
               title: 'Lecture',
               children: [
@@ -149,12 +151,12 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const TmdbSection(),
-            const RemindersSection(),
-            const RecordingsSection(),
-            const BackupSection(),
+            TmdbSection(),
+            RemindersSection(),
+            RecordingsSection(),
+            BackupSection(),
             const SettingsSection(title: 'Raccourcis du lecteur', children: [_Shortcuts()]),
-            const AboutSection(),
+            AboutSection(),
           ],
         );
       },
@@ -442,7 +444,11 @@ class _Shortcuts extends StatelessWidget {
     ('I', 'Statistiques (codec, décodage, cache, débit)'),
     ('P', 'Mini-lecteur (continuer à regarder en naviguant)'),
     ('O', 'Fenêtre flottante par-dessus les autres apps (Windows)'),
-    ('Manette', 'Croix / stick : se déplacer · A : valider · B : retour · X : pause'),
+    ('Clic droit / touche Menu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
+    (
+      'Manette',
+      'Croix / stick : se déplacer · A : valider · B : retour · X : pause · Y : actions rapides (plein écran dans le lecteur)',
+    ),
     ('Échap', 'Quitter le plein écran / retour'),
   ];
 

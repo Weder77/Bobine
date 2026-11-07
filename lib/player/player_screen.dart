@@ -436,7 +436,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _changeVolume(5);
     } else if (k == LogicalKeyboardKey.minus || k == LogicalKeyboardKey.numpadSubtract) {
       _changeVolume(-5);
-    } else if (k == LogicalKeyboardKey.keyF || k == LogicalKeyboardKey.f11) {
+    } else if (k == LogicalKeyboardKey.keyF || k == LogicalKeyboardKey.f11 || k == LogicalKeyboardKey.contextMenu) {
       if (!repeat) _setFullscreen(!_fullscreen);
     } else if (k == LogicalKeyboardKey.escape) {
       if (_tracksPanel) {

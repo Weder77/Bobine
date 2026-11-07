@@ -9,6 +9,7 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import '../services.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'widgets/common.dart';
 
 /// Films or Séries: category pane + virtualised poster grid.
@@ -281,6 +282,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                 onTap: () => it.movie != null
                                     ? Launch.openMovie(context, it.movie!)
                                     : Launch.openSeries(context, it.show!),
+                                onContextMenu: (at) => it.movie != null
+                                    ? showMovieActions(context, it.movie!, at)
+                                    : showSeriesActions(context, it.show!, at),
                               ),
                             );
                           },

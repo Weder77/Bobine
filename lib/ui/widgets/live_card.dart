@@ -50,6 +50,7 @@ class LiveCard extends StatelessWidget {
       child: HoverBuilder(
         onActivate: onActivate ?? onTap,
         onFocus: onFocus,
+        onContextMenu: onContextMenu,
         focusScale: 1.03,
         builder: (context, hover) => Semantics(
           button: true,
