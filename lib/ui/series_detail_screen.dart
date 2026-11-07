@@ -272,6 +272,7 @@ class _EpisodeTile extends StatelessWidget {
     final e = episode;
     final p = progress;
     return HoverBuilder(
+      onActivate: onTap,
       builder: (context, hover) {
         final lit = hover || current;
         return Semantics(

@@ -110,9 +110,9 @@ class TmdbInfo {
 /// Fetches artwork, synopsis, cast and trailer from The Movie Database,
 /// with the user's own key. Results are kept 30 days (7 for "no match").
 class TmdbService {
-  TmdbService(this._repo, this._settings)
-    : _api = Platform.environment['LUMEN_TMDB_BASE'] ?? 'https://api.themoviedb.org/3',
-      _img = Platform.environment['LUMEN_TMDB_IMG'] ?? 'https://image.tmdb.org/t/p';
+  TmdbService(this._repo, this._settings, {String? apiBase, String? imageBase})
+    : _api = apiBase ?? Platform.environment['LUMEN_TMDB_BASE'] ?? 'https://api.themoviedb.org/3',
+      _img = imageBase ?? Platform.environment['LUMEN_TMDB_IMG'] ?? 'https://image.tmdb.org/t/p';
 
   final Repository _repo;
   final AppSettings _settings;
@@ -157,7 +157,10 @@ class TmdbService {
           debugPrint('TMDB: $e');
           return cached?.$1 == null ? null : _cached(sourceId, kind, extId);
         })
-        .whenComplete(() => _inflight.remove(key));
+        .whenComplete(() {
+          // A block body: returning the removed future would make this one wait for itself.
+          _inflight.remove(key);
+        });
   }
 
   Future<TmdbInfo?> _fetch(ContentKind kind, String name, int? year) async {

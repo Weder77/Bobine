@@ -438,6 +438,16 @@ class _EpgGridState extends State<EpgGrid> {
               ),
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
+                focusColor: const Color(0x40FFFFFF),
+                // Arrow navigation: slide the timeline to show the focused programme.
+                onFocusChange: (f) {
+                  if (!f) return;
+                  if (right > gridW) {
+                    _scrollBy((right - gridW) / _pxPerMin + 15);
+                  } else if (left < 0) {
+                    _scrollBy(left / _pxPerMin - 15);
+                  }
+                },
                 onTap: () => widget.onProgram != null
                     ? widget.onProgram!(index, p)
                     : (live ? widget.onPlay(index) : _showDetails(c, p, index)),

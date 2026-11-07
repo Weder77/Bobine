@@ -5,11 +5,34 @@ import 'package:flutter/material.dart';
 import '../../core/theme.dart';
 import 'net_image.dart';
 
-/// Rebuilds with the hover state of the mouse.
+/// Rebuilds with the hover state of the mouse and, when [onActivate] is
+/// given, with the keyboard / remote / gamepad focus too: the widget joins
+/// the arrow-key navigation and Enter (or the gamepad's A) activates it.
 class HoverBuilder extends StatefulWidget {
-  const HoverBuilder({super.key, required this.builder, this.cursor = SystemMouseCursors.click});
+  const HoverBuilder({
+    super.key,
+    required this.builder,
+    this.cursor = SystemMouseCursors.click,
+    this.onActivate,
+    this.focusRingRadius,
+    this.focusScale = 1,
+    this.autofocus = false,
+    this.onFocus,
+  });
   final Widget Function(BuildContext context, bool hovered) builder;
   final MouseCursor cursor;
+  final VoidCallback? onActivate;
+
+  /// Draws a white ring around the widget while it has the keyboard focus
+  /// (cards draw their own ring from `hovered`).
+  final double? focusRingRadius;
+
+  /// Grows the widget slightly while focused (cards).
+  final double focusScale;
+  final bool autofocus;
+
+  /// Called when the keyboard focus arrives.
+  final VoidCallback? onFocus;
 
   @override
   State<HoverBuilder> createState() => _HoverBuilderState();
@@ -17,13 +40,87 @@ class HoverBuilder extends StatefulWidget {
 
 class _HoverBuilderState extends State<HoverBuilder> {
   bool _hover = false;
+  bool _focus = false;
 
   @override
-  Widget build(BuildContext context) => MouseRegion(
-    cursor: widget.cursor,
-    onEnter: (_) => setState(() => _hover = true),
-    onExit: (_) => setState(() => _hover = false),
-    child: widget.builder(context, _hover),
+  Widget build(BuildContext context) {
+    if (widget.onActivate == null) {
+      return MouseRegion(
+        cursor: widget.cursor,
+        onEnter: (_) => setState(() => _hover = true),
+        onExit: (_) => setState(() => _hover = false),
+        child: widget.builder(context, _hover),
+      );
+    }
+    var child = widget.builder(context, _hover || _focus);
+    if (widget.focusRingRadius != null) {
+      child = DecoratedBox(
+        position: DecorationPosition.foreground,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(widget.focusRingRadius!),
+          border: Border.all(color: _focus ? AppColors.text : Colors.transparent, width: 2),
+        ),
+        child: child,
+      );
+    }
+    if (widget.focusScale != 1) {
+      child = AnimatedScale(
+        scale: _focus ? widget.focusScale : 1,
+        duration: const Duration(milliseconds: 140),
+        curve: Curves.easeOut,
+        child: child,
+      );
+    }
+    return FocusableActionDetector(
+      autofocus: widget.autofocus,
+      mouseCursor: widget.cursor,
+      onShowHoverHighlight: (v) => setState(() => _hover = v),
+      onShowFocusHighlight: (v) {
+        setState(() => _focus = v);
+        if (v) widget.onFocus?.call();
+      },
+      actions: {
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (_) {
+            widget.onActivate!();
+            return null;
+          },
+        ),
+      },
+      child: child,
+    );
+  }
+}
+
+/// White ring around [child] while something inside it has the keyboard /
+/// gamepad focus (for menus and buttons whose own focus effect is hidden
+/// under the glass).
+class FocusRing extends StatefulWidget {
+  const FocusRing({super.key, required this.child, this.radius = 999});
+  final Widget child;
+  final double radius;
+
+  @override
+  State<FocusRing> createState() => _FocusRingState();
+}
+
+class _FocusRingState extends State<FocusRing> {
+  bool _on = false;
+
+  @override
+  Widget build(BuildContext context) => Focus(
+    canRequestFocus: false,
+    skipTraversal: true,
+    onFocusChange: (f) =>
+        setState(() => _on = f && FocusManager.instance.highlightMode == FocusHighlightMode.traditional),
+    child: DecoratedBox(
+      position: DecorationPosition.foreground,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(widget.radius),
+        border: Border.all(color: _on ? AppColors.text : Colors.transparent, width: 2),
+      ),
+      child: widget.child,
+    ),
   );
 }
 
@@ -175,12 +272,18 @@ class RoundAction extends StatelessWidget {
     tooltip: tooltip,
     onPressed: onPressed,
     iconSize: 24,
-    style: IconButton.styleFrom(
-      fixedSize: const Size(54, 54),
-      backgroundColor: const Color(0x66111114),
-      side: const BorderSide(color: Color(0x8CFFFFFF), width: 2),
-      shape: const CircleBorder(),
-    ),
+    style:
+        IconButton.styleFrom(
+          fixedSize: const Size(54, 54),
+          backgroundColor: const Color(0x66111114),
+          shape: const CircleBorder(),
+        ).copyWith(
+          side: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.focused)
+                ? const BorderSide(color: AppColors.accent, width: 2.5)
+                : const BorderSide(color: Color(0x8CFFFFFF), width: 2),
+          ),
+        ),
     icon: Icon(icon, color: color ?? AppColors.text),
   );
 }
@@ -212,6 +315,8 @@ class PosterCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: HoverBuilder(
+        onActivate: onTap,
+        focusScale: 1.04,
         builder: (context, hover) {
           return Semantics(
             button: true,
@@ -354,6 +459,8 @@ class LandscapeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: HoverBuilder(
+        onActivate: onTap,
+        focusScale: 1.04,
         builder: (context, hover) {
           return Semantics(
             button: true,
@@ -627,6 +734,7 @@ class _Arrow extends StatelessWidget {
       color: const Color(0xD90A0A0C),
       shape: const CircleBorder(side: BorderSide(color: Color(0x40FFFFFF))),
       child: InkWell(
+        canRequestFocus: false,
         customBorder: const CircleBorder(),
         onTap: onTap,
         child: Padding(padding: const EdgeInsets.all(10), child: Icon(icon, size: 26)),

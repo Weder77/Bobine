@@ -107,8 +107,14 @@ ThemeData buildTheme() {
     canvasColor: AppColors.bg,
     splashFactory: InkSparkle.splashFactory,
     visualDensity: VisualDensity.compact,
+    focusColor: const Color(0x29FFFFFF),
   );
   const buttonShape = StadiumBorder();
+  // Keyboard / remote / gamepad focus: an amber ring, visible on white and
+  // dark buttons alike (mouse clicks never show it).
+  WidgetStateProperty<BorderSide?> focusSide([BorderSide? rest]) => WidgetStateProperty.resolveWith(
+    (s) => s.contains(WidgetState.focused) ? const BorderSide(color: AppColors.accent, width: 2.5) : rest,
+  );
   return base.copyWith(
     textTheme: base.textTheme.apply(fontFamily: AppFonts.body, bodyColor: AppColors.text, displayColor: AppColors.text),
     dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 1),
@@ -148,7 +154,7 @@ ThemeData buildTheme() {
         padding: const EdgeInsets.symmetric(horizontal: 26),
         shape: buttonShape,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, fontSize: 16),
-      ),
+      ).copyWith(side: focusSide()),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
@@ -156,23 +162,22 @@ ThemeData buildTheme() {
         backgroundColor: AppColors.frosted,
         minimumSize: const Size(0, 52),
         padding: const EdgeInsets.symmetric(horizontal: 24),
-        side: BorderSide.none,
         shape: buttonShape,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, fontSize: 16),
-      ),
+      ).copyWith(side: focusSide(BorderSide.none)),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: AppColors.text,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 15),
-      ),
+      ).copyWith(side: focusSide()),
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
         foregroundColor: AppColors.textSoft,
         minimumSize: const Size(44, 44),
         shape: const CircleBorder(),
-      ),
+      ).copyWith(side: focusSide()),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(

@@ -4,6 +4,7 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'shell.dart';
+import 'widgets/common.dart';
 import 'widgets/pin_dialog.dart';
 
 /// Colours offered for profiles.
@@ -278,56 +279,58 @@ class ProfileMenuButton extends StatelessWidget {
     final s = AppScope.of(context);
     final current = s.profile;
     final profiles = s.repo.profiles();
-    return PopupMenuButton<String>(
-      tooltip: 'Profil : ${current.name}',
-      position: PopupMenuPosition.under,
-      offset: const Offset(0, 10),
-      onSelected: (v) async {
-        if (v.startsWith('p:')) {
-          final p = profiles.firstWhere((x) => x.id == int.parse(v.substring(2)));
-          await switchToProfile(context, p);
-        } else if (v == 'unlock') {
-          final pin = await askPin(context, title: 'Catégories protégées', message: 'Tape le code parental.');
-          if (pin != null && !s.unlockParental(pin) && context.mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+    return FocusRing(
+      child: PopupMenuButton<String>(
+        tooltip: 'Profil : ${current.name}',
+        position: PopupMenuPosition.under,
+        offset: const Offset(0, 10),
+        onSelected: (v) async {
+          if (v.startsWith('p:')) {
+            final p = profiles.firstWhere((x) => x.id == int.parse(v.substring(2)));
+            await switchToProfile(context, p);
+          } else if (v == 'unlock') {
+            final pin = await askPin(context, title: 'Catégories protégées', message: 'Tape le code parental.');
+            if (pin != null && !s.unlockParental(pin) && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+            }
+          } else if (v == 'lock') {
+            s.lockParental();
+          } else if (v == 'manage') {
+            onManage();
           }
-        } else if (v == 'lock') {
-          s.lockParental();
-        } else if (v == 'manage') {
-          onManage();
-        }
-      },
-      itemBuilder: (_) => [
-        for (final p in profiles)
-          PopupMenuItem(
-            value: 'p:${p.id}',
-            child: Row(
-              children: [
-                ProfileAvatar(profile: p, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    p.name,
-                    style: TextStyle(fontWeight: p.id == current.id ? FontWeight.w700 : FontWeight.w500),
+        },
+        itemBuilder: (_) => [
+          for (final p in profiles)
+            PopupMenuItem(
+              value: 'p:${p.id}',
+              child: Row(
+                children: [
+                  ProfileAvatar(profile: p, size: 28),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      p.name,
+                      style: TextStyle(fontWeight: p.id == current.id ? FontWeight.w700 : FontWeight.w500),
+                    ),
                   ),
-                ),
-                if (p.id == current.id) const Icon(Icons.check_rounded, size: 18),
-              ],
+                  if (p.id == current.id) const Icon(Icons.check_rounded, size: 18),
+                ],
+              ),
             ),
-          ),
-        if (s.settings.parentalEnabled && !current.kids) ...[
+          if (s.settings.parentalEnabled && !current.kids) ...[
+            const PopupMenuDivider(),
+            if (s.parentalUnlocked)
+              const PopupMenuItem(value: 'lock', child: Text('Reverrouiller les catégories protégées'))
+            else
+              const PopupMenuItem(value: 'unlock', child: Text('Afficher les catégories protégées…')),
+          ],
           const PopupMenuDivider(),
-          if (s.parentalUnlocked)
-            const PopupMenuItem(value: 'lock', child: Text('Reverrouiller les catégories protégées'))
-          else
-            const PopupMenuItem(value: 'unlock', child: Text('Afficher les catégories protégées…')),
+          const PopupMenuItem(value: 'manage', child: Text('Gérer les profils…')),
         ],
-        const PopupMenuDivider(),
-        const PopupMenuItem(value: 'manage', child: Text('Gérer les profils…')),
-      ],
-      child: Padding(
-        padding: const EdgeInsets.all(3),
-        child: ProfileAvatar(profile: current, size: 36),
+        child: Padding(
+          padding: const EdgeInsets.all(3),
+          child: ProfileAvatar(profile: current, size: 36),
+        ),
       ),
     );
   }

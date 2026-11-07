@@ -18,6 +18,8 @@ class LiveCard extends StatelessWidget {
     required this.onTap,
     this.onDoubleTap,
     this.onContextMenu,
+    this.onActivate,
+    this.onFocus,
     this.width = 300,
     this.selected = false,
     this.favorite = false,
@@ -25,6 +27,12 @@ class LiveCard extends StatelessWidget {
   final Channel channel;
   final VoidCallback onTap;
   final VoidCallback? onDoubleTap;
+
+  /// Enter / gamepad A while focused (defaults to [onTap]).
+  final VoidCallback? onActivate;
+
+  /// The keyboard / gamepad focus arrived on the card.
+  final VoidCallback? onFocus;
 
   /// Right click: menu at the given screen position.
   final ValueChanged<Offset>? onContextMenu;
@@ -40,6 +48,9 @@ class LiveCard extends StatelessWidget {
     final next = s.epg.next(c);
     return RepaintBoundary(
       child: HoverBuilder(
+        onActivate: onActivate ?? onTap,
+        onFocus: onFocus,
+        focusScale: 1.03,
         builder: (context, hover) => Semantics(
           button: true,
           label: c.name,

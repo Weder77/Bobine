@@ -228,7 +228,14 @@ class _LiveScreenState extends State<LiveScreen> {
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is! KeyDownEvent && e is! KeyRepeatEvent) return KeyEventResult.ignored;
+    // A card, chip or button inside has the focus: normal arrow navigation.
+    if (!node.hasPrimaryFocus) return KeyEventResult.ignored;
     final k = e.logicalKey;
+    // At the edges the arrows leave the grid (menu above, categories left).
+    if ((k == LogicalKeyboardKey.arrowUp && _selected < _columns) ||
+        (k == LogicalKeyboardKey.arrowLeft && _selected % _columns == 0)) {
+      return KeyEventResult.ignored;
+    }
     if (k == LogicalKeyboardKey.arrowRight) {
       _select(_selected + 1);
     } else if (k == LogicalKeyboardKey.arrowLeft) {
@@ -372,6 +379,8 @@ class _LiveScreenState extends State<LiveScreen> {
                             _select(i, immediate: true);
                           },
                           onDoubleTap: () => _fullscreen(i),
+                          onActivate: () => _fullscreen(i),
+                          onFocus: () => _select(i),
                           onContextMenu: (pos) => _channelMenu(c, pos),
                         );
                       }),

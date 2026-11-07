@@ -78,6 +78,13 @@ class _AppShellState extends State<AppShell> {
   /// handler rather than Shortcuts: after closing the player or a dialog, the
   /// keyboard focus is not always inside the shell's widget tree.
   bool _onKey(KeyEvent e) {
+    // Échap / gamepad B on another tab goes back to Accueil.
+    if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape) {
+      final typing = FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+      if (!mounted || typing || _index == ShellTab.home || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+      _go(ShellTab.home);
+      return true;
+    }
     if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.keyK) return false;
     final keys = HardwareKeyboard.instance;
     if (!keys.isControlPressed && !keys.isMetaPressed) return false;
@@ -127,13 +134,17 @@ class _AppShellState extends State<AppShell> {
                       Offstage(
                         key: ValueKey(i), // keeps each tab's state when others get built
                         offstage: i != _index,
-                        child: TickerMode(
-                          enabled: i == _index,
-                          // The home hero runs under the floating bar; the
-                          // other pages start below it.
-                          child: Padding(
-                            padding: EdgeInsets.only(top: i == ShellTab.home ? 0 : kTopBarHeight),
-                            child: _page(i),
+                        // Hidden tabs stay out of the arrow / Tab navigation.
+                        child: ExcludeFocus(
+                          excluding: i != _index,
+                          child: TickerMode(
+                            enabled: i == _index,
+                            // The home hero runs under the floating bar; the
+                            // other pages start below it.
+                            child: Padding(
+                              padding: EdgeInsets.only(top: i == ShellTab.home ? 0 : kTopBarHeight),
+                              child: _page(i),
+                            ),
                           ),
                         ),
                       ),
@@ -241,6 +252,8 @@ class _TabButton extends StatelessWidget {
       style: TextStyle(fontSize: 15.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: AppColors.text),
     );
     return HoverBuilder(
+      onActivate: onTap,
+      focusRingRadius: 999,
       builder: (context, hover) => Semantics(
         button: true,
         selected: selected,
@@ -316,49 +329,51 @@ class _SourceButton extends StatelessWidget {
       builder: (context, _) {
         final sources = s.repo.sources();
         final active = s.activeSource;
-        return PopupMenuButton<int>(
-          tooltip: active == null ? 'Sources' : 'Source : ${active.name}',
-          position: PopupMenuPosition.under,
-          offset: const Offset(0, 10),
-          onSelected: (id) => id < 0 ? onManage() : s.selectSource(id),
-          itemBuilder: (_) => [
-            for (final src in sources)
-              PopupMenuItem(
-                value: src.id,
-                child: Row(
-                  children: [
-                    Icon(src.id == active?.id ? Icons.check_rounded : null, size: 18, color: AppColors.text),
-                    const SizedBox(width: 10),
-                    Text(
-                      src.name,
-                      style: TextStyle(fontWeight: src.id == active?.id ? FontWeight.w700 : FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-            const PopupMenuDivider(),
-            const PopupMenuItem(value: -1, child: Text('Gérer les sources…')),
-          ],
-          child: Glass(
-            height: 54,
-            padding: const EdgeInsets.fromLTRB(7, 7, 14, 7),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const LumenMark(size: 40, round: true),
-                const SizedBox(width: 10),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 140),
-                  child: Text(
-                    active?.name ?? 'Lumen',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+        return FocusRing(
+          child: PopupMenuButton<int>(
+            tooltip: active == null ? 'Sources' : 'Source : ${active.name}',
+            position: PopupMenuPosition.under,
+            offset: const Offset(0, 10),
+            onSelected: (id) => id < 0 ? onManage() : s.selectSource(id),
+            itemBuilder: (_) => [
+              for (final src in sources)
+                PopupMenuItem(
+                  value: src.id,
+                  child: Row(
+                    children: [
+                      Icon(src.id == active?.id ? Icons.check_rounded : null, size: 18, color: AppColors.text),
+                      const SizedBox(width: 10),
+                      Text(
+                        src.name,
+                        style: TextStyle(fontWeight: src.id == active?.id ? FontWeight.w700 : FontWeight.w500),
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(width: 4),
-                const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textSoft),
-              ],
+              const PopupMenuDivider(),
+              const PopupMenuItem(value: -1, child: Text('Gérer les sources…')),
+            ],
+            child: Glass(
+              height: 54,
+              padding: const EdgeInsets.fromLTRB(7, 7, 14, 7),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const LumenMark(size: 40, round: true),
+                  const SizedBox(width: 10),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 140),
+                    child: Text(
+                      active?.name ?? 'Lumen',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textSoft),
+                ],
+              ),
             ),
           ),
         );

@@ -128,6 +128,7 @@ class _SearchScreenState extends State<SearchScreen> {
               itemBuilder: (context, i) {
                 final c = r.channels[i];
                 return HoverBuilder(
+                  onActivate: () => Launch.channel(context, c, r.channels),
                   builder: (context, hover) => GestureDetector(
                     onTap: () => Launch.channel(context, c, r.channels),
                     child: Container(
