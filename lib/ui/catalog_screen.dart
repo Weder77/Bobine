@@ -115,7 +115,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
         icon: Icons.apps_rounded,
       ),
       CategoryEntry(id: 'fav', label: 'Mes favoris', count: _favs.length, icon: Icons.favorite_rounded),
-      for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count),
+      for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count, locked: c.locked),
     ];
     if (!_entries.any((e) => e.id == _cat)) _cat = 'all';
     _loadItems();

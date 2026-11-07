@@ -4,6 +4,7 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../services.dart';
+import 'settings_family.dart';
 import 'settings_recordings.dart';
 import 'source_form.dart';
 import 'widgets/common.dart';
@@ -32,6 +33,9 @@ class SettingsScreen extends StatelessWidget {
               ),
               children: [for (final src in s.repo.sources()) _SourceTile(source: src)],
             ),
+            const ProfilesSection(),
+            const ParentalSection(),
+            const CategoriesSection(),
             SettingsSection(
               title: 'Lecture',
               children: [

@@ -9,6 +9,7 @@ import '../services.dart';
 import 'catalog_screen.dart';
 import 'home_screen.dart';
 import 'live_screen.dart';
+import 'profiles.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/common.dart';
@@ -203,6 +204,11 @@ class _TopBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   const _RecordingDot(),
+                  ListenableBuilder(
+                    listenable: Listenable.merge([AppScope.of(context).settings, AppScope.of(context).library]),
+                    builder: (context, _) => ProfileMenuButton(onManage: () => onSelect(ShellTab.settings)),
+                  ),
+                  const SizedBox(width: 12),
                   const _Clock(),
                   const SizedBox(width: 12),
                   _GlassIcon(

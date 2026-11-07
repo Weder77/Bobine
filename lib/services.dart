@@ -79,6 +79,9 @@ class AppServices {
   /// Parental code typed this session (locked categories visible).
   bool parentalUnlocked = false;
 
+  /// "Qui regarde ?" was answered (or not needed) this session.
+  bool profileChosen = false;
+
   static Future<AppServices> create() async {
     final support = await getApplicationSupportDirectory();
     final cache = await getApplicationCacheDirectory();
@@ -125,6 +128,8 @@ class AppServices {
     );
     services._ensureActiveSource();
     services._applyProfile();
+    // "Qui regarde ?" is asked once, at start.
+    services.profileChosen = !(settings.askProfileAtStart && repo.profiles().length > 1);
     return services;
   }
 

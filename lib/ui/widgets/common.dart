@@ -677,17 +677,21 @@ class EmptyState extends StatelessWidget {
 
 /// Entry of a category rail.
 class CategoryEntry {
-  const CategoryEntry({required this.id, required this.label, this.count, this.icon});
+  const CategoryEntry({required this.id, required this.label, this.count, this.icon, this.locked = false});
   final String id;
   final String label;
   final int? count;
   final IconData? icon;
+
+  /// Behind the parental code (shown with a padlock once unlocked).
+  final bool locked;
 }
 
 /// Copy of [entries] with the "fav" entry showing [count] (the counters are
 /// otherwise only computed when the screen loads).
 List<CategoryEntry> withFavoriteCount(List<CategoryEntry> entries, int count) => [
-  for (final e in entries) e.id == 'fav' ? CategoryEntry(id: e.id, label: e.label, count: count, icon: e.icon) : e,
+  for (final e in entries)
+    e.id == 'fav' ? CategoryEntry(id: e.id, label: e.label, count: count, icon: e.icon, locked: e.locked) : e,
 ];
 
 /// Left category rail used by Live / Films / Séries.
@@ -776,6 +780,11 @@ class _CategoryPaneState extends State<CategoryPane> {
                                     ),
                                   ),
                                 ),
+                                if (e.locked)
+                                  const Padding(
+                                    padding: EdgeInsets.only(right: 6),
+                                    child: Icon(Icons.lock_rounded, size: 14, color: AppColors.accent),
+                                  ),
                                 if (e.count != null)
                                   Text(
                                     '${e.count}',

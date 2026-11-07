@@ -5,6 +5,7 @@ import 'core/theme.dart';
 import 'player/mini_player.dart';
 import 'services.dart';
 import 'ui/onboarding_screen.dart';
+import 'ui/profiles.dart';
 import 'ui/shell.dart';
 
 class LumenApp extends StatelessWidget {
@@ -39,7 +40,18 @@ class _RootGate extends StatelessWidget {
     final s = AppScope.of(context);
     return ListenableBuilder(
       listenable: Listenable.merge([s.settings, s.library]),
-      builder: (context, _) => s.activeSource == null ? const OnboardingScreen() : const AppShell(),
+      builder: (context, _) {
+        if (s.activeSource == null) return const OnboardingScreen();
+        if (!s.profileChosen) {
+          return ProfilePickerScreen(
+            onChosen: () {
+              s.profileChosen = true;
+              s.library.userChanged();
+            },
+          );
+        }
+        return const AppShell();
+      },
     );
   }
 }

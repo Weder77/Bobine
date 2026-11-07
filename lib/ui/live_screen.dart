@@ -15,6 +15,7 @@ import '../services.dart';
 import 'epg_grid.dart';
 import 'launch.dart';
 import 'program_actions.dart';
+import 'settings_family.dart';
 import 'shell.dart';
 import 'widgets/common.dart';
 import 'widgets/live_card.dart';
@@ -129,7 +130,7 @@ class _LiveScreenState extends State<LiveScreen> {
       CategoryEntry(id: 'fav', label: 'Favoris', count: _favs.length, icon: Icons.star_rounded),
       const CategoryEntry(id: 'recent', label: 'Récemment regardées', icon: Icons.history_rounded),
       CategoryEntry(id: 'all', label: 'Toutes les chaînes', count: total, icon: Icons.apps_rounded),
-      for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count),
+      for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count, locked: c.locked),
     ];
     final saved = _s.repo.kvGet('live.cat.${src.id}');
     if (saved != null && _entries.any((e) => e.id == saved)) {
@@ -371,6 +372,7 @@ class _LiveScreenState extends State<LiveScreen> {
                             _select(i, immediate: true);
                           },
                           onDoubleTap: () => _fullscreen(i),
+                          onContextMenu: (pos) => _channelMenu(c, pos),
                         );
                       }),
                     ),
@@ -402,6 +404,12 @@ class _LiveScreenState extends State<LiveScreen> {
                     const SizedBox(width: 10),
                   ],
                   _categoryMenu(),
+                  const SizedBox(width: 10),
+                  _GuideChip(
+                    label: 'Ranger…',
+                    selected: false,
+                    onTap: () => showCategoryManager(context, ContentKind.live),
+                  ),
                 ],
               ),
             ),
@@ -706,6 +714,47 @@ class _LiveScreenState extends State<LiveScreen> {
         },
       ),
     );
+  }
+
+  /// Right-click menu of a channel card.
+  Future<void> _channelMenu(Channel c, Offset at) async {
+    final fav = _favs.contains(c.extId);
+    final size = MediaQuery.sizeOf(context);
+    final v = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(at.dx, at.dy, size.width - at.dx, size.height - at.dy),
+      items: [
+        const PopupMenuItem(value: 'play', child: Text('Regarder en plein écran')),
+        PopupMenuItem(value: 'fav', child: Text(fav ? 'Retirer des favoris' : 'Ajouter aux favoris')),
+        const PopupMenuItem(value: 'record', child: Text('Enregistrer maintenant')),
+        const PopupMenuItem(value: 'hide', child: Text('Masquer la chaîne')),
+      ],
+    );
+    if (!mounted) return;
+    switch (v) {
+      case 'play':
+        _fullscreen(_visible.indexOf(c));
+      case 'fav':
+        _toggleFav(c);
+      case 'record':
+        _s.recordings.recordNow(c, current: _s.epg.now(c));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enregistrement de « ${c.name} » démarré')));
+      case 'hide':
+        _s.repo.setChannelHidden(c.sourceId, c.extId, true);
+        _s.visibilityChanged();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('« ${c.name} » est masquée. Réglages → Catégories et chaînes pour la retrouver.'),
+            action: SnackBarAction(
+              label: 'Annuler',
+              onPressed: () {
+                _s.repo.setChannelHidden(c.sourceId, c.extId, false);
+                _s.visibilityChanged();
+              },
+            ),
+          ),
+        );
+    }
   }
 
   /// Records the current programme (or stops the recording of this channel).

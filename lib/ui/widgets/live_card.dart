@@ -17,6 +17,7 @@ class LiveCard extends StatelessWidget {
     required this.channel,
     required this.onTap,
     this.onDoubleTap,
+    this.onContextMenu,
     this.width = 300,
     this.selected = false,
     this.favorite = false,
@@ -24,6 +25,9 @@ class LiveCard extends StatelessWidget {
   final Channel channel;
   final VoidCallback onTap;
   final VoidCallback? onDoubleTap;
+
+  /// Right click: menu at the given screen position.
+  final ValueChanged<Offset>? onContextMenu;
   final double width;
   final bool selected;
   final bool favorite;
@@ -42,6 +46,8 @@ class LiveCard extends StatelessWidget {
           child: GestureDetector(
             onTap: onTap,
             onDoubleTap: onDoubleTap,
+            onSecondaryTapUp: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
+            onLongPressStart: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
             child: SizedBox(
               width: width,
               child: Column(
