@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
+import '../core/open_url.dart';
 import '../core/theme.dart';
 import '../data/import/xtream_api.dart';
 import '../data/models.dart';
+import '../features/tmdb.dart';
 import '../services.dart';
 import 'launch.dart';
 import 'widgets/common.dart';
@@ -21,6 +23,7 @@ class SeriesDetailScreen extends StatefulWidget {
 class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   late final AppServices _s;
   SeriesDetails? _details;
+  TmdbInfo? _tmdb;
   List<Episode> _episodes = const [];
   Map<String, ProgressEntry> _progress = const {};
   ProgressEntry? _last;
@@ -40,6 +43,13 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     _episodes = _s.repo.episodes(_sr.sourceId, _sr.extId);
     _refreshUser();
     _load();
+    _tmdb = _s.tmdb.cachedSeries(_sr);
+    _loadTmdb();
+  }
+
+  Future<void> _loadTmdb() async {
+    final info = await _s.tmdb.series(_sr);
+    if (mounted && info != null) setState(() => _tmdb = info);
   }
 
   @override
@@ -107,14 +117,19 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final d = _details;
+    final t = _tmdb;
     final seasons = _episodes.map((e) => e.season).toSet().toList()..sort();
     final target = _target();
+    final year = _sr.year ?? t?.year;
     final meta = <String>[
-      if (_sr.year != null) '${_sr.year}',
+      if (year != null) '$year',
       if (seasons.isNotEmpty) '${seasons.length} saison${seasons.length > 1 ? 's' : ''}',
     ];
-    final genre = d?.genre ?? _sr.genre;
-    final plot = d?.plot ?? _sr.plot;
+    final genre = t != null && t.genres.isNotEmpty ? t.genres.join(', ') : (d?.genre ?? _sr.genre);
+    final plot = t?.overview ?? d?.plot ?? _sr.plot;
+    final cast = d?.cast ?? (t == null || t.cast.isEmpty ? null : t.cast.join(', '));
+    final backdrop = t?.backdrop ?? d?.backdrop ?? _sr.backdrop;
+    final trailer = trailerUrl(t?.trailer);
 
     final category = _s.repo.categoryName(_sr.categoryId);
     final lastProgress = target != null && target.$2 ? _progress[target.$1.extId] : null;
@@ -124,14 +139,15 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       progressLabel: lastProgress == null
           ? null
           : '${target!.$1.code} · reste ${formatRuntime((lastProgress.duration - lastProgress.position).inSeconds)}',
-      backdrop: d?.backdrop ?? _sr.backdrop,
-      poster: _sr.poster ?? d?.poster,
+      backdrop: backdrop,
+      poster: _sr.poster ?? d?.poster ?? t?.poster,
       title: _sr.name,
-      rating: d?.rating ?? _sr.rating,
+      rating: d?.rating ?? _sr.rating ?? t?.rating,
       meta: meta,
       loading: _loading,
       fields: [
-        if (d?.cast != null) ('Distribution', d!.cast!),
+        if (cast != null) ('Distribution', cast),
+        if (t?.director != null) ('Création', t!.director!),
         if (genre != null) ('Genres', genre),
         if (category != null) ('Catégorie', category),
       ],
@@ -154,6 +170,12 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             icon: Icons.replay_rounded,
             tooltip: 'Recommencer depuis ${_episodes.first.code}',
             onPressed: () => Launch.episode(context, _sr, _episodes.first, _episodes),
+          ),
+        if (trailer != null)
+          RoundAction(
+            icon: Icons.smart_display_outlined,
+            tooltip: 'Bande-annonce',
+            onPressed: () => openExternal(trailer),
           ),
       ],
       bottom: _episodes.isEmpty
@@ -178,7 +200,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                           episode: e,
                           progress: _progress[e.extId],
                           current: target != null && target.$1.extId == e.extId,
-                          fallbackImage: d?.backdrop ?? _sr.backdrop ?? _sr.poster,
+                          fallbackImage: backdrop ?? _sr.poster,
                           onTap: () => Launch.episode(context, _sr, e, _episodes),
                         ),
                     ],

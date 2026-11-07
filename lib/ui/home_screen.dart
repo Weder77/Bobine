@@ -79,6 +79,22 @@ class _HomeScreenState extends State<HomeScreen> {
       d.recentSeries = r.series(id, sort: CatalogSort.added, limit: 30);
     }
     if (mounted) setState(() => _d = d);
+    _prefetchTmdb();
+  }
+
+  List<Movie> _heroMovies() =>
+      _d.recentMovies.where((m) => m.poster != null).take(4 - _d.continueWatching.take(2).length).toList();
+
+  /// Fetches TMDB backdrops of the banner films once, then redraws.
+  final Set<String> _tmdbAsked = {};
+  void _prefetchTmdb() {
+    if (!_s.tmdb.enabled) return;
+    for (final m in _heroMovies()) {
+      if (!_tmdbAsked.add('${m.sourceId}:${m.extId}')) continue;
+      _s.tmdb.movie(m).then((info) {
+        if (info != null && mounted) setState(() {});
+      });
+    }
   }
 
   List<_HeroItem> _heroItems() {
@@ -99,15 +115,17 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
-    for (final m in _d.recentMovies.where((m) => m.poster != null).take(4 - items.length)) {
+    for (final m in _heroMovies()) {
+      final t = _s.tmdb.cachedMovie(m);
       items.add(
         _HeroItem(
           kicker: 'FILM · NOUVEAU',
           title: m.name,
-          meta: ['Film', if (m.year != null) '${m.year}'],
-          rating: m.rating,
-          image: m.poster,
-          landscape: false,
+          meta: ['Film', if ((m.year ?? t?.year) != null) '${m.year ?? t?.year}', ...?t?.genres.take(2)],
+          rating: m.rating ?? t?.rating,
+          image: t?.backdrop ?? m.poster,
+          landscape: t?.backdrop != null,
+          overview: t?.overview,
           primaryLabel: 'Lecture',
           onPrimary: (c) => Launch.movie(c, m),
           secondaryLabel: "Plus d'infos",
@@ -279,6 +297,7 @@ class _HeroItem {
     this.progressLabel,
     this.secondaryLabel,
     this.onSecondary,
+    this.overview,
   });
   final String kicker;
   final String title;
@@ -292,6 +311,9 @@ class _HeroItem {
   final void Function(BuildContext) onPrimary;
   final String? secondaryLabel;
   final void Function(BuildContext)? onSecondary;
+
+  /// Synopsis line (from TMDB).
+  final String? overview;
 }
 
 /// Full-width banner under the glass bar (auto-advance, dots to pick).
@@ -511,6 +533,15 @@ class _HeroContent extends StatelessWidget {
               if (item.meta.isNotEmpty || item.rating != null) ...[
                 const SizedBox(height: 14),
                 _MetaLine(meta: item.meta, rating: item.rating),
+              ],
+              if (item.overview != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  item.overview!,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 16, height: 1.45, color: AppColors.textSoft),
+                ),
               ],
               if (item.progress != null) ...[
                 const SizedBox(height: 16),

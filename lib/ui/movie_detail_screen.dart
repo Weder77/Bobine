@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
+import '../core/open_url.dart';
 import '../core/theme.dart';
 import '../data/import/xtream_api.dart';
 import '../data/models.dart';
+import '../features/tmdb.dart';
 import '../services.dart';
 import 'launch.dart';
 import 'widgets/common.dart';
@@ -20,6 +22,7 @@ class MovieDetailScreen extends StatefulWidget {
 class _MovieDetailScreenState extends State<MovieDetailScreen> {
   late final AppServices _s;
   VodDetails? _details;
+  TmdbInfo? _tmdb;
   bool _loading = false;
   ProgressEntry? _progress;
   bool _fav = false;
@@ -43,6 +46,13 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
     }
     _refreshUser();
     _loadDetails();
+    _tmdb = _s.tmdb.cachedMovie(_m);
+    _loadTmdb();
+  }
+
+  Future<void> _loadTmdb() async {
+    final info = await _s.tmdb.movie(_m);
+    if (mounted && info != null) setState(() => _tmdb = info);
   }
 
   @override
@@ -78,14 +88,23 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final d = _details;
+    final t = _tmdb;
     final p = _progress;
     final resumable = p != null && p.resumable;
-    final rating = d?.rating ?? _m.rating;
+    final rating = (d?.rating ?? 0) > 0 ? d!.rating : (_m.rating ?? t?.rating);
     final year =
         _m.year?.toString() ??
-        ((d?.releaseDate != null && d!.releaseDate!.length >= 4) ? d.releaseDate!.substring(0, 4) : null);
-    final meta = <String>['Film', ?year, if (d?.durationSec != null) formatRuntime(d!.durationSec)];
-    final image = d?.backdrop ?? _m.poster;
+        ((d?.releaseDate != null && d!.releaseDate!.length >= 4) ? d.releaseDate!.substring(0, 4) : null) ??
+        t?.year?.toString();
+    final runtime = d?.durationSec ?? (t?.runtimeMinutes == null ? null : t!.runtimeMinutes! * 60);
+    final meta = <String>['Film', ?year, if (runtime != null) formatRuntime(runtime)];
+    final backdrop = t?.backdrop ?? d?.backdrop;
+    final image = backdrop ?? _m.poster;
+    final plot = t?.overview ?? d?.plot;
+    final cast = d?.cast ?? (t == null || t.cast.isEmpty ? null : t.cast.join(', '));
+    final director = d?.director ?? t?.director;
+    final genres = t != null && t.genres.isNotEmpty ? t.genres.join(', ') : d?.genre;
+    final trailer = trailerUrl(t?.trailer ?? d?.trailer);
 
     final video = <String>[
       if (d?.videoCodec != null || d?.videoHeight != null)
@@ -104,16 +123,16 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
 
     return DetailLayout(
       breadcrumb: _category == null ? 'Films' : 'Films · $_category',
-      backdrop: d?.backdrop,
-      poster: d?.poster ?? _m.poster,
+      backdrop: backdrop,
+      poster: d?.poster ?? _m.poster ?? t?.poster,
       title: _m.name,
       rating: rating,
       meta: meta,
       tags: d?.qualityTags ?? const [],
       fields: [
-        if (d?.cast != null) ('Distribution', d!.cast!),
-        if (d?.director != null) ('Réalisation', d!.director!),
-        if (d?.genre != null) ('Genres', d!.genre!),
+        if (cast != null) ('Distribution', cast),
+        if (director != null) ('Réalisation', director),
+        if (genres != null) ('Genres', genres),
         if (_category != null) ('Catégorie', _category!),
       ],
       loading: _loading,
@@ -137,6 +156,12 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
             icon: Icons.replay_rounded,
             tooltip: 'Depuis le début',
             onPressed: () => Launch.movie(context, _m, restart: true, image: image),
+          ),
+        if (trailer != null)
+          RoundAction(
+            icon: Icons.smart_display_outlined,
+            tooltip: 'Bande-annonce',
+            onPressed: () => openExternal(trailer),
           ),
       ],
       bottom: Column(
@@ -188,7 +213,15 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
         ],
       ),
       children: [
-        if (d?.plot != null) DetailParagraph(d!.plot!),
+        if (t?.tagline != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              t!.tagline!,
+              style: const TextStyle(color: AppColors.textSoft, fontStyle: FontStyle.italic, fontSize: 16),
+            ),
+          ),
+        if (plot != null) DetailParagraph(plot),
         if (p != null && p.finished)
           const Padding(
             padding: EdgeInsets.only(top: 8),

@@ -6,6 +6,7 @@ import '../data/models.dart';
 import '../services.dart';
 import 'settings_family.dart';
 import 'settings_recordings.dart';
+import 'settings_tmdb.dart';
 import 'source_form.dart';
 import 'widgets/common.dart';
 
@@ -147,6 +148,7 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
+            const TmdbSection(),
             const RemindersSection(),
             const RecordingsSection(),
             const SettingsSection(title: 'Raccourcis du lecteur', children: [_Shortcuts()]),

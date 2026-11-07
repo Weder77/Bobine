@@ -13,6 +13,7 @@ import 'data/repository.dart';
 import 'data/settings.dart';
 import 'features/recording_service.dart';
 import 'features/reminder_service.dart';
+import 'features/tmdb.dart';
 import 'player/pip.dart';
 import 'player/playback_tracker.dart';
 import 'player/player_service.dart';
@@ -54,6 +55,7 @@ class AppServices {
     required this.pip,
     required this.reminders,
     required this.recordings,
+    required this.tmdb,
   });
 
   final String dbPath;
@@ -75,6 +77,9 @@ class AppServices {
 
   /// Recordings of live channels.
   final RecordingService recordings;
+
+  /// Artwork, synopsis, cast and trailers (with the user's TMDB key).
+  final TmdbService tmdb;
 
   /// Parental code typed this session (locked categories visible).
   bool parentalUnlocked = false;
@@ -125,6 +130,7 @@ class AppServices {
       pip: pip,
       reminders: reminders,
       recordings: recordings,
+      tmdb: TmdbService(repo, settings),
     );
     services._ensureActiveSource();
     services._applyProfile();

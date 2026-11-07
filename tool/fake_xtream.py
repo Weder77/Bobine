@@ -27,6 +27,40 @@ PROGRAMS = ["Journal de 20h", "Météo", "Le grand match", "Documentaire : Océa
             "Talk-show", "Cinéma : Horizon", "Magazine auto", "Dessins animés", "Info en continu"]
 
 
+def tmdb(path, q, headers):
+    """Tiny stand-in for The Movie Database (LUMEN_TMDB_BASE=http://127.0.0.1:8765/tmdb/3)."""
+    key = q.get("api_key", [""])[0] or headers.get("Authorization", "").replace("Bearer ", "")
+    if key != "testkey":
+        return 401, {"status_message": "Invalid API key"}
+    if path == "/configuration":
+        return 200, {"images": {}}
+    m = re.match(r"^/search/(movie|tv)$", path)
+    if m:
+        query = q.get("query", [""])[0].lower()
+        titles = MOVIE_TITLES if m.group(1) == "movie" else ["Les Veilleurs", "Atlas", "Rivage"]
+        hits = [{"id": 1000 + i, "title": t, "name": t} for i, t in enumerate(titles) if t.lower() == query]
+        return 200, {"results": hits}
+    m = re.match(r"^/(movie|tv)/(\d+)$", path)
+    if m:
+        i = int(m.group(2)) - 1000
+        tv = m.group(1) == "tv"
+        return 200, {
+            "id": int(m.group(2)), "title": None if tv else MOVIE_TITLES[i % 12], "name": "Série" if tv else None,
+            "overview": "Résumé TMDB : au bord d'un monde qui s'efface, une équipe tente de sauver ce qui peut "
+                        "l'être. Un film de test servi par le faux TMDB de Lumen.",
+            "tagline": "Chaque lumière a son ombre.",
+            "backdrop_path": f"/backdrop{(i + 3) % 12}.png", "poster_path": f"/poster{i % 12}.png",
+            "genres": [{"name": "Science-Fiction"}, {"name": "Aventure"}],
+            "vote_average": 7.8, "release_date": f"{2015 + i}-03-01", "first_air_date": "2021-09-10",
+            "runtime": 128, "episode_run_time": [42],
+            "credits": {"cast": [{"name": "Léa Fontaine"}, {"name": "Marc Aubry"}, {"name": "Inès Roche"}],
+                        "crew": [{"job": "Director", "name": "Paul Vernier"}]},
+            "created_by": [{"name": "Nora Lemaire"}],
+            "videos": {"results": [{"site": "YouTube", "type": "Trailer", "key": "dQw4w9WgXcQ", "iso_639_1": "fr"}]},
+        }
+    return 404, {"status_message": "not found"}
+
+
 def api(action, q):
     if action is None:
         return {"user_info": {"username": "demo", "auth": 1, "status": "Active",
@@ -170,6 +204,19 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(json.dumps(api(q.get("action", [None])[0], q)).encode(), "application/json")
         if p == "/xmltv.php":
             return self.send_bytes(xmltv(), "application/xml")
+        if p.startswith("/tmdb/3/"):
+            code, body = tmdb(p[len("/tmdb/3"):], q, self.headers)
+            data = json.dumps(body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if p.startswith("/tmdb/img/"):
+            f = os.path.join(IMG, os.path.basename(p))
+            if os.path.exists(f):
+                return self.serve_file(f, "image/png")
         if p.startswith("/img/"):
             f = os.path.join(IMG, os.path.basename(p))
             if os.path.exists(f):
