@@ -25,6 +25,8 @@ MOVIE_TITLES = ["Horizon", "Le Phare", "Nuit Blanche", "Odyssée", "Brume", "Atl
                 "Orbite", "Marée", "Vertige", "Solstice", "Rivage", "Éclipse"]
 PROGRAMS = ["Journal de 20h", "Météo", "Le grand match", "Documentaire : Océans", "Série du soir",
             "Talk-show", "Cinéma : Horizon", "Magazine auto", "Dessins animés", "Info en continu"]
+GENRES = ["Info", "Info · Météo", "Sport · Football", "Documentaire · Nature", "Série · Policier",
+          "Divertissement", "Film · Aventure", "Magazine · Auto", "Jeunesse · Animation", "Info"]
 
 
 def tmdb(path, q, headers):
@@ -133,9 +135,10 @@ def xmltv():
             dur = timedelta(minutes=[30, 45, 60, 90][k % 4])
             fmt = "%Y%m%d%H%M%S +0000"
             title = PROGRAMS[k % len(PROGRAMS)].replace("&", "&amp;")
+            cats = "".join(f'<category lang="fr">{g}</category>' for g in GENRES[k % len(GENRES)].split(" · "))
             out.append(f'<programme start="{t.strftime(fmt)}" stop="{(t + dur).strftime(fmt)}" channel="{epg}">'
                        f'<title lang="fr">{title}</title><desc lang="fr">Description de « {title} » '
-                       f'sur {n}.</desc></programme>')
+                       f'sur {n}.</desc>{cats}</programme>')
             t += dur
             k += 1
     out.append("</tv>")

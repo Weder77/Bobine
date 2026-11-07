@@ -619,7 +619,7 @@ class Repository {
     final likes = words.map((w) => '%${w.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%');
     final rows = db.select(
       'SELECT p.channel AS p_channel, p.start AS p_start, p.stop AS p_stop, p.title AS p_title, '
-      'p.description AS p_description, ch.* '
+      'p.description AS p_description, p.category AS p_category, ch.* '
       'FROM epg_programs p JOIN channels ch ON ch.source_id = p.source_id AND ('
       'lower(ch.epg_id) = p.channel OR ch.match_key IN '
       '(SELECT e.name_key FROM epg_channels e WHERE e.source_id = p.source_id AND e.epg_id = p.channel)) '
@@ -637,6 +637,7 @@ class Repository {
             stop: DateTime.fromMillisecondsSinceEpoch((r['p_stop'] as int) * 1000),
             title: r['p_title'] as String,
             description: r['p_description'] as String?,
+            category: r['p_category'] as String?,
           ),
         ),
     ];
@@ -873,6 +874,43 @@ class Repository {
   );
 
   void tmdbClear() => write(() => db.execute('DELETE FROM tmdb_cache'));
+
+  // ------------------------------------------------------------- tendances
+
+  /// "Top 10 aujourd'hui" / "Tendances": the best rated of the latest
+  /// additions, films and series together (providers give no audience
+  /// figures).
+  List<Object> trending(int sourceId, {int limit = 10}) {
+    final items = <(Object, double, int)>[
+      for (final m in movies(sourceId, sort: CatalogSort.added, limit: 160))
+        (m, m.rating ?? 0, m.added?.millisecondsSinceEpoch ?? 0),
+      for (final s in series(sourceId, sort: CatalogSort.added, limit: 80))
+        (s, s.rating ?? 0, s.added?.millisecondsSinceEpoch ?? 0),
+    ];
+    items.sort((a, b) {
+      final r = b.$2.compareTo(a.$2);
+      return r != 0 ? r : b.$3.compareTo(a.$3);
+    });
+    return [for (final i in items.take(limit)) i.$1];
+  }
+
+  /// Last searches of this profile (most recent first).
+  List<String> recentSearches() {
+    final v = kvGet('search_recent_$profileId');
+    if (v == null) return const [];
+    try {
+      return (jsonDecode(v) as List).cast<String>();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  void addRecentSearch(String q) {
+    final t = q.trim();
+    if (t.length < 2) return;
+    final list = [t, ...recentSearches().where((x) => x.toLowerCase() != t.toLowerCase())].take(8).toList();
+    kvSet('search_recent_$profileId', jsonEncode(list));
+  }
 
   // --------------------------------------------------------------------- kv
 

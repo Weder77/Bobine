@@ -1,84 +1,131 @@
 import 'package:flutter/material.dart';
 
-/// "Salle obscure" design tokens (streaming direction, see the design canvas):
-/// the image comes first, actions are white, amber is only the brand mark and
-/// progress.
+/// "Bobine" design tokens (design_handoff_bobine): a warm near-black, cream
+/// and a vermilion accent; images come first, actions are white.
 class AppColors {
   // Grounds
-  static const bg = Color(0xFF111114);
-  static const surface = Color(0xFF1C1C21); // cards
-  static const surface2 = Color(0xFF232329); // menus, panels
-  static const surface3 = Color(0xFF2C2C33); // logos, chips
-  static const selected = Color(0xFF26262C); // selected rows
-  static const field = Color(0xFF18181C); // inputs
-  static const border = Color(0xFF26262C); // hairlines
-  static const borderStrong = Color(0xFF3A3A42); // outlined controls
+  static const bg = Color(0xFF0D0C0B);
+  static const surface = Color(0xFF1A1816); // cards, inputs
+  static const surface2 = Color(0xFF141311); // menus, panels
+  static const surface3 = Color(0xFF26221F); // programme on air (guide), chips
+  static const selected = Color(0xFF26221F);
+  static const field = Color(0xFF1A1816);
+  static const border = Color(0xFF24211E); // hairlines
+  static const borderSoft = Color(0xFF1E1C1A);
+  static const borderFaint = Color(0xFF161513);
+  static const borderInput = Color(0xFF2E2A26);
+  static const borderStrong = Color(0xFF3A3530); // outlined controls
 
   // Text
   static const text = Color(0xFFFFFFFF);
-  static const textSoft = Color(0xFFE6E7EB);
-  static const muted = Color(0xFFA9AAB1);
-  static const faint = Color(0xFF8C8D94);
+  static const textSoft = Color(0xFFD9D4CE);
+  static const muted = Color(0xFFB5AFA8); // tertiary, inactive nav
+  static const faint = Color(0xFF9A948D); // meta, mono
+  static const disabled = Color(0xFF7D766F); // past programmes
+  static const disabled2 = Color(0xFF5E5852);
+  static const placeholder = Color(0xFF6F6862);
+  static const outlineDigit = Color(0xFF57514B); // Top 10 numbers
 
-  // Brand: logo, progress bars, ratings.
-  static const accent = Color(0xFFFFB547);
-  static const onAccent = Color(0xFF1A1204);
-  static Color get accentTint => accent.withValues(alpha: 0.14);
+  // Brand: vermilion accent (live, progress, selection), cream marks.
+  static const accent = Color(0xFFFF5A36);
+  static const accentHover = Color(0xFFFF7A5C);
+  static const onAccent = Color(0xFF1A0A05);
+  static const accentSelected = Color(0xFF2B1A13); // guide selection
+  static Color get accentTint => accent.withValues(alpha: 0.16);
+  static const cream = Color(0xFFF3EEE8); // channel badges, reel flanks
+  static const reelShadow = Color(0xFFB83A1D);
 
-  // Actions: white primary buttons, frosted secondary ones.
+  // Actions: white primary buttons, warm translucent secondary ones.
   static const action = Color(0xFFFFFFFF);
-  static const onAction = Color(0xFF0B0B0D);
-  static const frosted = Color(0x33FFFFFF);
+  static const onAction = Color(0xFF0D0C0B);
+  static const frosted = Color(0x73787068); // rgba(120,112,104,.45)
+  static const frostedHover = Color(0xA6787068); // .65
+  static const glass = Color(0xA8201D1A); // rgba(32,29,26,.66)
 
   // Status
-  static const live = Color(0xFFF23B4C);
-  static const liveBadge = Color(0xFFD81F33);
-  static const success = Color(0xFF3DDC97);
+  static const live = accent;
+  static const liveBadge = accent;
+  static const success = Color(0xFF8FD1C2);
+  static const successTint = Color(0x246FB7A8);
 
-  // Content cues.
-  static const cueLive = Color(0xFF7FA6FF);
-  static const cueFilms = Color(0xFFB39DFF);
-  static const cueSeries = Color(0xFFFF8FA8);
+  // Profile colours offered in the editor.
+  static const guest = Color(0xFFE8C547);
+  static const kids = Color(0xFF6FB7A8);
 
-  /// Kept for the app icon only.
-  static const accent2 = Color(0xFFFF7A59);
+  // Kept names (older widgets): everything points at the accent now.
+  static const cueLive = accent;
+  static const cueFilms = accent;
+  static const cueSeries = accent;
+  static const accent2 = accentHover;
   static const accentGradient = LinearGradient(
-    colors: [accent, accent2],
+    colors: [accent, accentHover],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  /// Backdrop of a missing image, tinted per title / channel (hue 0-360).
+  static Gradient placeholderGradient(double hue) => RadialGradient(
+    center: const Alignment(0.48, -0.4),
+    radius: 1.1,
+    colors: [HSLColor.fromAHSL(1, hue, 0.48, 0.22).toColor(), HSLColor.fromAHSL(1, hue, 0.30, 0.10).toColor(), bg],
+    stops: const [0, 0.45, 0.85],
+  );
 }
 
-/// Typefaces: Inter for the interface, Bebas Neue for poster titles.
+/// Typefaces: Geist for the interface, Geist Mono for times and counters,
+/// Big Shoulders Display for screen and hero titles, Sacramento for the logo.
 class AppFonts {
-  static const body = 'Inter';
-  static const poster = 'BebasNeue';
+  static const body = 'Geist';
+  static const mono = 'GeistMono';
+  static const poster = 'BigShoulders';
+  static const script = 'Sacramento';
 }
 
-/// Heading style (Inter, heavy, slightly tightened).
-TextStyle displayStyle(double size, {FontWeight weight = FontWeight.w800, Color? color, double? height}) => TextStyle(
+/// Interface heading (Geist): row titles 20/600, dialog titles.
+TextStyle displayStyle(double size, {FontWeight weight = FontWeight.w700, Color? color, double? height}) => TextStyle(
   fontFamily: AppFonts.body,
   fontSize: size,
   fontWeight: weight,
   color: color ?? AppColors.text,
   height: height,
-  letterSpacing: size >= 24 ? -0.02 * size : null,
+  letterSpacing: size >= 24 ? -0.01 * size : null,
 );
 
-/// Condensed capitals for titles over images ("LES VEILLEURS").
-TextStyle posterStyle(double size, {Color? color, double height = 0.9, List<Shadow>? shadows}) => TextStyle(
+/// Big Shoulders Display capitals for screen and hero titles ("DIRECT").
+/// Callers pass upper-case text.
+TextStyle posterStyle(
+  double size, {
+  Color? color,
+  double height = 0.86,
+  List<Shadow>? shadows,
+  FontWeight weight = FontWeight.w800,
+}) => TextStyle(
   fontFamily: AppFonts.poster,
   fontSize: size,
-  fontWeight: FontWeight.w400,
+  fontWeight: weight,
   color: color ?? AppColors.text,
   height: height,
-  letterSpacing: size * 0.01,
   shadows: shadows,
 );
 
-/// Small uppercase label ("À SUIVRE").
-TextStyle labelStyle({Color color = AppColors.muted, double size = 12}) =>
-    TextStyle(fontSize: size, fontWeight: FontWeight.w700, letterSpacing: size * 0.14, color: color);
+/// Geist Mono: times, counters, channel numbers, quality badges.
+TextStyle monoStyle(double size, {FontWeight weight = FontWeight.w500, Color? color, double? height}) => TextStyle(
+  fontFamily: AppFonts.mono,
+  fontSize: size,
+  fontWeight: weight,
+  color: color ?? AppColors.faint,
+  height: height,
+  fontFeatures: tabularFigures,
+);
+
+/// Kicker: small capitals with wide spacing ("FILM · NOUVEAUTÉ").
+TextStyle labelStyle({Color color = AppColors.muted, double size = 12}) => TextStyle(
+  fontFamily: AppFonts.body,
+  fontSize: size,
+  fontWeight: FontWeight.w600,
+  letterSpacing: size * 0.16,
+  color: color,
+);
 
 const tabularFigures = [FontFeature.tabularFigures()];
 
@@ -109,7 +156,7 @@ ThemeData buildTheme() {
     visualDensity: VisualDensity.compact,
     focusColor: const Color(0x29FFFFFF),
   );
-  const buttonShape = StadiumBorder();
+  final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
   // Keyboard / remote / gamepad focus: an amber ring, visible on white and
   // dark buttons alike (mouse clicks never show it).
   WidgetStateProperty<BorderSide?> focusSide([BorderSide? rest]) => WidgetStateProperty.resolveWith(
@@ -129,20 +176,20 @@ ThemeData buildTheme() {
       fillColor: AppColors.field,
       isDense: true,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-      hintStyle: const TextStyle(color: AppColors.faint),
+      hintStyle: const TextStyle(color: AppColors.disabled),
       labelStyle: const TextStyle(color: AppColors.muted),
       prefixIconColor: AppColors.muted,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.borderStrong),
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: AppColors.borderInput),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.borderStrong),
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: AppColors.borderInput),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: const BorderSide(color: AppColors.text, width: 1.4),
+        borderRadius: BorderRadius.circular(6),
+        borderSide: const BorderSide(color: AppColors.accent, width: 1.2),
       ),
     ),
     filledButtonTheme: FilledButtonThemeData(
@@ -150,21 +197,27 @@ ThemeData buildTheme() {
         backgroundColor: AppColors.action,
         foregroundColor: AppColors.onAction,
         disabledBackgroundColor: AppColors.surface3,
-        minimumSize: const Size(0, 52),
-        padding: const EdgeInsets.symmetric(horizontal: 26),
+        minimumSize: const Size(0, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         shape: buttonShape,
-        textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, fontSize: 16),
+        textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 15),
       ).copyWith(side: focusSide()),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.text,
-        backgroundColor: AppColors.frosted,
-        minimumSize: const Size(0, 52),
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        shape: buttonShape,
-        textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w700, fontSize: 16),
-      ).copyWith(side: focusSide(BorderSide.none)),
+      style:
+          OutlinedButton.styleFrom(
+            foregroundColor: AppColors.text,
+            backgroundColor: AppColors.frosted,
+            minimumSize: const Size(0, 48),
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            shape: buttonShape,
+            textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 15),
+          ).copyWith(
+            side: focusSide(BorderSide.none),
+            backgroundColor: WidgetStateProperty.resolveWith(
+              (s) => s.contains(WidgetState.hovered) ? AppColors.frostedHover : AppColors.frosted,
+            ),
+          ),
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
@@ -196,10 +249,10 @@ ThemeData buildTheme() {
     ),
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? AppColors.onAccent : AppColors.muted,
+        (s) => s.contains(WidgetState.selected) ? AppColors.text : AppColors.muted,
       ),
       trackColor: WidgetStateProperty.resolveWith(
-        (s) => s.contains(WidgetState.selected) ? AppColors.accent : AppColors.surface3,
+        (s) => s.contains(WidgetState.selected) ? AppColors.accent : AppColors.borderStrong,
       ),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
     ),
@@ -230,23 +283,24 @@ ThemeData buildTheme() {
     popupMenuTheme: PopupMenuThemeData(
       color: AppColors.surface2,
       surfaceTintColor: Colors.transparent,
-      elevation: 12,
+      elevation: 24,
+      shadowColor: const Color(0xA6000000),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: AppColors.borderStrong),
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: AppColors.border),
       ),
       textStyle: const TextStyle(fontFamily: AppFonts.body, color: AppColors.text, fontSize: 14),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: AppColors.surface,
+      backgroundColor: AppColors.surface2,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: AppColors.border),
       ),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: AppColors.surface3,
+      backgroundColor: AppColors.surface,
       contentTextStyle: const TextStyle(fontFamily: AppFonts.body, color: AppColors.text),
       actionTextColor: AppColors.accent,
       behavior: SnackBarBehavior.floating,
@@ -261,7 +315,7 @@ ThemeData buildTheme() {
     sliderTheme: const SliderThemeData(
       activeTrackColor: AppColors.accent,
       thumbColor: AppColors.accent,
-      inactiveTrackColor: Color(0x33FFFFFF),
+      inactiveTrackColor: Color(0x59FFFFFF),
       trackHeight: 3,
       overlayShape: RoundSliderOverlayShape(overlayRadius: 12),
       thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6),

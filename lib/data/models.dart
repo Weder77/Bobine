@@ -337,11 +337,14 @@ class Episode {
 }
 
 class Program {
-  const Program({required this.start, required this.stop, required this.title, this.description});
+  const Program({required this.start, required this.stop, required this.title, this.description, this.category});
   final DateTime start;
   final DateTime stop;
   final String title;
   final String? description;
+
+  /// XMLTV genre, e.g. "Sport · Rugby".
+  final String? category;
 
   bool isLiveAt(DateTime t) => !t.isBefore(start) && t.isBefore(stop);
 
@@ -356,6 +359,7 @@ class Program {
     stop: DateTime.fromMillisecondsSinceEpoch((r['stop'] as int) * 1000),
     title: r['title'] as String,
     description: r['description'] as String?,
+    category: r['category'] as String?,
   );
 }
 

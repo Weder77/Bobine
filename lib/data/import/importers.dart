@@ -449,13 +449,13 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     var seen = 0;
 
     final parser = XmltvParser(
-      onProgramme: (channel, rawStart, rawStop, title, desc) {
+      onProgramme: (channel, rawStart, rawStop, title, desc, category) {
         seen++;
         if (seen % 5000 == 0) progress('Guide TV', seen);
         final start = rawStart + shift;
         final stop = rawStop + shift;
         if (stop < minStop || start > maxStart) return;
-        programmes.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title)]);
+        programmes.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title), category]);
       },
       onChannel: (id, names) {
         final lid = id.toLowerCase();
@@ -486,8 +486,8 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       db.execute('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
       db.execute('DELETE FROM epg_channels WHERE source_id = ?', [sourceId]);
       final p = db.prepare(
-        'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description, search) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description, search, category) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       );
       var i = 0;
       for (final row in programmes) {

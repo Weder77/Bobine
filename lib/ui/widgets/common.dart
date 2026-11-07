@@ -620,34 +620,40 @@ class LandscapeCard extends StatelessWidget {
 }
 
 /// Square channel logo with initials fallback.
+/// Channel badge: a cream tile with the playlist logo, or the channel's
+/// initials in Big Shoulders ("TF1", "F2", "M6") when there is none.
 class ChannelLogo extends StatelessWidget {
   const ChannelLogo({super.key, required this.name, required this.url, this.size = 44});
   final String name;
   final String? url;
   final double size;
 
-  static String initials(String name) => name
-      .replaceAll(RegExp(r'^[A-Z]{2,3}\s*[:|]\s*'), '')
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((w) => w.isNotEmpty)
-      .take(2)
-      .map((w) => w.characters.first.toUpperCase())
-      .join();
+  static String initials(String name) {
+    final clean = name
+        .replaceAll(RegExp(r'^\s*(\|[A-Z]{2,4}\||[A-Z]{2,3}\s*[:|-])\s*'), '')
+        .replaceAll(RegExp(r'[^A-Za-z0-9À-ÿ+ ]'), ' ')
+        .replaceAll(RegExp(r'\b(hd|fhd|uhd|4k|sd|hevc)\b', caseSensitive: false), ' ')
+        .trim();
+    final words = clean.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '?';
+    if (words.length == 1) return words.first.length <= 4 ? words.first : words.first.substring(0, 3);
+    if (RegExp(r'^\d+$').hasMatch(words[1])) return '${words[0][0]}${words[1]}'.toUpperCase();
+    return '${words[0].characters.first}${words[1].characters.first}'.toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
     final placeholder = Center(
-      child: Text(
-        initials(name),
-        style: TextStyle(fontSize: size * 0.3, fontWeight: FontWeight.w800, color: AppColors.textSoft),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(initials(name), maxLines: 1, style: posterStyle(size * 0.42, color: AppColors.onAction, height: 1)),
       ),
     );
     return Container(
       width: size,
       height: size,
       padding: EdgeInsets.all(size * 0.12),
-      decoration: BoxDecoration(color: AppColors.surface3, borderRadius: BorderRadius.circular(size * 0.24)),
+      decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(size * 0.24)),
       child: NetImage(url, fit: BoxFit.contain, decodeWidth: size, placeholder: placeholder),
     );
   }

@@ -5,7 +5,14 @@
 /// blocks and extracts the few fields we need.
 library;
 
-typedef ProgrammeCallback = void Function(String channel, int start, int stop, String title, String? description);
+typedef ProgrammeCallback = void Function(
+  String channel,
+  int start,
+  int stop,
+  String title,
+  String? description,
+  String? category,
+);
 typedef ChannelCallback = void Function(String id, List<String> displayNames);
 
 class XmltvParser {
@@ -88,7 +95,21 @@ class XmltvParser {
     final title = _pickText(inner, 'title');
     if (title == null) return;
     final desc = _pickText(inner, 'desc');
-    onProgramme(decodeEntities(channel), start, stop ?? start + 3600, title, desc);
+    // "Sport · Rugby": the first two categories, without repeats.
+    final cats = <String>[];
+    for (final c in _allTexts(inner, 'category')) {
+      final t = c.text.trim();
+      if (t.isNotEmpty && !cats.any((x) => x.toLowerCase() == t.toLowerCase())) cats.add(t);
+      if (cats.length == 2) break;
+    }
+    onProgramme(
+      decodeEntities(channel),
+      start,
+      stop ?? start + 3600,
+      title,
+      desc,
+      cats.isEmpty ? null : cats.join(' · '),
+    );
   }
 
   void _handleChannel(String openTag, String inner) {

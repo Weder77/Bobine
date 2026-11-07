@@ -97,6 +97,9 @@ class AppServices {
   /// libmpv disk cache folder (diagnostic page).
   final String mpvCacheDir;
 
+  /// Programme the guide should show next (from the search).
+  final ValueNotifier<(Channel, Program)?> guideFocus = ValueNotifier(null);
+
   /// Parental code typed this session (locked categories visible).
   bool parentalUnlocked = false;
 

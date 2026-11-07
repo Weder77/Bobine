@@ -143,6 +143,17 @@ Future<List<Episode>> _loadEpisodes(AppServices s, Series sr) async {
   }
 }
 
+/// Plays a series where the profile left it (or its first episode),
+/// loading the episodes from the server when needed.
+Future<void> playSeries(BuildContext context, Series sr) async {
+  final s = AppScope.of(context);
+  final all = await _loadEpisodes(s, sr);
+  final t = seriesTarget(all, s.repo.lastEpisodeProgress(sr.sourceId, sr.extId));
+  if (!context.mounted) return;
+  if (t == null) return Launch.openSeries(context, sr);
+  await Launch.episode(context, sr, t.$1, all);
+}
+
 /// Right click on a series: resume or next episode, start a season, details,
 /// favourite, trailer.
 Future<void> showSeriesActions(BuildContext context, Series sr, Offset at) async {
