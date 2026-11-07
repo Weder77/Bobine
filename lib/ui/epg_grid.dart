@@ -159,8 +159,11 @@ class _EpgGridState extends State<EpgGrid> {
   void _updateDay() {
     final today = DateTime.now();
     final v = _anchor;
-    widget.controller?.day.value =
-        DateTime(v.year, v.month, v.day).difference(DateTime(today.year, today.month, today.day)).inDays;
+    widget.controller?.day.value = DateTime(
+      v.year,
+      v.month,
+      v.day,
+    ).difference(DateTime(today.year, today.month, today.day)).inDays;
   }
 
   List<Program> _programs(Channel c) => _cache.putIfAbsent(
@@ -189,7 +192,9 @@ class _EpgGridState extends State<EpgGrid> {
         builder: (context, box) {
           _gridW = box.maxWidth - EpgGrid.nameW;
           return Container(
-            decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.borderSoft))),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AppColors.borderSoft)),
+            ),
             child: Stack(
               children: [
                 // Half-hour lines behind the rows.

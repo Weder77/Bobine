@@ -87,7 +87,7 @@ class _TmdbSectionState extends State<TmdbSection> {
         ),
         Container(
           alignment: Alignment.centerLeft,
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 16),
+          padding: const EdgeInsets.symmetric(vertical: 18),
           child: Wrap(
             spacing: 10,
             runSpacing: 8,

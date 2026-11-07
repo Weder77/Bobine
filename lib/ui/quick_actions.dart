@@ -294,7 +294,7 @@ Future<void> showChannelActions(
   final s = AppScope.of(context);
   final now = s.epg.now(c);
   return showQuickActions(context, at, [
-    QuickAction.header(c.name.toUpperCase()),
+    QuickAction.header(s.channelName(c).toUpperCase()),
     QuickAction(
       'Regarder en plein écran',
       Icons.play_arrow_rounded,
@@ -307,7 +307,7 @@ Future<void> showChannelActions(
       Icons.fiber_manual_record_rounded,
       () {
         s.recordings.recordNow(c, current: now);
-        _toast(context, 'Enregistrement de « ${now?.title ?? c.name} » démarré');
+        _toast(context, 'Enregistrement de « ${now?.title ?? s.channelName(c)} » démarré');
       },
     ),
     QuickAction('Masquer la chaîne', Icons.visibility_off_outlined, () {
@@ -315,7 +315,7 @@ Future<void> showChannelActions(
       s.visibilityChanged();
       _toast(
         context,
-        '« ${c.name} » est masquée. Réglages → Catégories et chaînes pour la retrouver.',
+        '« ${s.channelName(c)} » est masquée. Réglages → Catégories et chaînes pour la retrouver.',
         action: SnackBarAction(
           label: 'Annuler',
           onPressed: () {

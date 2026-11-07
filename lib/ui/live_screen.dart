@@ -234,21 +234,22 @@ class _LiveScreenState extends State<LiveScreen> {
         ),
         OutlinedButton.icon(
           onPressed: () => ShellNavigation.of(context)?.goTo(ShellTab.guide),
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(0, 44),
-            padding: const EdgeInsets.fromLTRB(14, 0, 18, 0),
-            backgroundColor: Colors.transparent,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-            textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 14, fontWeight: FontWeight.w600),
-          ).copyWith(
-            side: WidgetStateProperty.resolveWith(
-              (s) => BorderSide(
-                color: s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
-                    ? AppColors.text
-                    : AppColors.borderStrong,
+          style:
+              OutlinedButton.styleFrom(
+                minimumSize: const Size(0, 44),
+                padding: const EdgeInsets.fromLTRB(14, 0, 18, 0),
+                backgroundColor: Colors.transparent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 14, fontWeight: FontWeight.w600),
+              ).copyWith(
+                side: WidgetStateProperty.resolveWith(
+                  (s) => BorderSide(
+                    color: s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
+                        ? AppColors.text
+                        : AppColors.borderStrong,
+                  ),
+                ),
               ),
-            ),
-          ),
           icon: const Icon(Icons.table_chart_outlined, size: 18),
           label: const Text('Guide TV'),
         ),
@@ -257,7 +258,13 @@ class _LiveScreenState extends State<LiveScreen> {
     return LayoutBuilder(
       builder: (context, box) => box.maxWidth < 760
           ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [title, const SizedBox(height: 18), tools])
-          : Row(crossAxisAlignment: CrossAxisAlignment.end, children: [Expanded(child: title), tools]),
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: title),
+                tools,
+              ],
+            ),
     );
   }
 
@@ -458,12 +465,20 @@ class LiveTile extends StatelessWidget {
                               TextSpan(
                                 text: 'Ensuite ${formatClock(next!.start)} · ',
                                 children: [
-                                  TextSpan(text: next!.title, style: const TextStyle(color: AppColors.text)),
+                                  TextSpan(
+                                    text: next!.title,
+                                    style: const TextStyle(color: AppColors.text),
+                                  ),
                                 ],
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, height: 1.2, color: AppColors.muted),
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                height: 1.2,
+                                color: AppColors.muted,
+                              ),
                             ),
                           ),
                         ),

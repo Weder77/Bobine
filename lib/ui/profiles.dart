@@ -82,9 +82,9 @@ class ProfilePickerScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const BobineMark(size: 48),
-              const SizedBox(height: 28),
-              Text('Qui regarde ?', style: displayStyle(44)),
+              const BobineLogo(height: 60),
+              const SizedBox(height: 36),
+              Text('QUI REGARDE ?', style: posterStyle(64, height: 0.9)),
               const SizedBox(height: 40),
               Wrap(
                 spacing: 32,
@@ -292,7 +292,9 @@ class _ProfileEditorState extends State<_ProfileEditor> {
 /// Profile avatar in the top bar: switch profile, unlock protected categories.
 class ProfileMenuButton extends StatelessWidget {
   const ProfileMenuButton({super.key, required this.onManage});
-  final VoidCallback onManage;
+
+  /// Opens the settings, on the profiles page when [profiles].
+  final void Function({bool profiles}) onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -383,7 +385,7 @@ class ProfileMenuButton extends StatelessWidget {
       } else if (v.startsWith('s:')) {
         s.selectSource(int.parse(v.substring(2)));
       } else if (v == 'manage' || v == 'settings') {
-        onManage();
+        onManage(profiles: v == 'manage');
       }
     }
 

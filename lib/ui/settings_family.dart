@@ -5,54 +5,119 @@ import '../data/models.dart';
 import '../services.dart';
 import 'profiles.dart';
 import 'settings_screen.dart';
+import 'widgets/cards.dart';
 import 'widgets/common.dart';
 import 'widgets/pin_dialog.dart';
 
-/// Réglages → Profils.
-class ProfilesSection extends StatelessWidget {
-  const ProfilesSection({super.key});
+/// Réglages → Profils: one card per profile (click: use it, pencil: edit)
+/// and a dashed card to add one.
+class ProfileCards extends StatelessWidget {
+  const ProfileCards({super.key});
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final current = s.profile;
-    return SettingsSection(
-      title: 'Profils',
-      trailing: OutlinedButton.icon(
-        onPressed: () => showProfileEditor(context),
-        icon: const Icon(Icons.person_add_alt_rounded),
-        label: const Text('Ajouter'),
-      ),
+    return AutoGrid(
+      minWidth: 160,
+      spacing: 16,
+      runSpacing: 16,
       children: [
         for (final p in s.repo.profiles())
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-            leading: ProfileAvatar(profile: p, size: 40),
-            title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text(
-              [if (p.id == current.id) 'Profil actuel', if (p.kids) 'Enfant'].join(' · '),
-              style: const TextStyle(color: AppColors.muted),
-            ),
-            trailing: Wrap(
-              spacing: 4,
-              children: [
-                if (p.id != current.id)
-                  TextButton(onPressed: () => switchToProfile(context, p), child: const Text('Utiliser')),
-                IconButton(
-                  tooltip: 'Modifier',
-                  onPressed: () => showProfileEditor(context, profile: p),
-                  icon: const Icon(Icons.edit_outlined),
-                ),
-              ],
-            ),
+          _ProfileCard(
+            profile: p,
+            active: p.id == current.id,
+            onTap: () => p.id == current.id ? showProfileEditor(context, profile: p) : switchToProfile(context, p),
+            onEdit: () => showProfileEditor(context, profile: p),
           ),
-        SettingsSwitch(
-          title: 'Demander « Qui regarde ? » au démarrage',
-          subtitle: "Seulement s'il y a plusieurs profils. Chacun a ses favoris, sa progression et ses rappels.",
-          value: s.settings.askProfileAtStart,
-          onChanged: (v) => s.settings.update((x) => x.askProfileAtStart = v),
+        SizedBox(
+          height: 200,
+          child: DashedAction(
+            icon: Icons.add_rounded,
+            label: 'Ajouter un profil',
+            vertical: true,
+            onTap: () => showProfileEditor(context),
+          ),
         ),
       ],
+    );
+  }
+}
+
+class _ProfileCard extends StatelessWidget {
+  const _ProfileCard({required this.profile, required this.active, required this.onTap, required this.onEdit});
+  final Profile profile;
+  final bool active;
+  final VoidCallback onTap;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = profile;
+    final color = Color(p.color);
+    final ink = color.computeLuminance() > 0.4 ? AppColors.onAction : AppColors.text;
+    return HoverBuilder(
+      onActivate: onTap,
+      focusRingRadius: 12,
+      builder: (context, hover) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 200,
+          decoration: BoxDecoration(
+            color: hover ? AppColors.surface : AppColors.surface2,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: active ? AppColors.accent : AppColors.border, width: active ? 2 : 1),
+          ),
+          child: Stack(
+            children: [
+              Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 84,
+                      height: 84,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
+                      child: Text(
+                        p.name.isEmpty ? '?' : p.name.characters.first.toUpperCase(),
+                        style: posterStyle(42, color: ink, height: 1),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        p.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, height: 1),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      active ? 'Profil actif' : (p.kids ? 'Profil enfant' : 'Utiliser'),
+                      style: monoStyle(12, height: 1),
+                    ),
+                  ],
+                ),
+              ),
+              if (hover)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: IconButton(
+                    tooltip: 'Modifier',
+                    onPressed: onEdit,
+                    iconSize: 18,
+                    style: IconButton.styleFrom(foregroundColor: AppColors.textSoft),
+                    icon: const Icon(Icons.edit_outlined),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -157,7 +222,7 @@ class CategoriesSection extends StatelessWidget {
         ),
         if (hidden.isEmpty)
           const Padding(
-            padding: EdgeInsets.fromLTRB(18, 0, 18, 16),
+            padding: EdgeInsets.symmetric(vertical: 18),
             child: Text(
               'Aucune chaîne masquée. Clic droit sur une chaîne en Live TV → « Masquer ».',
               style: TextStyle(color: AppColors.muted),
@@ -166,7 +231,7 @@ class CategoriesSection extends StatelessWidget {
         else
           for (final c in hidden)
             ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 18),
+              contentPadding: const EdgeInsets.symmetric(vertical: 6),
               leading: ChannelLogo(name: c.name, url: c.logo, size: 36),
               title: Text(c.name),
               subtitle: const Text('Masquée', style: TextStyle(color: AppColors.muted)),

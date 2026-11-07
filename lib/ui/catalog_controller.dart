@@ -13,7 +13,8 @@ enum CatalogMode { rows, grid }
 class CatalogController extends ChangeNotifier {
   CatalogController(this._s, {required this.series}) {
     final saved = _s.repo.kvGet('catalog.sort.${kind.db}');
-    sort = CatalogSort.values.where((v) => v.name == saved && v != CatalogSort.provider).firstOrNull ?? CatalogSort.added;
+    sort =
+        CatalogSort.values.where((v) => v.name == saved && v != CatalogSort.provider).firstOrNull ?? CatalogSort.added;
     _s.library.addListener(_onLibrary);
     reload();
   }
@@ -62,7 +63,11 @@ class CatalogController extends ChangeNotifier {
       // profile, where they cannot be unlocked.
       final cats = _s.repo.categories(src.id, kind, includeLocked: !_s.profile.kids);
       entries = [
-        CategoryEntry(id: 'all', label: series ? 'Toutes les séries' : 'Tous les films', count: _s.repo.count(src.id, kind)),
+        CategoryEntry(
+          id: 'all',
+          label: series ? 'Toutes les séries' : 'Tous les films',
+          count: _s.repo.count(src.id, kind),
+        ),
         CategoryEntry(id: 'fav', label: 'Mes favoris', count: _s.repo.favoriteKeys(src.id, kind).length),
         for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count, locked: c.locked),
       ];

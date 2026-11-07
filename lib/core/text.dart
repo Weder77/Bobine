@@ -184,7 +184,9 @@ String? qualityOf(String name) {
   return null;
 }
 
-final RegExp _cleanPrefix = RegExp(r'^\s*(\|[^|]{1,6}\|\s*|\[[^\]]{1,6}\]\s*|[A-Za-z]{2,3}\s*[:|\-]\s+|[A-Za-z]{2,3}:\s*)');
+final RegExp _cleanPrefix = RegExp(
+  r'^\s*(\|[^|]{1,6}\|\s*|\[[^\]]{1,6}\]\s*|[A-Za-z]{2,3}\s*[:|\-]\s+|[A-Za-z]{2,3}:\s*)',
+);
 final RegExp _cleanQuality = RegExp(
   r'(?<![\w])(uhd|fhd|hd|sd|hq|lq|4k|8k|hevc|h\.?26[45]|1080[pi]?|720p?|2160p?|50fps|60fps|backup|vip|raw)(?![\w])',
   caseSensitive: false,

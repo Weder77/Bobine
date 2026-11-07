@@ -131,7 +131,9 @@ class _GuideScreenState extends State<GuideScreen> {
                   controller: _grid,
                   channels: _tiles,
                   epgVersion: _s.library.epg,
-                  selected: sel == null || sel.$1 >= _tiles.length ? null : (_tiles[sel.$1].channel.extId, sel.$2.start),
+                  selected: sel == null || sel.$1 >= _tiles.length
+                      ? null
+                      : (_tiles[sel.$1].channel.extId, sel.$2.start),
                   onPlay: _play,
                   onSelect: (i, p) => setState(() => _sel = (i, p)),
                   onMenu: (i, p, at) => showProgramActions(context, _tiles[i].channel, p, channels: _playList),
@@ -173,14 +175,17 @@ class _GuideScreenState extends State<GuideScreen> {
         _GuideButton.primary(label: 'Revoir', icon: Icons.replay_rounded, onTap: () => Launch.replay(context, c, p)),
       if (future)
         reminded
-            ? _GuideButton.active(label: 'Rappel activé', icon: Icons.notifications_rounded, onTap: () => _toggleReminder(c, p))
+            ? _GuideButton.active(
+                label: 'Rappel activé',
+                icon: Icons.notifications_rounded,
+                onTap: () => _toggleReminder(c, p),
+              )
             : _GuideButton.primary(
                 label: 'Me le rappeler',
                 icon: Icons.notifications_none_rounded,
                 onTap: () => _toggleReminder(c, p),
               ),
-      if (live && replay)
-        _GuideButton.secondary(label: 'Depuis le début', onTap: () => Launch.replay(context, c, p)),
+      if (live && replay) _GuideButton.secondary(label: 'Depuis le début', onTap: () => Launch.replay(context, c, p)),
       if (!live) _GuideButton.secondary(label: 'Voir la chaîne', onTap: () => _play(_sel!.$1)),
       RoundOutlineButton(
         icon: Icons.more_horiz_rounded,
@@ -224,9 +229,7 @@ class _GuideScreenState extends State<GuideScreen> {
               textDirection: TextDirection.ltr,
               maxLines: 1,
             )..layout();
-            final fitted = tp.width <= box.maxWidth
-                ? titleSize
-                : math.max(40.0, titleSize * box.maxWidth / tp.width);
+            final fitted = tp.width <= box.maxWidth ? titleSize : math.max(40.0, titleSize * box.maxWidth / tp.width);
             tp.dispose();
             return SizedBox(
               height: titleSize * 0.9,
@@ -282,7 +285,9 @@ class _GuideScreenState extends State<GuideScreen> {
                         DecoratedBox(
                           decoration: BoxDecoration(gradient: AppColors.placeholderGradient(hueOf(p.title))),
                         ),
-                        Center(child: ChannelLogo(name: t.name, url: c.logo, size: 72)),
+                        Center(
+                          child: ChannelLogo(name: t.name, url: c.logo, size: 72),
+                        ),
                         if (live)
                           Positioned(
                             left: 12,
@@ -387,18 +392,19 @@ class _GuideScreenState extends State<GuideScreen> {
           const SizedBox(width: 16),
           FilledButton.icon(
             onPressed: _grid.toNow,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size(0, 40),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              backgroundColor: AppColors.accent,
-              foregroundColor: AppColors.onAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-              textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 14, fontWeight: FontWeight.w700),
-            ).copyWith(
-              backgroundColor: WidgetStateProperty.resolveWith(
-                (s) => s.contains(WidgetState.hovered) ? AppColors.accentHover : AppColors.accent,
-              ),
-            ),
+            style:
+                FilledButton.styleFrom(
+                  minimumSize: const Size(0, 40),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: AppColors.onAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                  textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 14, fontWeight: FontWeight.w700),
+                ).copyWith(
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (s) => s.contains(WidgetState.hovered) ? AppColors.accentHover : AppColors.accent,
+                  ),
+                ),
             icon: const Icon(Icons.schedule_rounded, size: 17),
             label: const Text('Maintenant'),
           ),
@@ -457,35 +463,37 @@ class _GuideButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = switch (kind) {
-      0 => FilledButton.styleFrom(
-        backgroundColor: AppColors.action,
-        foregroundColor: AppColors.onAction,
-        padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
-      ),
-      1 => FilledButton.styleFrom(
-        backgroundColor: const Color(0x66787068),
-        foregroundColor: AppColors.text,
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 16, fontWeight: FontWeight.w600),
-      ).copyWith(
-        backgroundColor: WidgetStateProperty.resolveWith(
-          (s) => s.contains(WidgetState.hovered) ? const Color(0x99787068) : const Color(0x66787068),
-        ),
-      ),
-      _ => FilledButton.styleFrom(
-        backgroundColor: AppColors.accent.withValues(alpha: 0.12),
-        foregroundColor: AppColors.accent,
-        padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
-        side: const BorderSide(color: AppColors.accent, width: 1.5),
-      ),
-    }.merge(
-      FilledButton.styleFrom(
-        minimumSize: const Size(0, 48),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 16, fontWeight: FontWeight.w700),
-      ),
-    );
+    final style =
+        switch (kind) {
+          0 => FilledButton.styleFrom(
+            backgroundColor: AppColors.action,
+            foregroundColor: AppColors.onAction,
+            padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
+          ),
+          1 =>
+            FilledButton.styleFrom(
+              backgroundColor: const Color(0x66787068),
+              foregroundColor: AppColors.text,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 16, fontWeight: FontWeight.w600),
+            ).copyWith(
+              backgroundColor: WidgetStateProperty.resolveWith(
+                (s) => s.contains(WidgetState.hovered) ? const Color(0x99787068) : const Color(0x66787068),
+              ),
+            ),
+          _ => FilledButton.styleFrom(
+            backgroundColor: AppColors.accent.withValues(alpha: 0.12),
+            foregroundColor: AppColors.accent,
+            padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
+            side: const BorderSide(color: AppColors.accent, width: 1.5),
+          ),
+        }.merge(
+          FilledButton.styleFrom(
+            minimumSize: const Size(0, 48),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 16, fontWeight: FontWeight.w700),
+          ),
+        );
     if (icon == null) return FilledButton(onPressed: onTap, style: style, child: Text(label));
     return FilledButton.icon(onPressed: onTap, style: style, icon: Icon(icon, size: 20), label: Text(label));
   }

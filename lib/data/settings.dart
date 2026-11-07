@@ -38,6 +38,7 @@ class AppSettings extends ChangeNotifier {
     cleanNames = (json['cleanNames'] as bool?) ?? true;
     groupQualities = (json['groupQualities'] as bool?) ?? true;
     subtitleScale = (json['subtitleScale'] as num?)?.toDouble() ?? 1.0;
+    preferredQuality = (json['preferredQuality'] as String?) ?? 'Auto';
   }
 
   static const _key = 'settings';
@@ -100,6 +101,10 @@ class AppSettings extends ChangeNotifier {
   /// Size of the subtitles (mpv sub-scale: 0.75, 1 or 1.35).
   late double subtitleScale;
 
+  /// Stream played for a channel with several qualities: 'Auto' (the best),
+  /// 'FHD', 'HD' or 'SD'.
+  late String preferredQuality;
+
   void update(void Function(AppSettings s) change) {
     change(this);
     _save();
@@ -138,6 +143,7 @@ class AppSettings extends ChangeNotifier {
     'cleanNames': cleanNames,
     'groupQualities': groupQualities,
     'subtitleScale': subtitleScale,
+    'preferredQuality': preferredQuality,
   };
 
   /// Keys left out of backups: they only make sense on this computer.

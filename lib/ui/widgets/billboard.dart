@@ -79,8 +79,7 @@ class Billboard extends StatefulWidget {
   final Duration interval;
 
   /// Height of the billboard for a window of [size] (CSS clamp(min, f·vh, max)).
-  static double heightFor(Size size, double min, double max, double factor) =>
-      (size.height * factor).clamp(min, max);
+  static double heightFor(Size size, double min, double max, double factor) => (size.height * factor).clamp(min, max);
 
   @override
   State<Billboard> createState() => _BillboardState();
@@ -168,11 +167,7 @@ class _BillboardState extends State<Billboard> with TickerProviderStateMixin {
                 child: AnimatedBuilder(
                   animation: _zoom[i],
                   builder: (context, child) => Transform.scale(scale: 1.08 - 0.08 * _zoom[i].value, child: child),
-                  child: _Art(
-                    entry: entries[i],
-                    top: widget.topPadding,
-                    bottom: widget.controlsBottom + 40,
-                  ),
+                  child: _Art(entry: entries[i], top: widget.topPadding, bottom: widget.controlsBottom + 40),
                 ),
               ),
             ),
@@ -207,10 +202,8 @@ class _BillboardState extends State<Billboard> with TickerProviderStateMixin {
                 width: math.min(740, size.width * 0.62),
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 400),
-                  layoutBuilder: (current, previous) => Stack(
-                    alignment: Alignment.bottomLeft,
-                    children: [...previous, ?current],
-                  ),
+                  layoutBuilder: (current, previous) =>
+                      Stack(alignment: Alignment.bottomLeft, children: [...previous, ?current]),
                   child: _Content(key: ValueKey(e.key), entry: e, titleSize: titleSize),
                 ),
               ),
@@ -265,7 +258,11 @@ class _Bar extends StatelessWidget {
     clipBehavior: Clip.antiAlias,
     alignment: Alignment.centerLeft,
     child: state != null
-        ? FractionallySizedBox(widthFactor: state, heightFactor: 1, child: const ColoredBox(color: AppColors.text))
+        ? FractionallySizedBox(
+            widthFactor: state,
+            heightFactor: 1,
+            child: const ColoredBox(color: AppColors.text),
+          )
         : AnimatedBuilder(
             animation: animation,
             builder: (context, _) => FractionallySizedBox(
@@ -341,7 +338,10 @@ class _Content extends StatelessWidget {
         ),
       ],
       for (final m in [e.year, e.genre, e.duration])
-        if (m != null && m.isNotEmpty) ...[dot, Text(m, style: const TextStyle(fontSize: 15, color: AppColors.textSoft))],
+        if (m != null && m.isNotEmpty) ...[
+          dot,
+          Text(m, style: const TextStyle(fontSize: 15, color: AppColors.textSoft)),
+        ],
       if (e.quality != null) QualityBadge(e.quality!),
     ];
     // The first element must not start with a dot.
@@ -412,7 +412,8 @@ class _Content extends StatelessWidget {
           runSpacing: 12,
           children: [
             HeroButton.primary(label: e.primaryLabel, icon: Icons.play_arrow_rounded, onTap: e.onPrimary),
-            if (e.onInfo != null) HeroButton.secondary(label: "Plus d'infos", icon: Icons.info_outline_rounded, onTap: e.onInfo!),
+            if (e.onInfo != null)
+              HeroButton.secondary(label: "Plus d'infos", icon: Icons.info_outline_rounded, onTap: e.onInfo!),
             if (e.onFavorite != null)
               RoundOutlineButton(
                 icon: e.favorite ? Icons.check_rounded : Icons.add_rounded,
@@ -439,7 +440,10 @@ class QualityBadge extends StatelessWidget {
       borderRadius: BorderRadius.circular(4),
       border: Border.all(color: strong ? AppColors.text : const Color(0x59FFFFFF)),
     ),
-    child: Text(label, style: monoStyle(11, weight: FontWeight.w600, color: AppColors.text, height: 1)),
+    child: Text(
+      label,
+      style: monoStyle(11, weight: FontWeight.w600, color: AppColors.text, height: 1),
+    ),
   );
 }
 
@@ -495,21 +499,22 @@ class RoundOutlineButton extends StatelessWidget {
     child: IconButton(
       onPressed: onTap,
       iconSize: 22,
-      style: IconButton.styleFrom(
-        fixedSize: Size(size, size),
-        backgroundColor: const Color(0x4D0D0C0B),
-        foregroundColor: AppColors.text,
-        shape: const CircleBorder(),
-      ).copyWith(
-        side: WidgetStateProperty.resolveWith(
-          (s) => BorderSide(
-            color: s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
-                ? AppColors.text
-                : const Color(0x80FFFFFF),
-            width: 1.5,
+      style:
+          IconButton.styleFrom(
+            fixedSize: Size(size, size),
+            backgroundColor: const Color(0x4D0D0C0B),
+            foregroundColor: AppColors.text,
+            shape: const CircleBorder(),
+          ).copyWith(
+            side: WidgetStateProperty.resolveWith(
+              (s) => BorderSide(
+                color: s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
+                    ? AppColors.text
+                    : const Color(0x80FFFFFF),
+                width: 1.5,
+              ),
+            ),
           ),
-        ),
-      ),
       icon: Icon(icon),
     ),
   );

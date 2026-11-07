@@ -38,6 +38,7 @@ class LiveCatalog extends ChangeNotifier {
 
   int _contentVersion = -1;
   bool _clean = true, _group = true;
+  String _quality = 'Auto';
 
   @override
   void dispose() {
@@ -59,7 +60,9 @@ class LiveCatalog extends ChangeNotifier {
   }
 
   void _onSettings() {
-    if (_s.settings.cleanNames != _clean || _s.settings.groupQualities != _group) {
+    if (_s.settings.cleanNames != _clean ||
+        _s.settings.groupQualities != _group ||
+        _s.settings.preferredQuality != _quality) {
       _loadChannels();
       notifyListeners();
     }
@@ -111,16 +114,27 @@ class LiveCatalog extends ChangeNotifier {
     streamCount = list.length;
     _clean = _s.settings.cleanNames;
     _group = _s.settings.groupQualities;
-    tiles = group(list, clean: _clean, merge: _group);
+    _quality = _s.settings.preferredQuality;
+    tiles = group(list, clean: _clean, merge: _group, preferred: _quality);
   }
 
   /// Groups [channels] by name once qualities and prefixes are removed,
   /// keeping the order of first appearance.
-  static List<ChannelTile> group(List<Channel> channels, {required bool clean, required bool merge}) {
+  static List<ChannelTile> group(
+    List<Channel> channels, {
+    required bool clean,
+    required bool merge,
+    String preferred = 'Auto',
+  }) {
     if (!merge) {
       return [
         for (final c in channels)
-          ChannelTile(channel: c, name: clean ? cleanChannelName(c.name) : c.name, quality: channelQuality(c.name), variants: [c]),
+          ChannelTile(
+            channel: c,
+            name: clean ? cleanChannelName(c.name) : c.name,
+            quality: channelQuality(c.name),
+            variants: [c],
+          ),
       ];
     }
     final byKey = <String, List<Channel>>{};
@@ -131,9 +145,11 @@ class LiveCatalog extends ChangeNotifier {
     return [
       for (final variants in byKey.values)
         () {
-          final best = variants.reduce(
-            (a, b) => qualityRank(channelQuality(b.name)) > qualityRank(channelQuality(a.name)) ? b : a,
-          );
+          final best =
+              variants.where((c) => channelQuality(c.name) == preferred).firstOrNull ??
+              variants.reduce(
+                (a, b) => qualityRank(channelQuality(b.name)) > qualityRank(channelQuality(a.name)) ? b : a,
+              );
           return ChannelTile(
             channel: best,
             name: clean ? cleanChannelName(best.name) : best.name,

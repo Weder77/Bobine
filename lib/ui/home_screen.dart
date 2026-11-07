@@ -135,6 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final p = _s.epg.now(c);
       final item = LiveNowItem(
         channel: c,
+        name: _s.channelName(c),
         program: p,
         onTap: () => Launch.channel(context, c, _d.liveChannels),
         onContextMenu: (at) => showChannelActions(context, c, _d.liveChannels, at),

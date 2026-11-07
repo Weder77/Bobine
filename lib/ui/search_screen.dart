@@ -395,14 +395,14 @@ class _ChannelResult extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  ChannelLogo(name: c.name, url: c.logo, size: 40),
+                  ChannelLogo(name: AppScope.of(context).channelName(c), url: c.logo, size: 40),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          c.name,
+                          AppScope.of(context).channelName(c),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, height: 1),
@@ -532,7 +532,7 @@ class _ProgramRow extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-              ChannelLogo(name: c.name, url: c.logo, size: 40),
+              ChannelLogo(name: AppScope.of(context).channelName(c), url: c.logo, size: 40),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
@@ -546,7 +546,7 @@ class _ProgramRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      [c.name, if (p.category != null) p.category!].join(' · '),
+                      [AppScope.of(context).channelName(c), if (p.category != null) p.category!].join(' · '),
                       maxLines: 1,
                       style: const TextStyle(fontSize: 13, height: 1, color: AppColors.faint),
                     ),

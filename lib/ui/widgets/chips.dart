@@ -48,7 +48,10 @@ class GroupChip extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (locked) ...[Icon(Icons.lock_rounded, size: 13, color: fg), const SizedBox(width: 6)],
-                Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1, color: fg)),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1, color: fg),
+                ),
                 if (count != null) ...[
                   const SizedBox(width: 8),
                   Opacity(
@@ -130,8 +133,10 @@ class _ChipStripState extends State<ChipStrip> {
               ),
             ),
           ),
-          if (_hover && back) Positioned(left: 0, child: _StripArrow(Icons.chevron_left_rounded, () => _page(-1), left: true)),
-          if (_hover && forward) Positioned(right: 0, child: _StripArrow(Icons.chevron_right_rounded, () => _page(1), left: false)),
+          if (_hover && back)
+            Positioned(left: 0, child: _StripArrow(Icons.chevron_left_rounded, () => _page(-1), left: true)),
+          if (_hover && forward)
+            Positioned(right: 0, child: _StripArrow(Icons.chevron_right_rounded, () => _page(1), left: false)),
         ],
       ),
     );

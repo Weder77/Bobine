@@ -66,7 +66,12 @@ class MoreLink extends StatelessWidget {
       onTap: onTap,
       child: Text(
         label,
-        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1, color: hover ? AppColors.text : AppColors.textSoft),
+        style: TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+          height: 1,
+          color: hover ? AppColors.text : AppColors.textSoft,
+        ),
       ),
     ),
   );
@@ -127,7 +132,11 @@ class _RailState extends State<Rail> {
   Widget build(BuildContext context) {
     final n = widget.itemCount;
     final step = widget.itemWidth + widget.gap;
-    final order = [for (var i = 0; i < n; i++) if (i != widget.raised) i, if (widget.raised != null && widget.raised! < n) widget.raised!];
+    final order = [
+      for (var i = 0; i < n; i++)
+        if (i != widget.raised) i,
+      if (widget.raised != null && widget.raised! < n) widget.raised!,
+    ];
     final canBack = _controller.hasClients && _controller.offset > 4;
     final canForward = !_controller.hasClients || _controller.offset < _controller.position.maxScrollExtent - 4;
     return MouseRegion(
@@ -416,7 +425,8 @@ class _PosterHover extends StatelessWidget {
                       style: const TextStyle(color: AppColors.accent),
                     ),
                   if (m.year != null) Text('${m.year}'),
-                  if (m.genre != null && m.genre!.isNotEmpty) Text(m.genre!, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  if (m.genre != null && m.genre!.isNotEmpty)
+                    Text(m.genre!, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
               ),
             ),
@@ -638,7 +648,15 @@ class _ResumeCard extends StatelessWidget {
                       child: Artwork(url: p.image, label: p.title, decodeWidth: 420),
                     ),
                     if (hover)
-                      const Center(child: CircleAction(icon: Icons.play_arrow_rounded, filled: true, onTap: _noop, tooltip: 'Reprendre', size: 48)),
+                      const Center(
+                        child: CircleAction(
+                          icon: Icons.play_arrow_rounded,
+                          filled: true,
+                          onTap: _noop,
+                          tooltip: 'Reprendre',
+                          size: 48,
+                        ),
+                      ),
                     if (hover && onRemove != null)
                       Positioned(
                         top: 8,
@@ -691,7 +709,15 @@ class _ResumeCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Text('reste $left', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.3, color: AppColors.faint)),
+                Text(
+                  'reste $left',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    height: 1.3,
+                    color: AppColors.faint,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 6),
@@ -714,13 +740,11 @@ void _noop() {}
 
 /// Data of a "En direct maintenant" card.
 class LiveNowItem {
-  const LiveNowItem({
-    required this.channel,
-    required this.program,
-    required this.onTap,
-    this.onContextMenu,
-  });
+  const LiveNowItem({required this.channel, required this.program, required this.onTap, this.name, this.onContextMenu});
   final Channel channel;
+
+  /// Name shown (cleaned), else the provider's.
+  final String? name;
   final Program? program;
   final VoidCallback onTap;
   final ValueChanged<Offset>? onContextMenu;
@@ -761,7 +785,10 @@ class LiveNowStrip extends StatelessWidget {
               children: [
                 for (var i = 0; i < shown.length; i++) ...[
                   if (i > 0) const SizedBox(width: gap),
-                  SizedBox(width: w, child: _LiveNowCard(item: shown[i])),
+                  SizedBox(
+                    width: w,
+                    child: _LiveNowCard(item: shown[i]),
+                  ),
                 ],
               ],
             );
@@ -809,14 +836,14 @@ class _LiveNowCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      ChannelLogo(name: c.name, url: c.logo, size: 40),
+                      ChannelLogo(name: item.name ?? c.name, url: c.logo, size: 40),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              c.name,
+                              item.name ?? c.name,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, height: 1),

@@ -120,7 +120,10 @@ class _CatalogScreenState extends State<CatalogScreen> {
       for (final p in r.continueWatching(src.id))
         if (series ? p.kind == ContentKind.episode : p.kind == ContentKind.movie) p,
     ];
-    final top = [for (final t in r.trending(src.id, limit: 40)) if (series ? t is Series : t is Movie) t].take(10).toList();
+    final top = [
+      for (final t in r.trending(src.id, limit: 40))
+        if (series ? t is Series : t is Movie) t,
+    ].take(10).toList();
     List<Object> list({int? categoryId, CatalogSort sort = CatalogSort.added}) => series
         ? r.series(src.id, categoryId: categoryId, sort: sort, limit: 30)
         : r.movies(src.id, categoryId: categoryId, sort: sort, limit: 30);
@@ -141,17 +144,22 @@ class _CatalogScreenState extends State<CatalogScreen> {
     _rows = [
       if (_resume.isNotEmpty) _RowData(series ? 'Reprendre tes séries' : 'Reprendre', const [], resume: _resume),
       if (recent.isNotEmpty)
-        _RowData(series ? 'Ajoutées récemment' : 'Ajoutés récemment', recent, onMore: () => _c.openGrid('all', CatalogSort.added)),
-      if (top.isNotEmpty)
-        _RowData(series ? 'Top 10 séries' : "Top 10 films aujourd'hui", top, top: true, sub: series ? 'sur ta source' : null),
-      if (favorites.isNotEmpty) _RowData('Mes favoris', favorites, onMore: () => _c.openGrid('fav')),
-      for (final cat in cats)
         _RowData(
-          cat.name,
-          list(categoryId: cat.id),
-          onMore: () => _c.openGrid('c:${cat.id}'),
+          series ? 'Ajoutées récemment' : 'Ajoutés récemment',
+          recent,
+          onMore: () => _c.openGrid('all', CatalogSort.added),
         ),
-      if (best.isNotEmpty && (best.first is Movie ? (best.first as Movie).rating : (best.first as Series).rating) != null)
+      if (top.isNotEmpty)
+        _RowData(
+          series ? 'Top 10 séries' : "Top 10 films aujourd'hui",
+          top,
+          top: true,
+          sub: series ? 'sur ta source' : null,
+        ),
+      if (favorites.isNotEmpty) _RowData('Mes favoris', favorites, onMore: () => _c.openGrid('fav')),
+      for (final cat in cats) _RowData(cat.name, list(categoryId: cat.id), onMore: () => _c.openGrid('c:${cat.id}')),
+      if (best.isNotEmpty &&
+          (best.first is Movie ? (best.first as Movie).rating : (best.first as Series).rating) != null)
         _RowData('Les mieux notés', best, onMore: () => _c.openGrid('all', CatalogSort.rating)),
     ];
     TitleCards.prefetch(_s, [...hero, ...top], _tmdbAsked, () {
@@ -339,10 +347,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                   delegate: SliverChildBuilderDelegate(childCount: _visible.length, (context, i) {
                     final o = _visible[i];
                     final item = cards.poster(o);
-                    return GridPoster(
-                      item: item,
-                      progress: o is Movie ? _progress[o.extId] : null,
-                    );
+                    return GridPoster(item: item, progress: o is Movie ? _progress[o.extId] : null);
                   }),
                 ),
               ),
@@ -413,7 +418,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
     return LayoutBuilder(
       builder: (context, box) => box.maxWidth < 900
           ? Column(crossAxisAlignment: CrossAxisAlignment.start, children: [left, const SizedBox(height: 18), tools])
-          : Row(crossAxisAlignment: CrossAxisAlignment.end, children: [Expanded(child: left), tools]),
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(child: left),
+                tools,
+              ],
+            ),
     );
   }
 
@@ -435,7 +446,11 @@ class _Empty extends StatelessWidget {
     padding: EdgeInsets.fromLTRB(48, top + 80, 48, 80),
     child: Column(
       children: [
-        Text(title, textAlign: TextAlign.center, style: posterStyle(36, height: 1).copyWith(letterSpacing: 36 * 0.04)),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: posterStyle(36, height: 1).copyWith(letterSpacing: 36 * 0.04),
+        ),
         const SizedBox(height: 12),
         Text(
           text,
@@ -792,11 +807,7 @@ Future<void> _showCategories(BuildContext context, CatalogController c) {
                       for (var col = 0; col < cols; col++) ...[
                         if (col > 0) const SizedBox(width: 20),
                         Expanded(
-                          child: Column(
-                            children: [
-                              for (final e in c.entries.skip(col * perCol).take(perCol)) item(e),
-                            ],
-                          ),
+                          child: Column(children: [for (final e in c.entries.skip(col * perCol).take(perCol)) item(e)]),
                         ),
                       ],
                     ],
@@ -916,7 +927,11 @@ class _GridPosterState extends State<GridPoster> {
         const SizedBox(height: 5),
         DefaultTextStyle.merge(
           style: monoStyle(12, height: 1),
-          child: Row(children: [for (final (i, w) in meta.indexed) ...[if (i > 0) const SizedBox(width: 8), w]]),
+          child: Row(
+            children: [
+              for (final (i, w) in meta.indexed) ...[if (i > 0) const SizedBox(width: 8), w],
+            ],
+          ),
         ),
       ],
     );

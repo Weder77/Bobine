@@ -393,7 +393,12 @@ class _TopBar extends StatelessWidget {
                         const SizedBox(width: 14),
                         ListenableBuilder(
                           listenable: Listenable.merge([s.settings, s.library]),
-                          builder: (context, _) => ProfileMenuButton(onManage: () => onSelect(ShellTab.settings)),
+                          builder: (context, _) => ProfileMenuButton(
+                            onManage: ({bool profiles = false}) {
+                              if (profiles) settingsPageRequest.value = 'profils';
+                              onSelect(ShellTab.settings);
+                            },
+                          ),
                         ),
                         const SizedBox(width: 20),
                         const _Clock(),
@@ -610,32 +615,6 @@ class _ClockState extends State<_Clock> {
   @override
   Widget build(BuildContext context) =>
       Text(formatClock(DateTime.now()), style: monoStyle(17, color: AppColors.textSoft));
-}
-
-/// App logo: a bold "B" on the amber brand colour, like the app icon.
-class BobineMark extends StatelessWidget {
-  const BobineMark({super.key, this.size = 40, this.round = false});
-  final double size;
-  final bool round;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(round ? size : size * 0.28)),
-    alignment: Alignment.center,
-    // Same letter as the app icon (tool/make_icon.py).
-    child: Text(
-      'B',
-      style: TextStyle(
-        fontFamily: AppFonts.body,
-        fontSize: size * 0.56,
-        fontWeight: FontWeight.w800,
-        color: AppColors.onAccent,
-        height: 1.1,
-      ),
-    ),
-  );
 }
 
 class _ImportBanner extends StatelessWidget {
