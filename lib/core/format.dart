@@ -41,6 +41,18 @@ String formatDay(DateTime t) {
   return '${_days[t.weekday - 1]} ${t.day} ${_months[t.month - 1]}';
 }
 
+/// "Sam. 7 nov." (capital initial, as in the design's kickers and guide).
+String formatShortDate(DateTime t) {
+  final d = _days[t.weekday - 1];
+  return '${d[0].toUpperCase()}${d.substring(1)} ${t.day} ${_months[t.month - 1]}';
+}
+
+/// "Ven. 6": a day button of the guide.
+String formatDayButton(DateTime t) {
+  final d = _days[t.weekday - 1];
+  return '${d[0].toUpperCase()}${d.substring(1)} ${t.day}';
+}
+
 String formatDate(DateTime t) => '${t.day} ${_months[t.month - 1]} ${t.year}';
 
 String formatRelative(DateTime? t) {

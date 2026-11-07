@@ -183,3 +183,56 @@ String? qualityOf(String name) {
   if (RegExp(r'\b(hd|720p?)\b').hasMatch(n)) return 'HD';
   return null;
 }
+
+final RegExp _cleanPrefix = RegExp(r'^\s*(\|[^|]{1,6}\|\s*|\[[^\]]{1,6}\]\s*|[A-Za-z]{2,3}\s*[:|\-]\s+|[A-Za-z]{2,3}:\s*)');
+final RegExp _cleanQuality = RegExp(
+  r'(?<![\w])(uhd|fhd|hd|sd|hq|lq|4k|8k|hevc|h\.?26[45]|1080[pi]?|720p?|2160p?|50fps|60fps|backup|vip|raw)(?![\w])',
+  caseSensitive: false,
+);
+final RegExp _superscripts = RegExp('[ᴬ-ᵡ⁰-⁹ⁱ-ⁿ]+');
+
+/// Channel name without country prefix, quality and decorations:
+/// "|FR| TF1 FHD ★" → "TF1", "FR: FRANCE 2 HD" → "France 2".
+String cleanChannelName(String name) {
+  var s = name.replaceFirst(_cleanPrefix, '');
+  s = s.replaceAll(_superscripts, ' ');
+  // Short bracketed tags: "(FR)", "[HD]", "(1080p)".
+  s = s.replaceAll(RegExp(r'[\[\(][^\]\)]{0,8}[\]\)]'), ' ');
+  s = s.replaceAll(_cleanQuality, ' ');
+  // Symbols (stars, dots, emoji…) but not letters, digits and + & ' ! . -
+  s = s.replaceAll(RegExp(r"[^\p{L}\p{N}\s+&'!.\-]", unicode: true), ' ');
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  s = s.replaceAll(RegExp(r'^[\-.|:]+|[\-.|:]+$'), '').trim();
+  if (s.isEmpty) return name.trim();
+  // All capitals ("FRANCE 2"): words of 4 letters or more with a vowel get a
+  // capital initial only; acronyms (TF1, BFMTV, LCI) stay as they are.
+  if (s == s.toUpperCase() && s != s.toLowerCase()) {
+    s = s
+        .split(' ')
+        .map((w) {
+          final letters = w.replaceAll(RegExp(r'[^\p{L}]', unicode: true), '');
+          if (letters.length < 4 || !RegExp('[AEIOUYÀÂÉÈÊËÎÏÔÛÙÜ]').hasMatch(letters)) return w;
+          return w[0] + w.substring(1).toLowerCase();
+        })
+        .join(' ');
+  }
+  return s;
+}
+
+/// Quality of a channel stream from its name ("4K", "FHD", "HD", "SD").
+String? channelQuality(String name) {
+  final q = qualityOf(name);
+  if (q != null) return q;
+  if (RegExp('ᴴᴰ').hasMatch(name)) return 'HD';
+  if (RegExp(r'(?<![\w])sd(?![\w])', caseSensitive: false).hasMatch(name)) return 'SD';
+  return null;
+}
+
+/// Rank of a quality, best first when sorted descending.
+int qualityRank(String? q) => switch (q) {
+  '4K' => 4,
+  'FHD' => 3,
+  'HD' => 2,
+  'SD' => 0,
+  _ => 1,
+};

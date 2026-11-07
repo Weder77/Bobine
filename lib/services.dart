@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'core/app_log.dart';
 import 'core/legacy.dart';
+import 'core/text.dart';
 import 'data/db.dart';
 import 'data/epg_cache.dart';
 import 'data/import/import_service.dart';
@@ -289,6 +290,9 @@ class AppServices {
       }
     }
   }
+
+  /// Name of [c] as shown in the app (cleaned unless turned off).
+  String channelName(Channel c) => settings.cleanNames ? cleanChannelName(c.name) : c.name;
 
   void toggleFavorite(ContentKind kind, String extId, int sourceId) {
     repo.toggleFavorite(sourceId, kind, extId);

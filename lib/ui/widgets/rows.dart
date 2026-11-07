@@ -868,8 +868,9 @@ class _LiveNowCard extends StatelessWidget {
 
 /// 8 px accent dot that breathes (1.6 s), next to "En direct maintenant".
 class PulseDot extends StatefulWidget {
-  const PulseDot({super.key, this.size = 8});
+  const PulseDot({super.key, this.size = 8, this.color = AppColors.accent});
   final double size;
+  final Color color;
 
   @override
   State<PulseDot> createState() => _PulseDotState();
@@ -891,7 +892,7 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
     child: Container(
       width: widget.size,
       height: widget.size,
-      decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
     ),
   );
 }

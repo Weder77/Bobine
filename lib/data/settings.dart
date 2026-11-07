@@ -35,6 +35,8 @@ class AppSettings extends ChangeNotifier {
     checkUpdates = (json['checkUpdates'] as bool?) ?? true;
     askProfileAtStart = (json['askProfileAtStart'] as bool?) ?? true;
     heroAutoplay = (json['heroAutoplay'] as bool?) ?? true;
+    cleanNames = (json['cleanNames'] as bool?) ?? true;
+    groupQualities = (json['groupQualities'] as bool?) ?? true;
   }
 
   static const _key = 'settings';
@@ -88,6 +90,12 @@ class AppSettings extends ChangeNotifier {
   /// The billboards of the home, films and series pages change by themselves.
   late bool heroAutoplay;
 
+  /// "|FR| TF1 FHD ★" is shown as "TF1".
+  late bool cleanNames;
+
+  /// One channel for its FHD, HD and SD streams (the best one plays).
+  late bool groupQualities;
+
   void update(void Function(AppSettings s) change) {
     change(this);
     _save();
@@ -123,6 +131,8 @@ class AppSettings extends ChangeNotifier {
     'checkUpdates': checkUpdates,
     'askProfileAtStart': askProfileAtStart,
     'heroAutoplay': heroAutoplay,
+    'cleanNames': cleanNames,
+    'groupQualities': groupQualities,
   };
 
   /// Keys left out of backups: they only make sense on this computer.

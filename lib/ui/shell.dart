@@ -8,7 +8,9 @@ import '../core/theme.dart';
 import '../features/updater.dart';
 import '../services.dart';
 import 'catalog_screen.dart';
+import 'guide_screen.dart';
 import 'home_screen.dart';
+import 'live_catalog.dart';
 import 'live_screen.dart';
 import 'profiles.dart';
 import 'search_screen.dart';
@@ -69,10 +71,14 @@ class _AppShellState extends State<AppShell> {
   /// Pages scrolled past 40 px get an opaque header.
   final Set<int> _scrolled = {};
 
+  /// Groups and channels shared by Direct and Guide TV.
+  late final LiveCatalog _live;
+
   @override
   void initState() {
     super.initState();
     _s = AppScope.of(context);
+    _live = LiveCatalog(_s);
     _s.imports.addListener(_onImports);
     _s.updates.addListener(_onUpdates);
     HardwareKeyboard.instance.addHandler(_onKey);
@@ -99,6 +105,7 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    _live.dispose();
     HardwareKeyboard.instance.removeHandler(_onKey);
     _searchCtl.dispose();
     _searchFocus.dispose();
@@ -173,8 +180,8 @@ class _AppShellState extends State<AppShell> {
 
   Widget _page(int i) => switch (i) {
     ShellTab.home => const HomeScreen(),
-    ShellTab.live => LiveScreen(active: _index == ShellTab.live),
-    ShellTab.guide => LiveScreen(active: _index == ShellTab.guide, guide: true),
+    ShellTab.live => LiveScreen(catalog: _live),
+    ShellTab.guide => GuideScreen(catalog: _live),
     ShellTab.movies => const CatalogScreen(series: false),
     ShellTab.series => const CatalogScreen(series: true),
     _ => const SettingsScreen(),
