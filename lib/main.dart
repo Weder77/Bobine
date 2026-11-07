@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
 import 'app.dart';
+import 'core/app_log.dart';
+import 'core/version.dart';
 import 'services.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
+  AppLog.add('Lumen $kAppVersion démarre');
   try {
     final services = await AppServices.create();
     runApp(LumenApp(services: services));

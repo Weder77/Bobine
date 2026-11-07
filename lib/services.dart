@@ -5,12 +5,14 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'core/app_log.dart';
 import 'data/db.dart';
 import 'data/epg_cache.dart';
 import 'data/import/import_service.dart';
 import 'data/models.dart';
 import 'data/repository.dart';
 import 'data/settings.dart';
+import 'features/backup.dart';
 import 'features/recording_service.dart';
 import 'features/reminder_service.dart';
 import 'features/tmdb.dart';
@@ -56,6 +58,8 @@ class AppServices {
     required this.reminders,
     required this.recordings,
     required this.tmdb,
+    required this.backup,
+    required this.mpvCacheDir,
   });
 
   final String dbPath;
@@ -81,6 +85,12 @@ class AppServices {
   /// Artwork, synopsis, cast and trailers (with the user's TMDB key).
   final TmdbService tmdb;
 
+  /// Export / restore of the user's data.
+  final BackupService backup;
+
+  /// libmpv disk cache folder (diagnostic page).
+  final String mpvCacheDir;
+
   /// Parental code typed this session (locked categories visible).
   bool parentalUnlocked = false;
 
@@ -95,6 +105,7 @@ class AppServices {
     await mpvCache.create(recursive: true);
     ImageFetcher.init(p.join(cache.path, 'images'));
 
+    AppLog.install(logPath: p.join(support.path, 'lumen.log'));
     final dbPath = p.join(support.path, 'lumen.db');
     final repo = Repository(openAppDatabase(dbPath));
     final settings = AppSettings(repo);
@@ -131,6 +142,8 @@ class AppServices {
       reminders: reminders,
       recordings: recordings,
       tmdb: TmdbService(repo, settings),
+      backup: BackupService(repo, settings),
+      mpvCacheDir: mpvCache.path,
     );
     services._ensureActiveSource();
     services._applyProfile();
@@ -249,6 +262,20 @@ class AppServices {
     _applyVisibility();
     epg.clear();
     library.contentChanged();
+  }
+
+  /// Reloads everything after a backup was restored; new sources are imported.
+  void afterRestore(RestoreReport report) {
+    _ensureActiveSource();
+    _applyProfile();
+    epg.clear();
+    library.contentChanged();
+    library.userChanged();
+    if (report.sourcesCreated > 0) {
+      for (final src in repo.sources().where((s) => s.contentUpdatedAt == null)) {
+        unawaited(refresh(src).catchError((Object _) {}));
+      }
+    }
   }
 
   void toggleFavorite(ContentKind kind, String extId, int sourceId) {

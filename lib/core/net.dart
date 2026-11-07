@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'text.dart';
 
 /// User-Agent used for API / playlist requests when the source does not define one.
-const String kDefaultHttpUserAgent = 'Lumen/1.0';
+const String kDefaultHttpUserAgent = 'Lumen/1.1';
 
 /// Ready-made User-Agent values some IPTV providers expect.
 const Map<String, String> kUserAgentPresets = {

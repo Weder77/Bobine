@@ -8,7 +8,10 @@ import 'repository.dart';
 /// User preferences, persisted as JSON in the `kv` table.
 class AppSettings extends ChangeNotifier {
   AppSettings(this._repo) {
-    final json = _repo.kvGetJson(_key) ?? const {};
+    _read(_repo.kvGetJson(_key) ?? const {});
+  }
+
+  void _read(Map<String, Object?> json) {
     activeSourceId = json['activeSourceId'] as int?;
     cacheMb = (json['cacheMb'] as int?) ?? 1024;
     backCacheMb = (json['backCacheMb'] as int?) ?? 384;
@@ -90,33 +93,63 @@ class AppSettings extends ChangeNotifier {
   /// Persists without notifying (for high frequency values like volume).
   void saveQuietly() => _save();
 
-  void _save() {
-    _repo.kvSet(
-      _key,
-      jsonEncode({
-        'activeSourceId': activeSourceId,
-        'cacheMb': cacheMb,
-        'backCacheMb': backCacheMb,
-        'diskCache': diskCache,
-        'seekStep': seekStep,
-        'hardwareDecoding': hardwareDecoding,
-        'deinterlace': deinterlace,
-        'audioLang': audioLang,
-        'subtitleLang': subtitleLang,
-        'autoFullscreen': autoFullscreen,
-        'autoNextEpisode': autoNextEpisode,
-        'epgRefreshHours': epgRefreshHours,
-        'contentRefreshHours': contentRefreshHours,
-        'epgDays': epgDays,
-        'volume': volume,
-        'activeProfileId': activeProfileId,
-        'parentalPin': Secrets.protect(parentalPin),
-        'tmdbKey': Secrets.protect(tmdbKey),
-        'recordingsDir': recordingsDir,
-        'reminderLeadMinutes': reminderLeadMinutes,
-        'checkUpdates': checkUpdates,
-        'askProfileAtStart': askProfileAtStart,
-      }),
-    );
+  void _save() => _repo.kvSet(_key, jsonEncode(_json()));
+
+  Map<String, Object?> _json() => {
+    'activeSourceId': activeSourceId,
+    'cacheMb': cacheMb,
+    'backCacheMb': backCacheMb,
+    'diskCache': diskCache,
+    'seekStep': seekStep,
+    'hardwareDecoding': hardwareDecoding,
+    'deinterlace': deinterlace,
+    'audioLang': audioLang,
+    'subtitleLang': subtitleLang,
+    'autoFullscreen': autoFullscreen,
+    'autoNextEpisode': autoNextEpisode,
+    'epgRefreshHours': epgRefreshHours,
+    'contentRefreshHours': contentRefreshHours,
+    'epgDays': epgDays,
+    'volume': volume,
+    'activeProfileId': activeProfileId,
+    'parentalPin': Secrets.protect(parentalPin),
+    'tmdbKey': Secrets.protect(tmdbKey),
+    'recordingsDir': recordingsDir,
+    'reminderLeadMinutes': reminderLeadMinutes,
+    'checkUpdates': checkUpdates,
+    'askProfileAtStart': askProfileAtStart,
+  };
+
+  /// Keys left out of backups: they only make sense on this computer.
+  static const _localOnly = {'activeSourceId', 'activeProfileId', 'recordingsDir'};
+
+  /// Preferences for a backup file. The parental code and the TMDB key are
+  /// included (in clear) only with [secrets].
+  Map<String, Object?> backupJson({required bool secrets}) {
+    final j = _json()..removeWhere((k, _) => _localOnly.contains(k) || k == 'parentalPin' || k == 'tmdbKey');
+    if (secrets) {
+      j['parentalPin'] = parentalPin;
+      j['tmdbKey'] = tmdbKey;
+    }
+    return j;
+  }
+
+  /// Applies the preferences of a backup file over the current ones.
+  void restoreBackup(Map<String, Object?> backup) {
+    final current = _json()
+      ..['parentalPin'] = parentalPin
+      ..['tmdbKey'] = tmdbKey;
+    final merged = {
+      ...current,
+      for (final e in backup.entries)
+        if (!_localOnly.contains(e.key) && current.containsKey(e.key)) e.key: e.value,
+    };
+    try {
+      _read(merged);
+    } catch (_) {
+      _read(current); // a malformed file must not break the settings
+    }
+    _save();
+    notifyListeners();
   }
 }

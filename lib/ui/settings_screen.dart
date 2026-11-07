@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
+import '../core/version.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'settings_family.dart';
+import 'settings_maintenance.dart';
 import 'settings_recordings.dart';
 import 'settings_tmdb.dart';
 import 'source_form.dart';
@@ -151,6 +153,7 @@ class SettingsScreen extends StatelessWidget {
             const TmdbSection(),
             const RemindersSection(),
             const RecordingsSection(),
+            const BackupSection(),
             const SettingsSection(title: 'Raccourcis du lecteur', children: [_Shortcuts()]),
             const SettingsSection(
               title: 'À propos',
@@ -158,7 +161,7 @@ class SettingsScreen extends StatelessWidget {
                 Padding(
                   padding: EdgeInsets.all(18),
                   child: Text(
-                    'Lumen 1.0 — lecteur IPTV basé sur libmpv (FFmpeg) via media_kit.\n'
+                    'Lumen $kAppVersion — lecteur IPTV basé sur libmpv (FFmpeg) via media_kit.\n'
                     'Toutes les données (sources, favoris, progression) sont stockées localement.',
                     style: TextStyle(color: AppColors.muted, height: 1.5),
                   ),
