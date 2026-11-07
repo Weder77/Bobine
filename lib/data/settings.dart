@@ -37,6 +37,7 @@ class AppSettings extends ChangeNotifier {
     heroAutoplay = (json['heroAutoplay'] as bool?) ?? true;
     cleanNames = (json['cleanNames'] as bool?) ?? true;
     groupQualities = (json['groupQualities'] as bool?) ?? true;
+    subtitleScale = (json['subtitleScale'] as num?)?.toDouble() ?? 1.0;
   }
 
   static const _key = 'settings';
@@ -96,6 +97,9 @@ class AppSettings extends ChangeNotifier {
   /// One channel for its FHD, HD and SD streams (the best one plays).
   late bool groupQualities;
 
+  /// Size of the subtitles (mpv sub-scale: 0.75, 1 or 1.35).
+  late double subtitleScale;
+
   void update(void Function(AppSettings s) change) {
     change(this);
     _save();
@@ -133,6 +137,7 @@ class AppSettings extends ChangeNotifier {
     'heroAutoplay': heroAutoplay,
     'cleanNames': cleanNames,
     'groupQualities': groupQualities,
+    'subtitleScale': subtitleScale,
   };
 
   /// Keys left out of backups: they only make sense on this computer.

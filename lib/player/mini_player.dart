@@ -67,7 +67,7 @@ class MiniPlayer extends StatefulWidget {
 }
 
 class _MiniPlayerState extends State<MiniPlayer> {
-  static const _width = 400.0;
+  static const _width = 448.0;
   static const _height = _width * 9 / 16;
   Offset _offset = Offset.zero; // from the bottom-right corner
   bool _hover = false;
@@ -90,11 +90,15 @@ class _MiniPlayerState extends State<MiniPlayer> {
         child: GestureDetector(
           onPanUpdate: (d) => setState(() => _offset += d.delta),
           onDoubleTap: () => expandPip(s),
-          child: Material(
-            color: Colors.black,
-            elevation: 18,
-            shadowColor: Colors.black,
-            borderRadius: BorderRadius.circular(14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: const [
+                BoxShadow(color: Color(0xB3000000), blurRadius: 80, offset: Offset(0, 30)),
+                BoxShadow(color: Color(0x1FFFFFFF), spreadRadius: 1),
+              ],
+            ),
             clipBehavior: Clip.antiAlias,
             child: Stack(
               fit: StackFit.expand,
@@ -107,10 +111,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
                 ),
                 AnimatedOpacity(
                   opacity: _hover ? 1 : 0,
-                  duration: const Duration(milliseconds: 150),
+                  duration: const Duration(milliseconds: 200),
                   child: _PipControls(
-                    title: item?.title ?? '',
-                    live: item?.isLive ?? false,
+                    title: _title(s, item),
                     onExpand: () => expandPip(s),
                     onClose: s.pip.close,
                     onFloat: AppWindow.canFloat ? () => s.pip.float(s.pip.session.value!) : null,
@@ -125,6 +128,18 @@ class _MiniPlayerState extends State<MiniPlayer> {
       ),
     );
   }
+}
+
+/// "TF1 · Le journal" or "Les Veilleurs · S01E02".
+String _title(AppServices s, PlayItem? item) {
+  if (item == null) return '';
+  if (item.isLive) {
+    final c = s.repo.channelByExt(item.sourceId, item.extId);
+    final name = c == null ? item.title : s.channelName(c);
+    final now = c == null ? null : s.epg.now(c);
+    return now == null ? name : '$name · ${now.title}';
+  }
+  return item.subtitle == null ? item.title : '${item.title} · ${item.subtitle!.split(' · ').first}';
 }
 
 /// The whole (small, always on top) window shows the video. Dragging it
@@ -164,8 +179,7 @@ class _FloatingPlayerViewState extends State<FloatingPlayerView> {
                 opacity: _hover ? 1 : 0,
                 duration: const Duration(milliseconds: 150),
                 child: _PipControls(
-                  title: item?.title ?? '',
-                  live: item?.isLive ?? false,
+                  title: _title(s, item),
                   onExpand: () => expandPip(s),
                   onClose: s.pip.close,
                   onDock: s.pip.unfloat,
@@ -182,16 +196,8 @@ class _FloatingPlayerViewState extends State<FloatingPlayerView> {
 }
 
 class _PipControls extends StatelessWidget {
-  const _PipControls({
-    required this.title,
-    required this.live,
-    required this.onExpand,
-    required this.onClose,
-    this.onFloat,
-    this.onDock,
-  });
+  const _PipControls({required this.title, required this.onExpand, required this.onClose, this.onFloat, this.onDock});
   final String title;
-  final bool live;
   final VoidCallback onExpand;
   final VoidCallback onClose;
 
@@ -204,86 +210,78 @@ class _PipControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    Widget button(IconData icon, String label, VoidCallback? onTap, {double size = 22}) => Semantics(
-      button: true,
-      label: label,
-      child: IconButton(
-        onPressed: onTap,
-        iconSize: size,
-        style: IconButton.styleFrom(
-          foregroundColor: AppColors.text,
-          backgroundColor: const Color(0x660A0A0C),
-          fixedSize: const Size(40, 40),
-          minimumSize: const Size(40, 40),
-        ),
-        icon: Icon(icon),
-      ),
-    );
+    Widget button(IconData icon, String label, VoidCallback? onTap, {double size = 34, double iconSize = 16}) =>
+        Tooltip(
+          message: label,
+          child: IconButton(
+            onPressed: onTap,
+            iconSize: iconSize,
+            style:
+                IconButton.styleFrom(
+                  foregroundColor: AppColors.text,
+                  fixedSize: Size(size, size),
+                  minimumSize: Size(size, size),
+                  shape: const CircleBorder(),
+                ).copyWith(
+                  backgroundColor: WidgetStateProperty.resolveWith(
+                    (st) => st.contains(WidgetState.hovered) ? const Color(0xE60D0C0B) : const Color(0x990D0C0B),
+                  ),
+                ),
+            icon: Icon(icon),
+          ),
+        );
     return DecoratedBox(
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xB3000000), Color(0x00000000), Color(0x00000000), Color(0x99000000)],
-          stops: [0, 0.35, 0.65, 1],
+          colors: [Color(0x99000000), Color(0x00000000), Color(0x00000000), Color(0xBF000000)],
+          stops: [0, 0.4, 0.6, 1],
         ),
       ),
       child: Stack(
         children: [
           Positioned(
-            left: 12,
             top: 10,
-            right: 56,
+            right: 10,
             child: Row(
               children: [
-                if (live) ...[const LiveBadge(), const SizedBox(width: 8)],
-                Expanded(
-                  child: Text(
-                    title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  ),
-                ),
+                if (onFloat != null) ...[
+                  button(Icons.open_in_new_rounded, 'Fenêtre flottante', onFloat),
+                  const SizedBox(width: 6),
+                ],
+                if (onDock != null) ...[
+                  button(Icons.picture_in_picture_alt_rounded, "Revenir dans l'app", onDock),
+                  const SizedBox(width: 6),
+                ],
+                button(Icons.open_in_full_rounded, 'Agrandir', onExpand),
+                const SizedBox(width: 6),
+                button(Icons.close_rounded, 'Fermer', onClose),
               ],
             ),
           ),
-          Positioned(top: 6, right: 6, child: button(Icons.close_rounded, 'Fermer', onClose)),
           Center(
             child: StreamBuilder<bool>(
               stream: s.player.player.stream.playing,
               initialData: s.player.player.state.playing,
-              builder: (context, snap) => Semantics(
-                button: true,
-                label: snap.data == true ? 'Pause' : 'Lecture',
-                child: IconButton(
-                  onPressed: s.player.player.playOrPause,
-                  iconSize: 34,
-                  style: IconButton.styleFrom(
-                    foregroundColor: AppColors.onAction,
-                    backgroundColor: AppColors.action,
-                    fixedSize: const Size(56, 56),
-                  ),
-                  icon: Icon(snap.data == true ? Icons.pause_rounded : Icons.play_arrow_rounded),
-                ),
+              builder: (context, snap) => button(
+                snap.data == true ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                snap.data == true ? 'Pause' : 'Lecture',
+                s.player.player.playOrPause,
+                size: 56,
+                iconSize: 26,
               ),
             ),
           ),
           Positioned(
-            right: 8,
-            bottom: 10,
-            child: Row(
-              children: [
-                if (onFloat != null) ...[
-                  button(Icons.open_in_new_rounded, 'Fenêtre flottante', onFloat, size: 20),
-                  const SizedBox(width: 6),
-                ],
-                if (onDock != null) ...[
-                  button(Icons.picture_in_picture_alt_rounded, "Revenir dans l'app", onDock, size: 20),
-                  const SizedBox(width: 6),
-                ],
-                button(Icons.open_in_full_rounded, 'Plein écran', onExpand, size: 20),
-              ],
+            left: 14,
+            right: 14,
+            bottom: 12,
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.2),
             ),
           ),
         ],

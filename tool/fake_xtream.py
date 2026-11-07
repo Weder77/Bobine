@@ -55,7 +55,7 @@ def tmdb(path, q, headers):
             "genres": [{"name": "Science-Fiction"}, {"name": "Aventure"}],
             "vote_average": 7.8, "release_date": f"{2015 + i}-03-01", "first_air_date": "2021-09-10",
             "runtime": 128, "episode_run_time": [42],
-            "credits": {"cast": [{"name": "Léa Fontaine"}, {"name": "Marc Aubry"}, {"name": "Inès Roche"}],
+            "credits": {"cast": [{"name": "Léa Fontaine", "character": "Capitaine Vega", "profile_path": "/p1.jpg"}, {"name": "Marc Aubry", "character": "Docteur Hale"}, {"name": "Inès Roche", "character": "Mina"}, {"name": "Paul Garnier", "character": "Le passeur"}],
                         "crew": [{"job": "Director", "name": "Paul Vernier"}]},
             "created_by": [{"name": "Nora Lemaire"}],
             "videos": {"results": [{"site": "YouTube", "type": "Trailer", "key": "dQw4w9WgXcQ", "iso_639_1": "fr"}]},

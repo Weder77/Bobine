@@ -6,15 +6,15 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
-import '../core/format.dart';
 import '../core/text.dart';
 import '../core/theme.dart';
 import '../core/window.dart';
 import '../data/models.dart';
+import '../features/tmdb.dart';
 import '../services.dart';
 import '../ui/widgets/common.dart';
 import 'play_items.dart';
-import 'player_panels.dart';
+import 'player_chrome.dart';
 import 'player_session.dart';
 import 'player_service.dart';
 import 'player_widgets.dart';
@@ -38,15 +38,16 @@ class PlayerScreen extends StatefulWidget {
 }
 
 enum _Aspect {
-  auto('Automatique'),
-  r169('16:9'),
-  r43('4:3'),
-  r219('21:9'),
-  zoom('Zoom (remplir)'),
-  stretch('Étirer');
+  auto('Automatique', 'Auto'),
+  r169('16:9', '16:9'),
+  r43('4:3', '4:3'),
+  r219('21:9', '21:9'),
+  zoom('Zoom (remplir)', 'Remplir'),
+  stretch('Étirer', 'Étirer');
 
-  const _Aspect(this.label);
+  const _Aspect(this.label, this.short);
   final String label;
+  final String short;
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
@@ -64,21 +65,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
   final _panelScroll = ScrollController();
 
   bool _controls = true;
-  bool _menuOpen = false;
+  bool _playing = true;
 
-  /// "Audio & sous-titres" panel.
-  bool _tracksPanel = false;
+  /// Panel open over the video.
+  _Panel _panel = _Panel.none;
   bool _overControls = false;
   bool _fullscreen = false;
   bool _showStats = false;
-  bool _channelPanel = false;
+
+  /// Episode whose "Épisode suivant" card was dismissed.
+  String? _nextDismissed;
+
+  /// Season shown in the "Épisodes" panel.
+  int? _panelSeason;
+
+  /// Streams of the live channel in other qualities (lazy).
+  List<Channel>? _variants;
   List<(String, String)> _stats = const [];
   String? _osd;
   String? _error;
   String _digits = '';
   _Aspect _aspect = _Aspect.auto;
   double _volumeBeforeMute = 100;
-  int? _nextCountdown;
 
   /// Live: true once the user paused or rewound (time-shift in the cache).
   bool _timeshift = false;
@@ -87,7 +95,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String _aid = '';
   String _sid = '';
 
-  Timer? _hideTimer, _osdTimer, _digitTimer, _tick, _nextTimer;
+  Timer? _hideTimer, _osdTimer, _digitTimer, _tick;
 
   /// Shrunk into the mini-player / floating window: playback goes on.
   bool _minimized = false;
@@ -126,9 +134,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
     _subs.add(
       _ps.player.stream.playing.listen((p) {
-        if (p && _error != null && mounted) setState(() => _error = null);
+        if (!mounted) return;
+        setState(() {
+          _playing = p;
+          if (p) _error = null;
+        });
       }),
     );
+    // Playback is starting: no pause screen while it loads.
+    _playing = true;
+    unawaited(_ps.setProp('sub-scale', '${_s.settings.subtitleScale}'));
 
     // Light-weight UI clock: position 4×/s, cache ranges 1×/s, stats 1×/s.
     _tick = Timer.periodic(const Duration(milliseconds: 250), (_) => _onTick());
@@ -141,7 +156,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   @override
   void dispose() {
     _s.tracker.flush();
-    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick, _nextTimer]) {
+    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick]) {
       t?.cancel();
     }
     for (final s in _subs) {
@@ -167,7 +182,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _onTick() async {
     if (!mounted) return;
     _tickCount++;
-    if (_controls || _showStats) _position.value = _ps.player.state.position;
+    if (_controls || _showStats || _item.kind == ContentKind.episode) _position.value = _ps.player.state.position;
     if (_tickCount % 4 == 0) {
       if (_controls || _showStats) _cache.value = await _ps.cacheState();
       if (_controls && (_decoder.value == null || _tickCount % 40 == 0)) {
@@ -221,19 +236,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void _onCompleted() {
     if (!mounted || _isLive) return;
     _s.tracker.markFinished(_item);
-    if (_nextEpisode != null && _s.settings.autoNextEpisode) {
-      setState(() => _nextCountdown = 8);
-      _nextTimer?.cancel();
-      _nextTimer = Timer.periodic(const Duration(seconds: 1), (t) {
-        if (!mounted) return t.cancel();
-        if (_nextCountdown == null) return t.cancel();
-        if (_nextCountdown! <= 1) {
-          t.cancel();
-          _playNextEpisode();
-        } else {
-          setState(() => _nextCountdown = _nextCountdown! - 1);
-        }
-      });
+    if (_nextEpisode != null && _s.settings.autoNextEpisode && _nextDismissed != _item.extId) {
+      _playNextEpisode();
     } else {
       _showControls(sticky: true);
     }
@@ -245,8 +249,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!_controls) setState(() => _controls = true);
     _hideTimer?.cancel();
     if (sticky) return;
-    _hideTimer = Timer(const Duration(milliseconds: 2800), () {
-      if (!mounted || _menuOpen || _overControls || _channelPanel) return;
+    _hideTimer = Timer(const Duration(milliseconds: 3500), () {
+      if (!mounted || _overControls || _panel != _Panel.none) return;
       if (!_ps.player.state.playing) return;
       setState(() => _controls = false);
     });
@@ -347,10 +351,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _item = channelItem(_source!, c);
       _error = null;
       _timeshift = false;
+      _variants = null;
     });
     _ps.play(_item);
     _s.repo.touchChannel(c.sourceId, c.extId);
-    _flash('${c.number ?? index + 1}  ${c.name}');
+    _flash('${c.number ?? index + 1}  ${_s.channelName(c)}');
     _showControls();
   }
 
@@ -371,19 +376,46 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
   }
 
-  void _toggleChannelPanel() {
-    if (!_isLive || _channels.isEmpty) return;
-    setState(() => _channelPanel = !_channelPanel);
-    if (_channelPanel) {
-      _showControls(sticky: true);
+  void _setPanel(_Panel p) {
+    final next = _panel == p ? _Panel.none : p;
+    if (next == _Panel.channels && (!_isLive || _channels.isEmpty)) return;
+    if (next == _Panel.guide && !_isLive) return;
+    if (next == _Panel.episodes && _episodes.isEmpty) return;
+    setState(() => _panel = next);
+    if (next == _Panel.audio) _refreshSelectedTracks();
+    if (next == _Panel.episodes) _panelSeason = _episodes.where((e) => e.extId == _item.extId).firstOrNull?.season;
+    if (next == _Panel.channels) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_panelScroll.hasClients) {
-          _panelScroll.jumpTo((_chIndex * 60.0 - 200).clamp(0.0, _panelScroll.position.maxScrollExtent));
+          _panelScroll.jumpTo(
+            (_chIndex * ChannelListPanel.rowExtent - 200).clamp(0.0, _panelScroll.position.maxScrollExtent),
+          );
         }
       });
-    } else {
-      _showControls();
     }
+    if (next == _Panel.none) {
+      _showControls();
+      _focus.requestFocus();
+    } else {
+      _showControls(sticky: true);
+    }
+  }
+
+  /// Next quality of the live channel ("TF1 FHD" → "TF1 HD" → …).
+  void _cycleQuality() {
+    final ch = _currentChannel;
+    if (ch == null || _source == null) return;
+    final variants = _variants ??= _s.repo.channelVariants(ch);
+    if (variants.length < 2) return _flash('Une seule qualité pour cette chaîne');
+    final i = variants.indexWhere((c) => c.extId == ch.extId);
+    final next = variants[(i + 1) % variants.length];
+    setState(() {
+      _item = channelItem(_source!, next);
+      _error = null;
+      _timeshift = false;
+    });
+    _ps.play(_item);
+    _flash(channelQuality(next.name) ?? next.name);
   }
 
   // -------------------------------------------------------------- series
@@ -397,16 +429,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _playNextEpisode() {
     final next = _nextEpisode;
-    if (next == null || _source == null) return;
-    _nextTimer?.cancel();
+    if (next != null) _playEpisode(next);
+  }
+
+  void _playEpisode(Episode e) {
+    if (_source == null) return;
     _s.tracker.flush();
-    final p = _s.repo.progress(_item.sourceId, ContentKind.episode, next.extId);
+    final p = _s.repo.progress(_item.sourceId, ContentKind.episode, e.extId);
     setState(() {
-      _nextCountdown = null;
-      _item = episodeItem(_source!, widget.session.series, next);
+      _item = episodeItem(_source!, widget.session.series, e);
+      _panel = _Panel.none;
     });
     _ps.play(_item, start: (p != null && p.resumable) ? p.position : null, force: true);
-    _flash(next.code);
+    _flash(e.code);
+    _showControls();
   }
 
   // ------------------------------------------------------------ keyboard
@@ -439,10 +475,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else if (k == LogicalKeyboardKey.keyF || k == LogicalKeyboardKey.f11 || k == LogicalKeyboardKey.contextMenu) {
       if (!repeat) _setFullscreen(!_fullscreen);
     } else if (k == LogicalKeyboardKey.escape) {
-      if (_tracksPanel) {
-        _setTracksPanel(false);
-      } else if (_channelPanel) {
-        _toggleChannelPanel();
+      if (_panel != _Panel.none) {
+        _setPanel(_panel);
+      } else if (_showStats) {
+        setState(() => _showStats = false);
       } else if (_fullscreen) {
         _setFullscreen(false);
       } else {
@@ -465,7 +501,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else if (k == LogicalKeyboardKey.keyR) {
       if (!repeat) _cycleAspect();
     } else if (k == LogicalKeyboardKey.keyC) {
-      if (!repeat) _toggleChannelPanel();
+      if (!repeat) _setPanel(_Panel.channels);
+    } else if (k == LogicalKeyboardKey.keyG) {
+      if (!repeat) _setPanel(_Panel.guide);
+    } else if (k == LogicalKeyboardKey.keyE) {
+      if (!repeat) _setPanel(_Panel.episodes);
     } else if (k == LogicalKeyboardKey.keyN) {
       if (!repeat) _playNextEpisode();
     } else if (k == LogicalKeyboardKey.home && !_isLive) {
@@ -510,6 +550,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   // --------------------------------------------------------------- build
 
+  bool get _visible => _controls || !_playing || _panel != _Panel.none;
+
   @override
   Widget build(BuildContext context) {
     final (fit, ratio) = switch (_aspect) {
@@ -520,6 +562,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _Aspect.zoom => (BoxFit.cover, null),
       _Aspect.stretch => (BoxFit.fill, null),
     };
+    final vis = _visible;
     return Scaffold(
       backgroundColor: Colors.black,
       body: Focus(
@@ -528,12 +571,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onKeyEvent: _onKey,
         child: Listener(
           onPointerSignal: (e) {
-            if (e is PointerScrollEvent && !_channelPanel) {
+            if (e is PointerScrollEvent && _panel == _Panel.none) {
               _changeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
             }
           },
           child: MouseRegion(
-            cursor: _controls ? SystemMouseCursors.basic : SystemMouseCursors.none,
+            cursor: vis ? SystemMouseCursors.basic : SystemMouseCursors.none,
             onHover: (_) => _showControls(),
             child: Stack(
               fit: StackFit.expand,
@@ -542,8 +585,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     _focus.requestFocus();
-                    if (_channelPanel) return _toggleChannelPanel();
-                    _isLive ? _showControls() : _togglePlay();
+                    if (_panel != _Panel.none) return _setPanel(_panel);
+                    _togglePlay();
                   },
                   onDoubleTap: () => _setFullscreen(!_fullscreen),
                   child: Video(
@@ -557,41 +600,35 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
                   ),
                 ),
+                // Shade at the top and bottom behind the bars.
+                IgnorePointer(
+                  child: AnimatedOpacity(
+                    opacity: vis ? 1 : 0,
+                    duration: const Duration(milliseconds: 300),
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [Color(0xBF000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
+                          stops: [0, 0.22, 0.5, 1],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                if (!_playing && _panel == _Panel.none && _error == null)
+                  _isLive ? const LivePausedBadge() : _pauseInfo(),
                 _buildBuffering(),
                 if (_osd != null) _buildOsd(),
                 if (_digits.isNotEmpty) _buildDigits(),
                 _buildError(),
-                if (_showStats) StatsPanel(stats: _stats),
-                _buildControls(),
-                if (_tracksPanel)
-                  TracksPanel(
-                    tracks: _ps.player.state.tracks,
-                    audioId: _aid,
-                    subtitleId: _sid,
-                    onAudio: _selectAudio,
-                    onSubtitle: _selectSubtitle,
-                    onClose: () => _setTracksPanel(false),
-                  ),
-                if (_isLive)
-                  ChannelPanel(
-                    open: _channelPanel,
-                    channels: _channels,
-                    selected: _chIndex,
-                    epg: _s.epg,
-                    scroll: _panelScroll,
-                    onPick: _playChannel,
-                    onClose: _toggleChannelPanel,
-                  ),
-                if (_nextCountdown != null && _nextEpisode != null)
-                  NextEpisodeCard(
-                    episode: _nextEpisode!,
-                    countdown: _nextCountdown!,
-                    onPlay: _playNextEpisode,
-                    onCancel: () {
-                      _nextTimer?.cancel();
-                      setState(() => _nextCountdown = null);
-                    },
-                  ),
+                if (_isLive && _panel == _Panel.guide) MiniGuide(programs: _miniGuide()),
+                _topBar(vis),
+                _bottomBar(vis),
+                ..._floating(vis),
+                if (_showStats) StatsCard(stats: _stats, onClose: () => setState(() => _showStats = false)),
+                ..._panels(),
               ],
             ),
           ),
@@ -599,6 +636,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       ),
     );
   }
+
+  // ------------------------------------------------------------- overlays
 
   Widget _buildBuffering() {
     return IgnorePointer(
@@ -614,14 +653,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 const SizedBox(
                   width: 54,
                   height: 54,
-                  child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.text),
+                  child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent),
                 ),
                 const SizedBox(height: 14),
                 StreamBuilder<double>(
                   stream: _ps.player.stream.bufferingPercentage,
                   builder: (context, p) => Text(
                     p.hasData && p.data! > 0 ? 'Mise en mémoire… ${p.data!.round()} %' : 'Chargement…',
-                    style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.w600),
+                    style: monoStyle(13, color: AppColors.textSoft),
                   ),
                 ),
               ],
@@ -636,34 +675,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
     child: Align(
       alignment: const Alignment(0, -0.55),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         decoration: BoxDecoration(
-          color: playerGlass,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          color: const Color(0xD60D0C0B),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0x1AFFFFFF)),
         ),
-        child: Text(_osd!, style: displayStyle(22, weight: FontWeight.w700)),
+        child: Text(_osd!, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
       ),
     ),
   );
 
   Widget _buildDigits() => Positioned(
-    top: 40,
+    top: 100,
     right: 48,
     child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
-        color: playerGlass,
-        borderRadius: BorderRadius.circular(16),
+        color: const Color(0xD60D0C0B),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppColors.accent, width: 1.5),
       ),
       child: Text(
         _digits,
-        style: displayStyle(
-          46,
-          weight: FontWeight.w800,
-          color: AppColors.accent,
-        ).copyWith(fontFeatures: tabularFigures),
+        style: monoStyle(44, weight: FontWeight.w600, color: AppColors.accent, height: 1.1),
       ),
     ),
   );
@@ -676,27 +711,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
         if (message == null) return const SizedBox.shrink();
         final reconnecting = status != null && status.startsWith('Reconnexion');
         return Align(
-          alignment: const Alignment(0, 0.35),
+          alignment: const Alignment(0, 0.1),
           child: Container(
             constraints: const BoxConstraints(maxWidth: 520),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: playerGlass,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              color: const Color(0xEB0D0C0B),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0x1AFFFFFF)),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
                   reconnecting ? Icons.wifi_tethering_rounded : Icons.error_outline_rounded,
-                  color: reconnecting ? AppColors.accent : AppColors.live,
+                  color: AppColors.accent,
                   size: 32,
                 ),
-                const SizedBox(height: 10),
-                Text(reconnecting ? message : 'Lecture impossible', style: displayStyle(20)),
+                const SizedBox(height: 12),
+                Text(
+                  (reconnecting ? message : 'Lecture impossible').toUpperCase(),
+                  textAlign: TextAlign.center,
+                  style: posterStyle(30, height: 1),
+                ),
                 if (!reconnecting) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 8),
                   Text(
                     message,
                     textAlign: TextAlign.center,
@@ -723,488 +762,486 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
   }
 
-  Widget _buildControls() {
-    return IgnorePointer(
-      ignoring: !_controls,
-      child: AnimatedOpacity(
-        opacity: _controls ? 1 : 0,
-        duration: const Duration(milliseconds: 200),
-        child: Stack(
-          children: [
-            // Top bar
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(32, 28, 40, 90),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xCC000000), Color(0x00000000)],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
+  /// What a paused film or episode is (TMDB / provider details).
+  Widget _pauseInfo() {
+    final episode = _item.kind == ContentKind.episode;
+    final series = widget.session.series;
+    final movie = episode ? null : _s.repo.movieByExt(_item.sourceId, _item.extId);
+    final tm = movie != null ? _s.tmdb.cachedMovie(movie) : (series != null ? _s.tmdb.cachedSeries(series) : null);
+    final ep = episode ? _episodes.where((e) => e.extId == _item.extId).firstOrNull : null;
+    final rating = movie?.rating ?? series?.rating ?? tm?.rating;
+    final year = movie?.year ?? series?.year ?? tm?.year;
+    final genre = (tm?.genres.isNotEmpty ?? false) ? tm!.genres.take(2).join(', ') : series?.genre;
+    final meta = [
+      if (rating != null && rating > 0) '★ ${rating.toStringAsFixed(1).replaceAll('.', ',')}',
+      if (episode && ep != null) ep.code,
+      if (year != null) '$year',
+      if (genre != null && genre.isNotEmpty) genre,
+    ].join('  ·  ');
+    final synopsis = episode ? (ep?.plot ?? series?.plot ?? tm?.overview) : tm?.overview;
+    final people = tm == null
+        ? const <CastMember>[]
+        : (tm.people.isNotEmpty ? tm.people : [for (final n in tm.cast) CastMember(n)]);
+    return PauseInfo(
+      kicker: episode ? (ep?.code ?? 'Épisode') : 'Film',
+      title: displayTitle(episode ? (series?.name ?? _item.title) : (movie?.name ?? _item.title)),
+      meta: meta,
+      synopsis: synopsis,
+      people: people,
+    );
+  }
+
+  List<Program> _miniGuide() {
+    final ch = _currentChannel;
+    if (ch == null) return const [];
+    final now = DateTime.now();
+    return _s.epg.programs(ch, now, now.add(const Duration(hours: 12))).take(4).toList();
+  }
+
+  // ------------------------------------------------------------- top bar
+
+  Widget _topBar(bool vis) {
+    final ch = _currentChannel;
+    final episode = _item.kind == ContentKind.episode;
+    final ep = episode ? _episodes.where((e) => e.extId == _item.extId).firstOrNull : null;
+    Widget title;
+    if (_isLive) {
+      final name = ch == null ? _item.title : _s.channelName(ch);
+      title = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ChannelLogo(name: name, url: ch?.logo ?? _item.image, size: 44),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1),
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Tooltip(
-                      message: 'Retour (Échap)',
-                      child: IconButton(
-                        onPressed: () => Navigator.of(context).maybePop(),
-                        style: IconButton.styleFrom(
-                          foregroundColor: AppColors.text,
-                          fixedSize: const Size(54, 54),
-                          shape: const CircleBorder(),
-                        ),
-                        icon: const Icon(Icons.arrow_back_rounded, size: 32),
-                      ),
-                    ),
-                    const Spacer(),
-                    ValueListenableBuilder<String?>(
-                      valueListenable: _decoder,
-                      builder: (context, d, _) => d == null
-                          ? const SizedBox.shrink()
-                          : Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.black.withValues(alpha: 0.45),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                d,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.textSoft,
-                                ),
-                              ),
-                            ),
-                    ),
-                  ],
+                const SizedBox(height: 6),
+                Text(
+                  'Chaîne ${ch?.number ?? _chIndex + 1}',
+                  style: monoStyle(13, color: AppColors.textSoft, height: 1),
                 ),
-              ),
+              ],
             ),
-            // Bottom bar
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: MouseRegion(
-                onEnter: (_) => _overControls = true,
-                onExit: (_) {
-                  _overControls = false;
-                  _showControls();
-                },
-                child: Container(
-                  padding: const EdgeInsets.fromLTRB(40, 130, 40, 30),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Color(0x00000000), Color(0xE6000000)],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                  ),
-                  child: _isLive ? _liveBar() : _vodBar(),
-                ),
-              ),
+          ),
+          const SizedBox(width: 18),
+          ValueListenableBuilder<Duration>(
+            valueListenable: _position,
+            builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
+              valueListenable: _cache,
+              builder: (context, cache, _) => LiveTag(delay: _delay(pos, cache)),
+            ),
+          ),
+        ],
+      );
+    } else if (_playing || _panel != _Panel.none) {
+      final series = widget.session.series;
+      final sub = ep != null
+          ? '${ep.code} · ${ep.displayTitle}'
+          : [if (_item.subtitle != null) _item.subtitle!].join(' · ');
+      title = Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            displayTitle(episode ? (series?.name ?? _item.title) : _item.title),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, height: 1),
+          ),
+          if (sub.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              sub,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: monoStyle(13, color: AppColors.textSoft, height: 1),
             ),
           ],
+        ],
+      );
+    } else {
+      title = const SizedBox.shrink();
+    }
+    return Positioned(
+      left: 0,
+      right: 0,
+      top: 0,
+      child: IgnorePointer(
+        ignoring: !vis,
+        child: AnimatedOpacity(
+          opacity: vis ? 1 : 0,
+          duration: const Duration(milliseconds: 300),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 28),
+            child: Row(
+              children: [
+                RoundGlassButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: 'Retour (Échap)',
+                  onTap: () => Navigator.of(context).maybePop(),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Align(alignment: Alignment.centerLeft, child: title),
+                ),
+                PlayerIconButton(
+                  icon: Icons.monitor_heart_outlined,
+                  tooltip: 'Statistiques du flux (I)',
+                  onTap: () => setState(() => _showStats = !_showStats),
+                ),
+                const SizedBox(width: 6),
+                PlayerIconButton(
+                  icon: Icons.picture_in_picture_alt_rounded,
+                  tooltip: "Image dans l'image (P)",
+                  onTap: _minimize,
+                ),
+                if (AppWindow.canFloat) ...[
+                  const SizedBox(width: 6),
+                  PlayerIconButton(
+                    icon: Icons.open_in_new_rounded,
+                    tooltip: 'Fenêtre flottante par-dessus tes autres apps (O)',
+                    onTap: () => _minimize(floating: true),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 
-  Widget _playButton() => StreamBuilder<bool>(
-    stream: _ps.player.stream.playing,
-    initialData: _ps.player.state.playing,
-    builder: (context, snap) => OverlayButton(
-      big: true,
-      icon: snap.data == true ? Icons.pause_rounded : Icons.play_arrow_rounded,
-      tooltip: snap.data == true ? 'Pause (Espace)' : 'Lecture (Espace)',
-      onPressed: _togglePlay,
-    ),
-  );
-
-  Widget _vodBar() {
-    final step = _s.settings.seekStep;
-    final next = _nextEpisode;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ValueListenableBuilder<Duration>(
-          valueListenable: _position,
-          builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
-            valueListenable: _cache,
-            builder: (context, cache, _) {
-              final dur = _ps.player.state.duration;
-              return Row(
-                children: [
-                  Expanded(
-                    child: SeekBar(
-                      position: pos,
-                      duration: dur,
-                      ranges: cache.ranges,
-                      onInteraction: _showControls,
-                      onSeek: (d) {
-                        _ps.player.seek(d);
-                        _position.value = d;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Tooltip(
-                    message: '${formatDuration(pos, forceHours: dur.inHours > 0)} / ${formatDuration(dur)}',
-                    child: Text(
-                      formatDuration(dur - pos, forceHours: dur.inHours > 0),
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, fontFeatures: tabularFigures),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            _playButton(),
-            const SizedBox(width: 4),
-            OverlayButton(icon: Icons.replay_10_rounded, tooltip: '−$step s (←)', onPressed: () => _seekBy(-step)),
-            const SizedBox(width: 4),
-            OverlayButton(icon: Icons.forward_10_rounded, tooltip: '+$step s (→)', onPressed: () => _seekBy(step)),
-            const SizedBox(width: 4),
-            _volume(),
-            const SizedBox(width: 10),
-            ValueListenableBuilder<Duration>(
-              valueListenable: _position,
-              builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
-                valueListenable: _cache,
-                builder: (context, cache, _) {
-                  final ahead = cache.cacheEnd == null ? Duration.zero : cache.cacheEnd! - pos;
-                  return ahead.inSeconds < 1
-                      ? const SizedBox.shrink()
-                      : Tooltip(
-                          message: 'Déjà téléchargé devant la lecture : avancer dans cette zone est instantané',
-                          child: CachePill(ahead),
-                        );
-                },
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: _item.title,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    if (_item.subtitle != null)
-                      TextSpan(
-                        text: '   ${_item.subtitle}',
-                        style: const TextStyle(color: AppColors.textSoft),
-                      ),
-                  ],
-                ),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
-            const SizedBox(width: 16),
-            if (next != null) ...[
-              OverlayButton(icon: Icons.skip_next_rounded, tooltip: 'Épisode suivant (N)', onPressed: _playNextEpisode),
-              const SizedBox(width: 4),
-            ],
-            ..._trackMenus(withSpeed: true),
-          ],
-        ),
-      ],
-    );
+  /// How far behind the live edge playback is, or null when at the edge.
+  Duration? _delay(Duration pos, CacheState cache) {
+    if (!_timeshift) return null;
+    final end = cache.cacheEnd;
+    final behind = end == null ? Duration.zero : end - pos;
+    if (behind.inSeconds < 20 && _playing) return null;
+    return behind.isNegative ? Duration.zero : behind;
   }
 
-  Widget _liveBar() {
+  void _backToLive() {
+    final end = _cache.value.cacheEnd;
+    if (end != null) _ps.player.seek(end - const Duration(seconds: 2));
+    if (!_ps.player.state.playing) _ps.player.play();
+    setState(() => _timeshift = false);
+  }
+
+  // ---------------------------------------------------------- bottom bar
+
+  Widget _bottomBar(bool vis) {
+    final step = _s.settings.seekStep;
     final ch = _currentChannel;
-    final now = ch == null ? null : _s.epg.now(ch);
-    final next = ch == null ? null : _s.epg.next(ch);
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            ChannelLogo(name: _item.title, url: _item.image, size: 64),
-            const SizedBox(width: 18),
-            Expanded(
+    final next = _nextEpisode;
+    final hasEpisodes = _episodes.isNotEmpty;
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: IgnorePointer(
+        ignoring: !vis,
+        child: AnimatedOpacity(
+          opacity: vis ? 1 : 0,
+          duration: const Duration(milliseconds: 300),
+          child: MouseRegion(
+            onEnter: (_) => _overControls = true,
+            onExit: (_) {
+              _overControls = false;
+              _showControls();
+            },
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(48, 0, 48, 30),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  if (_isLive)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: LiveProgramInfo(
+                        now: ch == null ? null : _s.epg.now(ch),
+                        next: ch == null ? null : _s.epg.next(ch),
+                        fallbackTitle: ch == null ? _item.title : _s.channelName(ch),
+                      ),
+                    )
+                  else
+                    ValueListenableBuilder<Duration>(
+                      valueListenable: _position,
+                      builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
+                        valueListenable: _cache,
+                        builder: (context, cache, _) => VodSeekRow(
+                          position: pos,
+                          duration: _ps.player.state.duration,
+                          ranges: cache.ranges,
+                          onInteraction: _showControls,
+                          onSeek: (d) {
+                            _ps.player.seek(d);
+                            _position.value = d;
+                          },
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      if (ch?.number != null)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 12),
-                          child: Text(
-                            '${ch!.number}',
-                            style: displayStyle(26, color: AppColors.accent).copyWith(fontFeatures: tabularFigures),
+                      PlayPauseButton(player: _ps.player, onTap: _togglePlay),
+                      const SizedBox(width: 12),
+                      if (!_isLive) ...[
+                        PlayerIconButton(
+                          icon: Icons.replay_10_rounded,
+                          size: 24,
+                          tooltip: 'Reculer de $step s (←)',
+                          onTap: () => _seekBy(-step),
+                        ),
+                        const SizedBox(width: 6),
+                        PlayerIconButton(
+                          icon: Icons.forward_10_rounded,
+                          size: 24,
+                          tooltip: 'Avancer de $step s (→)',
+                          onTap: () => _seekBy(step),
+                        ),
+                        const SizedBox(width: 6),
+                      ],
+                      VolumeControl(
+                        service: _ps,
+                        onMute: _toggleMute,
+                        onChanged: (v) {
+                          _ps.player.setVolume(v);
+                          _showControls();
+                        },
+                      ),
+                      if (_isLive)
+                        ValueListenableBuilder<Duration>(
+                          valueListenable: _position,
+                          builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
+                            valueListenable: _cache,
+                            builder: (context, cache, _) => _delay(pos, cache) == null
+                                ? const SizedBox.shrink()
+                                : Padding(
+                                    padding: const EdgeInsets.only(left: 6),
+                                    child: FilledButton.icon(
+                                      onPressed: _backToLive,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: AppColors.accent,
+                                        foregroundColor: AppColors.onAccent,
+                                        minimumSize: const Size(0, 40),
+                                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                        textStyle: const TextStyle(
+                                          fontFamily: AppFonts.body,
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      icon: const Icon(Icons.circle, size: 8),
+                                      label: const Text('Revenir au direct'),
+                                    ),
+                                  ),
                           ),
                         ),
-                      Flexible(
-                        child: Text(_item.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: displayStyle(26)),
+                      const Spacer(),
+                      if (_isLive && _channels.isNotEmpty)
+                        PlayerTextButton(
+                          icon: Icons.format_list_bulleted_rounded,
+                          label: 'Chaînes',
+                          tooltip: 'Chaînes (C)',
+                          active: _panel == _Panel.channels,
+                          onTap: () => _setPanel(_Panel.channels),
+                        ),
+                      if (_isLive)
+                        PlayerTextButton(
+                          icon: Icons.table_chart_outlined,
+                          label: 'Mini-guide',
+                          tooltip: 'Mini-guide (G)',
+                          active: _panel == _Panel.guide,
+                          onTap: () => _setPanel(_Panel.guide),
+                        ),
+                      if (next != null)
+                        PlayerIconButton(
+                          icon: Icons.skip_next_rounded,
+                          tooltip: 'Épisode suivant (N)',
+                          onTap: _playNextEpisode,
+                        ),
+                      if (hasEpisodes)
+                        PlayerTextButton(
+                          icon: Icons.video_library_outlined,
+                          label: 'Épisodes',
+                          tooltip: 'Épisodes (E)',
+                          active: _panel == _Panel.episodes,
+                          onTap: () => _setPanel(_Panel.episodes),
+                        ),
+                      PlayerTextButton(
+                        icon: Icons.subtitles_outlined,
+                        label: 'Audio et sous-titres',
+                        tooltip: 'Audio et sous-titres (A / S)',
+                        active: _panel == _Panel.audio,
+                        onTap: () => _setPanel(_Panel.audio),
                       ),
-                      const SizedBox(width: 14),
-                      _liveStatus(),
+                      if (_isLive)
+                        QualityButton(
+                          label:
+                              channelQuality(_item.title) ?? (ch == null ? 'Auto' : channelQuality(ch.name) ?? 'Auto'),
+                          tooltip: 'Qualité du flux : change de qualité si la chaîne en a plusieurs',
+                          onTap: _cycleQuality,
+                        )
+                      else
+                        StreamBuilder<int?>(
+                          stream: _ps.player.stream.height,
+                          initialData: _ps.player.state.height,
+                          builder: (context, h) =>
+                              QualityButton(label: resolutionLabel(h.data), tooltip: 'Qualité de la vidéo'),
+                        ),
+                      PlayerIconButton(
+                        icon: _fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
+                        size: 24,
+                        tooltip: 'Plein écran (F)',
+                        onTap: () => _setFullscreen(!_fullscreen),
+                      ),
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  if (now != null) ...[
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: '${formatClock(now.start)} – ${formatClock(now.stop)}   ',
-                            style: const TextStyle(color: AppColors.muted, fontFeatures: tabularFigures),
-                          ),
-                          TextSpan(
-                            text: now.title,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        SizedBox(width: 360, child: ProgressLine(now.progressAt(DateTime.now()))),
-                        if (next != null) ...[
-                          const SizedBox(width: 16),
-                          Flexible(
-                            child: Text(
-                              'Ensuite ${formatClock(next.start)}  ${next.title}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13.5, color: AppColors.muted),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ] else
-                    const Text('Pas de programme disponible', style: TextStyle(color: AppColors.muted)),
                 ],
               ),
             ),
-          ],
+          ),
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            _playButton(),
-            const SizedBox(width: 6),
-            if (_channels.isNotEmpty) ...[
-              OverlayButton(
-                icon: Icons.keyboard_arrow_up_rounded,
-                tooltip: 'Chaîne précédente (↑)',
-                onPressed: () => _zap(-1),
-              ),
-              const SizedBox(width: 6),
-              OverlayButton(
-                icon: Icons.keyboard_arrow_down_rounded,
-                tooltip: 'Chaîne suivante (↓)',
-                onPressed: () => _zap(1),
-              ),
-              const SizedBox(width: 6),
-              OverlayButton(
-                icon: Icons.format_list_bulleted_rounded,
-                tooltip: 'Liste des chaînes (C)',
-                active: _channelPanel,
-                onPressed: _toggleChannelPanel,
-              ),
-              const SizedBox(width: 6),
-            ],
-            _volume(),
-            const Spacer(),
-            ..._trackMenus(withSpeed: false),
-          ],
-        ),
-      ],
+      ),
     );
   }
 
-  /// "EN DIRECT" or "Retour au direct" when the user rewound in the cache.
-  Widget _liveStatus() {
-    return ValueListenableBuilder<Duration>(
-      valueListenable: _position,
-      builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
-        valueListenable: _cache,
-        builder: (context, cache, _) {
-          final end = cache.cacheEnd;
-          final behind = end == null ? Duration.zero : end - pos;
-          if (!_timeshift || (behind.inSeconds < 20 && _ps.player.state.playing)) {
-            return const LiveBadge();
-          }
-          return Material(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(8),
-            child: InkWell(
-              borderRadius: BorderRadius.circular(8),
+  // ------------------------------------------------------------ floating
+
+  List<Widget> _floating(bool vis) {
+    if (_item.kind != ContentKind.episode || _panel != _Panel.none) return const [];
+    final bottom = vis ? 150.0 : 48.0;
+    return [
+      ValueListenableBuilder<Duration>(
+        valueListenable: _position,
+        builder: (context, pos, _) {
+          final dur = _ps.player.state.duration;
+          final next = _nextEpisode;
+          final left = (dur - pos).inSeconds;
+          Widget? child;
+          if (next != null && dur.inSeconds > 60 && left <= 20 && _nextDismissed != _item.extId) {
+            child = NextEpisodePrompt(
+              episode: next,
+              secondsLeft: left,
+              auto: _s.settings.autoNextEpisode,
+              onPlay: _playNextEpisode,
+              onCancel: () => setState(() => _nextDismissed = _item.extId),
+            );
+          } else if (dur.inSeconds > 255 && pos.inSeconds < 85) {
+            child = SkipIntroButton(
               onTap: () {
-                if (end != null) _ps.player.seek(end - const Duration(seconds: 2));
-                if (!_ps.player.state.playing) _ps.player.play();
-                setState(() => _timeshift = false);
+                _ps.player.seek(const Duration(seconds: 85));
+                _position.value = const Duration(seconds: 85);
               },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.skip_next_rounded, size: 16, color: AppColors.live),
-                    const SizedBox(width: 4),
-                    Text(
-                      behind.inSeconds >= 20 ? 'Retour au direct (−${formatDuration(behind)})' : 'Retour au direct',
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            );
+          }
+          return AnimatedPositioned(
+            duration: const Duration(milliseconds: 300),
+            right: 48,
+            bottom: bottom,
+            child: child ?? const SizedBox.shrink(),
           );
         },
       ),
-    );
-  }
-
-  Widget _volume() {
-    return StreamBuilder<double>(
-      stream: _ps.player.stream.volume,
-      initialData: _ps.player.state.volume,
-      builder: (context, snap) {
-        final v = snap.data ?? 100;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            OverlayButton(
-              icon: v == 0 ? Icons.volume_off_rounded : (v < 50 ? Icons.volume_down_rounded : Icons.volume_up_rounded),
-              tooltip: 'Muet (M)',
-              onPressed: _toggleMute,
-            ),
-            SizedBox(
-              width: 120,
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 4,
-                  inactiveTrackColor: Colors.white.withValues(alpha: 0.22),
-                  thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
-                  overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
-                ),
-                child: Slider(
-                  value: v.clamp(0, 150),
-                  max: 150,
-                  onChanged: (x) {
-                    _ps.player.setVolume(x);
-                    _showControls();
-                  },
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  void _setTracksPanel(bool open) {
-    setState(() {
-      _tracksPanel = open;
-      _menuOpen = open;
-    });
-    if (open) {
-      _refreshSelectedTracks();
-      _showControls(sticky: true);
-    } else {
-      _showControls();
-      _focus.requestFocus();
-    }
-  }
-
-  List<Widget> _trackMenus({required bool withSpeed}) {
-    final player = _ps.player;
-    void opened() {
-      _menuOpen = true;
-      _showControls(sticky: true);
-    }
-
-    void closed() {
-      _menuOpen = false;
-      _showControls();
-      _focus.requestFocus();
-    }
-
-    const gap = SizedBox(width: 4);
-    return [
-      OverlayButton(
-        icon: Icons.subtitles_outlined,
-        tooltip: 'Audio et sous-titres (A / S)',
-        active: _tracksPanel,
-        onPressed: () => _setTracksPanel(!_tracksPanel),
-      ),
-      gap,
-      if (withSpeed) ...[
-        ChoiceMenu<double>(
-          icon: Icons.speed_rounded,
-          tooltip: 'Vitesse de lecture',
-          header: 'VITESSE',
-          onOpened: opened,
-          onClosed: closed,
-          items: () => [
-            for (final r in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
-              ChoiceItem(
-                r,
-                r == 1.0 ? 'Normale' : '×${(r == r.roundToDouble() ? r.toInt() : r).toString().replaceAll('.', ',')}',
-                selected: (player.state.rate - r).abs() < 0.01,
-              ),
-          ],
-          onSelected: player.setRate,
-        ),
-        gap,
-      ],
-      ChoiceMenu<_Aspect>(
-        icon: Icons.aspect_ratio_rounded,
-        tooltip: "Format d'image (R)",
-        header: "FORMAT D'IMAGE · R",
-        onOpened: opened,
-        onClosed: closed,
-        items: () => [for (final a in _Aspect.values) ChoiceItem(a, a.label, selected: a == _aspect)],
-        onSelected: (a) => setState(() => _aspect = a),
-      ),
-      gap,
-      OverlayButton(icon: Icons.picture_in_picture_alt_rounded, tooltip: 'Mini-lecteur (P)', onPressed: _minimize),
-      gap,
-      if (AppWindow.canFloat) ...[
-        OverlayButton(
-          icon: Icons.open_in_new_rounded,
-          tooltip: 'Fenêtre flottante par-dessus tes autres apps (O)',
-          onPressed: () => _minimize(floating: true),
-        ),
-        gap,
-      ],
-      OverlayButton(
-        icon: Icons.bar_chart_rounded,
-        tooltip: 'Statistiques (I)',
-        active: _showStats,
-        onPressed: () => setState(() => _showStats = !_showStats),
-      ),
-      gap,
-      OverlayButton(
-        icon: _fullscreen ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
-        tooltip: 'Plein écran (F)',
-        onPressed: () => _setFullscreen(!_fullscreen),
-      ),
     ];
   }
+
+  // -------------------------------------------------------------- panels
+
+  List<Widget> _panels() {
+    switch (_panel) {
+      case _Panel.channels:
+        return [
+          // A click beside the panel closes it.
+          Positioned.fill(child: GestureDetector(onTap: () => _setPanel(_panel))),
+          ChannelListPanel(
+            channels: _channels,
+            names: _s.channelName,
+            selected: _chIndex,
+            epg: _s.epg,
+            scroll: _panelScroll,
+            onPick: _playChannel,
+            onClose: () => _setPanel(_panel),
+          ),
+        ];
+      case _Panel.audio:
+        return [
+          Positioned.fill(child: GestureDetector(onTap: () => _setPanel(_panel))),
+          TracksSidePanel(
+            tracks: _ps.player.state.tracks,
+            audioId: _aid,
+            subtitleId: _sid,
+            onAudio: _selectAudio,
+            onSubtitle: _selectSubtitle,
+            subtitleScale: _s.settings.subtitleScale,
+            onSubtitleScale: (v) {
+              _s.settings.update((s) => s.subtitleScale = v);
+              _ps.setProp('sub-scale', '$v');
+              setState(() {});
+            },
+            onClose: () => _setPanel(_panel),
+            extra: [
+              if (!_isLive)
+                panelSegmentsSection<double>(
+                  'Vitesse de lecture',
+                  [
+                    0.5,
+                    0.75,
+                    1.0,
+                    1.25,
+                    1.5,
+                    2.0,
+                  ].reduce((a, b) => (a - _ps.player.state.rate).abs() < (b - _ps.player.state.rate).abs() ? a : b),
+                  const [(0.75, '×0,75'), (1.0, 'Normale'), (1.25, '×1,25'), (1.5, '×1,5'), (2.0, '×2')],
+                  (r) async {
+                    await _ps.player.setRate(r);
+                    if (mounted) setState(() {});
+                  },
+                ),
+              panelSegmentsSection<_Aspect>("Format d'image", _aspect, [
+                for (final a in _Aspect.values) (a, a.short),
+              ], (a) => setState(() => _aspect = a)),
+            ],
+          ),
+        ];
+      case _Panel.episodes:
+        final seasons = _episodes.map((e) => e.season).toSet().toList()..sort();
+        return [
+          Positioned.fill(child: GestureDetector(onTap: () => _setPanel(_panel))),
+          EpisodesPanel(
+            seriesTitle: displayTitle(widget.session.series?.name ?? _item.title),
+            episodes: _episodes,
+            current: _item.extId,
+            season: _panelSeason ?? seasons.firstOrNull ?? 1,
+            seasons: seasons,
+            onSeason: (n) => setState(() => _panelSeason = n),
+            progressOf: (e) {
+              if (e.extId == _item.extId) {
+                final d = _ps.player.state.duration.inMilliseconds;
+                return d <= 0 ? 0 : _ps.player.state.position.inMilliseconds / d;
+              }
+              final p = _s.repo.progress(_item.sourceId, ContentKind.episode, e.extId);
+              return p == null ? 0 : (p.finished ? 1 : p.fraction);
+            },
+            onPick: (e) => e.extId == _item.extId ? _setPanel(_panel) : _playEpisode(e),
+            onClose: () => _setPanel(_panel),
+          ),
+        ];
+      case _Panel.guide:
+      case _Panel.none:
+        return const [];
+    }
+  }
 }
+
+enum _Panel { none, channels, guide, audio, episodes }

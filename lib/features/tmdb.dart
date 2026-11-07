@@ -8,6 +8,21 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
 
+/// An actor and their part.
+class CastMember {
+  const CastMember(this.name, {this.role, this.photo});
+  final String name;
+  final String? role;
+
+  /// Full image address of the portrait.
+  final String? photo;
+
+  Map<String, Object?> toJson() => {'name': name, 'role': role, 'photo': photo};
+
+  factory CastMember.fromJson(Map<String, Object?> j) =>
+      CastMember(j['name'] as String, role: j['role'] as String?, photo: j['photo'] as String?);
+}
+
 /// What TMDB adds to a film or series page.
 class TmdbInfo {
   const TmdbInfo({
@@ -19,6 +34,7 @@ class TmdbInfo {
     this.poster,
     this.genres = const [],
     this.cast = const [],
+    this.people = const [],
     this.director,
     this.trailer,
     this.rating,
@@ -36,6 +52,9 @@ class TmdbInfo {
   final String? poster;
   final List<String> genres;
   final List<String> cast;
+
+  /// [cast] with parts and portraits (empty in older cache entries).
+  final List<CastMember> people;
   final String? director;
 
   /// YouTube address of the trailer.
@@ -53,6 +72,7 @@ class TmdbInfo {
     'poster': poster,
     'genres': genres,
     'cast': cast,
+    'people': [for (final p in people) p.toJson()],
     'director': director,
     'trailer': trailer,
     'rating': rating,
@@ -69,6 +89,7 @@ class TmdbInfo {
     poster: j['poster'] as String?,
     genres: (j['genres'] as List? ?? const []).cast<String>(),
     cast: (j['cast'] as List? ?? const []).cast<String>(),
+    people: [for (final p in (j['people'] as List? ?? const []).cast<Map>()) CastMember.fromJson(p.cast())],
     director: j['director'] as String?,
     trailer: j['trailer'] as String?,
     rating: (j['rating'] as num?)?.toDouble(),
@@ -202,7 +223,16 @@ class TmdbService {
     });
     String? img(Object? path, String size) => path is String && path.isNotEmpty ? '$_img/$size$path' : null;
     final credits = (d['credits'] as Map?) ?? const {};
-    final cast = [for (final c in (credits['cast'] as List? ?? const []).cast<Map>().take(8)) '${c['name']}'];
+    final castRows = (credits['cast'] as List? ?? const []).cast<Map>().take(8).toList();
+    final cast = [for (final c in castRows) '${c['name']}'];
+    final people = [
+      for (final c in castRows)
+        CastMember(
+          '${c['name']}',
+          role: (c['character'] as String?)?.trim().isEmpty ?? true ? null : (c['character'] as String).trim(),
+          photo: img(c['profile_path'], 'w185'),
+        ),
+    ];
     final crew = (credits['crew'] as List? ?? const []).cast<Map>();
     final director =
         crew.where((c) => c['job'] == 'Director').map((c) => '${c['name']}').firstOrNull ??
@@ -225,6 +255,7 @@ class TmdbService {
       poster: img(d['poster_path'], 'w500'),
       genres: [for (final g in (d['genres'] as List? ?? const []).cast<Map>()) '${g['name']}'],
       cast: cast,
+      people: people,
       director: director,
       trailer: trailer == null ? null : 'https://www.youtube.com/watch?v=${trailer['key']}',
       rating: (d['vote_average'] as num?)?.toDouble(),
