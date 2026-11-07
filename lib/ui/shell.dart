@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
+import '../features/updater.dart';
 import '../services.dart';
 import 'catalog_screen.dart';
 import 'home_screen.dart';
@@ -64,13 +65,34 @@ class _AppShellState extends State<AppShell> {
     super.initState();
     _s = AppScope.of(context);
     _s.imports.addListener(_onImports);
+    _s.updates.addListener(_onUpdates);
     HardwareKeyboard.instance.addHandler(_onKey);
+    // Found while "Qui regarde ?" was shown.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onUpdates());
+  }
+
+  String? _announced;
+
+  /// A newer version found at startup: say it once, with a shortcut.
+  void _onUpdates() {
+    final info = _s.updates.available;
+    if (info == null || _announced == info.version || !mounted) return;
+    if (_s.updates.stage != UpdateStage.available || _index == ShellTab.settings) return;
+    _announced = info.version;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 12),
+        content: Text('Lumen ${info.version} est disponible.'),
+        action: SnackBarAction(label: 'Voir', onPressed: () => _go(ShellTab.settings)),
+      ),
+    );
   }
 
   @override
   void dispose() {
     HardwareKeyboard.instance.removeHandler(_onKey);
     _s.imports.removeListener(_onImports);
+    _s.updates.removeListener(_onUpdates);
     super.dispose();
   }
 

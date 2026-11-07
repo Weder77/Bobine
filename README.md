@@ -19,7 +19,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 
 ---
 
-## Fonctionnalités (v1)
+## Fonctionnalités
 
 **Sources**
 - Comptes **Xtream Codes** (serveur + identifiant + mot de passe). Coller un lien `get.php?username=…&password=…` remplit les champs automatiquement.
@@ -50,6 +50,20 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Pistes audio et sous-titres (choix de la langue préférée, `fr` par défaut), vitesse, format d'image (16:9, 4:3, 21:9, zoom, étirer).
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
+
+**Nouveautés 1.1**
+- **Mini-lecteur** (touche P) : la vidéo continue dans un coin pendant que tu navigues ; double-clic pour revenir en plein écran. Sous Windows, **fenêtre flottante** toujours au-dessus des autres applications (touche O).
+- **Replay** des chaînes qui le proposent (Xtream `tv_archive`, M3U `catchup`) : « Depuis le début » sur le direct, « Revoir » sur un programme passé du guide.
+- **Rappels** (« Me le rappeler ») et **enregistrements** (maintenant ou programmés depuis le guide) dans `Vidéos\Lumen`.
+- **Recherche dans le guide TV** : les programmes à venir et en cours apparaissent dans la recherche.
+- **Profils** (« Qui regarde ? ») avec favoris, reprises et rappels séparés, profil enfant.
+- **Contrôle parental** : code à 4 chiffres, catégories adultes verrouillées automatiquement.
+- **Ranger les catégories** (masquer, verrouiller, réordonner) et masquer des chaînes (clic droit).
+- **Fiches enrichies TMDB** (clé gratuite à saisir dans les réglages) : grandes images, résumé en français, distribution, bande-annonce.
+- **Sauvegarde / restauration** des données dans un fichier, avec ou sans identifiants.
+- **Diagnostic** : versions, stockage, test de connexion, journal, rapport à copier sans identifiants.
+- **Télécommande et manette** (Xbox / XInput sous Windows) : navigation aux flèches avec focus visible, A = ouvrir, B = retour.
+- **Installateur Windows** et **mise à jour intégrée** depuis les Releases GitHub.
 
 ---
 
@@ -95,10 +109,12 @@ Autres optimisations :
 Chaque envoi de code est compilé automatiquement sur un Windows de GitHub (tests compris) :
 
 1. Sur GitHub, ouvre l'onglet **Actions**, puis la dernière exécution **« Build »** réussie (coche verte).
-2. En bas de la page, télécharge l'artefact **`Lumen-windows-x64`** (il faut être connecté à GitHub).
-3. Dézippe l'archive et lance **`lumen.exe`**.
+2. En bas de la page, télécharge l'artefact **`Lumen-Setup`** (installateur, sans droits administrateur) ou **`Lumen-windows-x64`** (version portable à dézipper). Il faut être connecté à GitHub.
+3. Lance **`Lumen-Setup-x.y.z.exe`**, ou dézippe l'archive et lance **`lumen.exe`**.
 
-Pour une version « officielle », crée un tag `v1.0.0` : l'archive sera publiée automatiquement dans les **Releases**.
+Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVersion` dans `lib/core/version.dart` (un test vérifie qu'ils sont identiques), puis crée le tag correspondant (`v1.1.0`) : l'installateur et l'archive sont publiés dans les **Releases**, et les applications installées proposent la mise à jour (*Réglages → À propos et mises à jour*).
+
+> La vérification des mises à jour interroge l'API publique de GitHub : elle ne voit pas les Releases d'un dépôt **privé**. Dans ce cas, installe les nouvelles versions à la main depuis l'onglet Actions ou Releases.
 
 ### Option développeur : compiler toi-même
 
@@ -166,7 +182,11 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 | R | Format d'image |
 | N | Épisode suivant |
 | I | Statistiques |
+| P | Mini-lecteur |
+| O | Fenêtre flottante (Windows) |
 | Échap | Quitter le plein écran / retour |
+
+Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), **Entrée** ouvre et **Échap** revient. Une manette Xbox fait de même : croix ou stick pour se déplacer, **A** valider, **B** retour, **X** pause, **LB / RB** page précédente / suivante.
 
 ### En cas de problème
 
@@ -175,13 +195,14 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 - **Effet de peigne** sur certaines chaînes : désentrelacement sur « Toujours ».
 - **Petit SSD ou peu de RAM** : réduis la taille du cache dans les réglages.
 - **Programmes du guide décalés d'une heure ou plus** : *Réglages → Sources → Modifier → Options avancées → Décalage du guide TV*.
+- **Autre souci** : *Réglages → Sauvegarde et diagnostic → Diagnostic* teste la connexion à chaque source et affiche le journal ; « Copier le rapport » donne un texte sans mot de passe à partager.
 
 ---
 
 ## Données et vie privée
 
-Tout est stocké **localement** dans une base SQLite (`lumen.db`) : sources, favoris, progression et réglages.
-Sous Windows elle se trouve dans `%APPDATA%\com.lumen\Lumen\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV.
+Tout est stocké **localement** dans une base SQLite (`lumen.db`) : sources, profils, favoris, progression, rappels et réglages. Un journal (`lumen.log`, identifiants masqués) se trouve à côté.
+Sous Windows elle se trouve dans `%APPDATA%\com.lumen\Lumen\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV, sauf ce que tu actives : les titres des films et séries ouverts vers TMDB si tu as saisi une clé, et la vérification des mises à jour vers GitHub (désactivable).
 
 Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `lumen.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Lumen`.
 
@@ -232,8 +253,8 @@ flutter test
 ## Feuille de route
 
 - [ ] **Synchronisation par compte** (favoris, progression, sources) entre plusieurs appareils. Les données utilisateur sont déjà indexées par des identifiants stables et horodatées pour la préparer.
-- [ ] Replay / catch-up (`tv_archive` Xtream), déjà détecté et affiché dans l'app.
+- [x] Replay / catch-up, rappels, enregistrements, mini-lecteur, profils, contrôle parental, TMDB, sauvegarde, manette, installateur (1.1).
 - [ ] Multi-écran (2 à 4 chaînes).
 - [ ] Portail Stalker (MAC).
 - [ ] Version Android TV / mobile (même code Flutter + media_kit).
-- [ ] Contrôle parental, profils.
+- [ ] Signature de l'installateur Windows (évite l'avertissement SmartScreen).

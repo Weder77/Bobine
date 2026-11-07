@@ -16,6 +16,7 @@ import 'features/backup.dart';
 import 'features/recording_service.dart';
 import 'features/reminder_service.dart';
 import 'features/tmdb.dart';
+import 'features/updater.dart';
 import 'player/pip.dart';
 import 'player/playback_tracker.dart';
 import 'player/player_service.dart';
@@ -59,6 +60,7 @@ class AppServices {
     required this.recordings,
     required this.tmdb,
     required this.backup,
+    required this.updates,
     required this.mpvCacheDir,
   });
 
@@ -87,6 +89,9 @@ class AppServices {
 
   /// Export / restore of the user's data.
   final BackupService backup;
+
+  /// New versions on GitHub (installer on Windows).
+  final UpdateService updates;
 
   /// libmpv disk cache folder (diagnostic page).
   final String mpvCacheDir;
@@ -143,6 +148,7 @@ class AppServices {
       recordings: recordings,
       tmdb: TmdbService(repo, settings),
       backup: BackupService(repo, settings),
+      updates: UpdateService(repo, settings),
       mpvCacheDir: mpvCache.path,
     );
     services._ensureActiveSource();

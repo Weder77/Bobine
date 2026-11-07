@@ -155,19 +155,7 @@ class SettingsScreen extends StatelessWidget {
             const RecordingsSection(),
             const BackupSection(),
             const SettingsSection(title: 'Raccourcis du lecteur', children: [_Shortcuts()]),
-            const SettingsSection(
-              title: 'À propos',
-              children: [
-                Padding(
-                  padding: EdgeInsets.all(18),
-                  child: Text(
-                    'Lumen $kAppVersion — lecteur IPTV basé sur libmpv (FFmpeg) via media_kit.\n'
-                    'Toutes les données (sources, favoris, progression) sont stockées localement.',
-                    style: TextStyle(color: AppColors.muted, height: 1.5),
-                  ),
-                ),
-              ],
-            ),
+            const AboutSection(),
           ],
         );
       },

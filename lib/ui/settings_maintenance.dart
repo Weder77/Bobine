@@ -1,8 +1,11 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../core/open_url.dart';
 import '../core/theme.dart';
+import '../core/version.dart';
 import '../features/backup.dart';
+import '../features/updater.dart';
 import '../services.dart';
 import 'diagnostic_screen.dart';
 import 'settings_screen.dart';
@@ -158,4 +161,113 @@ class _ExportDialogState extends State<_ExportDialog> {
       FilledButton(onPressed: () => Navigator.pop(context, _credentials), child: const Text('Choisir le fichier…')),
     ],
   );
+}
+
+/// Réglages → À propos et mises à jour.
+class AboutSection extends StatelessWidget {
+  const AboutSection({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final u = s.updates;
+    return ListenableBuilder(
+      listenable: u,
+      builder: (context, _) {
+        final info = u.available;
+        final busy = u.stage == UpdateStage.checking || u.stage == UpdateStage.downloading;
+        final status = switch (u.stage) {
+          UpdateStage.checking => 'Recherche…',
+          UpdateStage.upToDate => 'Lumen est à jour.',
+          UpdateStage.available => 'Lumen ${info!.version} est disponible.',
+          UpdateStage.downloading => 'Téléchargement… ${(u.progress * 100).round()} %',
+          UpdateStage.ready => 'Prêt : Lumen va se fermer, s’installer puis se rouvrir.',
+          UpdateStage.error => u.error ?? 'Erreur',
+          UpdateStage.idle => null,
+        };
+        return SettingsSection(
+          title: 'À propos et mises à jour',
+          children: [
+            SettingsOption(
+              title: 'Lumen $kAppVersion',
+              subtitle:
+                  'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Toutes les données (sources, favoris, '
+                  'progression) restent sur cet ordinateur.',
+              child: OutlinedButton(
+                onPressed: busy ? null : () => u.check(),
+                child: const Text('Rechercher une mise à jour'),
+              ),
+            ),
+            if (status != null)
+              Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.fromLTRB(18, 0, 18, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      status,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: switch (u.stage) {
+                          UpdateStage.error => AppColors.live,
+                          UpdateStage.available || UpdateStage.ready => AppColors.accent,
+                          _ => AppColors.textSoft,
+                        },
+                      ),
+                    ),
+                    if (u.stage == UpdateStage.downloading) ...[
+                      const SizedBox(height: 10),
+                      SizedBox(width: 360, child: LinearProgressIndicator(value: u.progress)),
+                    ],
+                    if (info != null && info.notes != null && info.notes!.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 200),
+                        child: SingleChildScrollView(
+                          child: Text(info.notes!, style: const TextStyle(color: AppColors.muted, height: 1.5)),
+                        ),
+                      ),
+                    ],
+                    if (info != null && (u.stage == UpdateStage.available || u.stage == UpdateStage.ready)) ...[
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (u.canInstall && u.stage == UpdateStage.available)
+                            FilledButton.icon(
+                              onPressed: u.download,
+                              icon: const Icon(Icons.download_rounded, size: 20),
+                              label: const Text('Télécharger et installer'),
+                            ),
+                          if (u.stage == UpdateStage.ready)
+                            FilledButton.icon(
+                              onPressed: () => u.installAndRestart(beforeExit: () async => s.tracker.flush()),
+                              icon: const Icon(Icons.restart_alt_rounded, size: 20),
+                              label: const Text('Installer et redémarrer'),
+                            ),
+                          OutlinedButton(
+                            onPressed: () => openExternal(info.page),
+                            child: const Text('Voir la version'),
+                          ),
+                          if (u.stage == UpdateStage.available)
+                            TextButton(onPressed: u.skip, child: const Text('Ignorer cette version')),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            SettingsSwitch(
+              title: 'Vérifier les mises à jour au démarrage',
+              subtitle: 'Une fois par jour au plus, sur les versions publiées dans GitHub.',
+              value: s.settings.checkUpdates,
+              onChanged: (v) => s.settings.update((x) => x.checkUpdates = v),
+            ),
+          ],
+        );
+      },
+    );
+  }
 }

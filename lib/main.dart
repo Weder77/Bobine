@@ -13,7 +13,11 @@ Future<void> main() async {
   try {
     final services = await AppServices.create();
     runApp(LumenApp(services: services));
-    WidgetsBinding.instance.addPostFrameCallback((_) => services.refreshStaleSources());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      services.refreshStaleSources();
+      // A little later: the update check must not slow the first screens.
+      Future.delayed(const Duration(seconds: 8), services.updates.checkInBackground);
+    });
   } catch (e, st) {
     debugPrint('Startup failed: $e\n$st');
     runApp(StartupErrorApp(error: e.toString()));

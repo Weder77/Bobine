@@ -204,6 +204,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_bytes(json.dumps(api(q.get("action", [None])[0], q)).encode(), "application/json")
         if p == "/xmltv.php":
             return self.send_bytes(xmltv(), "application/xml")
+        if p == "/gh/releases/latest":
+            # Fake GitHub release (LUMEN_UPDATE_URL=http://127.0.0.1:8765/gh/releases/latest).
+            return self.send_bytes(json.dumps({
+                "tag_name": "v1.2.0", "html_url": "https://github.com/weder77/iptv/releases/tag/v1.2.0",
+                "body": "- Multi-écran\n- Corrections diverses",
+                "assets": [{"name": "Lumen-Setup-1.2.0.exe", "size": 4, "digest": "sha256:00",
+                            "browser_download_url": f"{BASE}/gh/setup.exe"}]}).encode(), "application/json")
         if p.startswith("/tmdb/3/"):
             code, body = tmdb(p[len("/tmdb/3"):], q, self.headers)
             data = json.dumps(body).encode()

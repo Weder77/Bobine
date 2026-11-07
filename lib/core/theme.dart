@@ -248,6 +248,7 @@ ThemeData buildTheme() {
     snackBarTheme: SnackBarThemeData(
       backgroundColor: AppColors.surface3,
       contentTextStyle: const TextStyle(fontFamily: AppFonts.body, color: AppColors.text),
+      actionTextColor: AppColors.accent,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       width: 520,
