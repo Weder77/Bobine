@@ -2,6 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'program_actions.dart';
+import '../data/models.dart';
+import '../core/format.dart';
+
 import '../core/theme.dart';
 import '../data/repository.dart';
 import '../services.dart';
@@ -21,6 +25,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final _focus = FocusNode();
   Timer? _debounce;
   SearchResults? _results;
+  List<ProgramHit> _programs = const [];
   String _query = '';
 
   @override
@@ -53,6 +58,7 @@ class _SearchScreenState extends State<SearchScreen> {
       setState(() {
         _query = trimmed;
         _results = trimmed.length < 2 ? null : s.repo.search(src.id, trimmed);
+        _programs = trimmed.length < 3 ? const [] : s.repo.searchPrograms(src.id, trimmed);
       });
     });
   }
@@ -111,7 +117,7 @@ class _SearchScreenState extends State<SearchScreen> {
             title: 'Que veux-tu regarder ?',
             message: 'La recherche ignore les accents et la casse. Tape au moins 2 caractères.',
           )
-        else if (r.isEmpty)
+        else if (r.isEmpty && _programs.isEmpty)
           EmptyState(icon: Icons.search_off_rounded, title: 'Aucun résultat pour « $_query »')
         else ...[
           if (r.channels.isNotEmpty) ...[
@@ -187,8 +193,69 @@ class _SearchScreenState extends State<SearchScreen> {
                 );
               },
             ),
+          if (_programs.isNotEmpty) _ProgramResults(hits: _programs),
         ],
       ],
+    );
+  }
+}
+
+/// Guide programmes matching the search: live now, coming up, or replayable.
+class _ProgramResults extends StatelessWidget {
+  const _ProgramResults({required this.hits});
+  final List<ProgramHit> hits;
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    final now = DateTime.now();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(48, 28, 48, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Au programme (${hits.length})', style: displayStyle(22, weight: FontWeight.w700)),
+          const SizedBox(height: 14),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1000),
+            child: Column(
+              children: [
+                for (final h in hits)
+                  Builder(
+                    builder: (context) {
+                      final time = programTime(h.program, now);
+                      final replay = canReplay(h.channel, h.program, now);
+                      final reminded = s.repo.hasReminder(h.channel.sourceId, h.channel.extId, h.program.start);
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        hoverColor: AppColors.surface,
+                        onTap: () => showProgramActions(context, h.channel, h.program),
+                        leading: ChannelLogo(name: h.channel.name, url: h.channel.logo, size: 44),
+                        title: Text(h.program.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                        subtitle: Text(
+                          '${h.channel.name} · ${formatDay(h.program.start)} ${formatClock(h.program.start)} – '
+                          '${formatClock(h.program.stop)}',
+                          style: const TextStyle(color: AppColors.muted),
+                        ),
+                        trailing: switch (time) {
+                          ProgramTime.live => const LiveBadge(),
+                          ProgramTime.past when replay => const Pill('Replay', icon: Icons.replay_rounded),
+                          ProgramTime.past => const Text('Passé', style: TextStyle(color: AppColors.faint)),
+                          ProgramTime.future when reminded => const Icon(
+                            Icons.notifications_active_rounded,
+                            color: AppColors.accent,
+                          ),
+                          ProgramTime.future => const Icon(Icons.notifications_none_rounded, color: AppColors.muted),
+                        },
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../core/window.dart';
 import '../services.dart';
 import '../ui/widgets/common.dart';
+import '../ui/widgets/reminder_banner.dart';
 import 'player_screen.dart';
 import 'player_service.dart';
 
@@ -40,7 +41,7 @@ class PipLayer extends StatelessWidget {
             ],
           );
         }
-        return Stack(children: [child, if (show) const MiniPlayer()]);
+        return Stack(children: [child, if (show) const MiniPlayer(), const ReminderBanner()]);
       },
     );
   }

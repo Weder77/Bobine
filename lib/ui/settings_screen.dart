@@ -4,6 +4,7 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../services.dart';
+import 'settings_recordings.dart';
 import 'source_form.dart';
 import 'widgets/common.dart';
 
@@ -22,7 +23,7 @@ class SettingsScreen extends StatelessWidget {
           children: [
             Text('Réglages', style: displayStyle(34)),
             const SizedBox(height: 28),
-            _Section(
+            SettingsSection(
               title: 'Sources',
               trailing: FilledButton.icon(
                 onPressed: () => showSourceDialog(context),
@@ -31,47 +32,47 @@ class SettingsScreen extends StatelessWidget {
               ),
               children: [for (final src in s.repo.sources()) _SourceTile(source: src)],
             ),
-            _Section(
+            SettingsSection(
               title: 'Lecture',
               children: [
-                _Option(
+                SettingsOption(
                   title: 'Cache de lecture (vers l\'avant)',
                   subtitle:
                       'Quantité de vidéo téléchargée à l\'avance. Plus il est grand, plus les sauts '
                       'en avant sont instantanés (1 Go ≈ 15 min de 1080p).',
-                  child: _Segments<int>(
+                  child: SettingsSegments<int>(
                     value: st.cacheMb,
                     options: const {256: '256 Mo', 512: '512 Mo', 1024: '1 Go', 2048: '2 Go'},
                     onChanged: (v) => st.update((x) => x.cacheMb = v),
                   ),
                 ),
-                _Option(
+                SettingsOption(
                   title: 'Cache arrière',
                   subtitle:
                       'Garde ce qui a déjà été vu : reculer est instantané (et permet de revenir '
                       'en arrière sur le direct).',
-                  child: _Segments<int>(
+                  child: SettingsSegments<int>(
                     value: st.backCacheMb,
                     options: const {128: '128 Mo', 384: '384 Mo', 768: '768 Mo'},
                     onChanged: (v) => st.update((x) => x.backCacheMb = v),
                   ),
                 ),
-                _Switch(
+                SettingsSwitch(
                   title: 'Cache sur disque',
                   subtitle: 'Stocke le cache sur le disque au lieu de la RAM. Recommandé, surtout avec un gros cache.',
                   value: st.diskCache,
                   onChanged: (v) => st.update((x) => x.diskCache = v),
                 ),
-                _Option(
+                SettingsOption(
                   title: 'Saut avec ← / →',
                   subtitle: 'Maj + flèche = saut × 6.',
-                  child: _Segments<int>(
+                  child: SettingsSegments<int>(
                     value: st.seekStep,
                     options: const {5: '5 s', 10: '10 s', 15: '15 s', 30: '30 s'},
                     onChanged: (v) => st.update((x) => x.seekStep = v),
                   ),
                 ),
-                _Switch(
+                SettingsSwitch(
                   title: 'Décodage matériel',
                   subtitle:
                       'Utilise la carte graphique (D3D11 / NVDEC / VideoToolbox / VA-API) : '
@@ -79,62 +80,62 @@ class SettingsScreen extends StatelessWidget {
                   value: st.hardwareDecoding,
                   onChanged: (v) => st.update((x) => x.hardwareDecoding = v),
                 ),
-                _Option(
+                SettingsOption(
                   title: 'Désentrelacement',
                   subtitle: 'Supprime l\'effet de peigne des chaînes TV en 1080i / 576i.',
-                  child: _Segments<String>(
+                  child: SettingsSegments<String>(
                     value: st.deinterlace,
                     options: const {'auto': 'Auto', 'yes': 'Toujours', 'no': 'Jamais'},
                     onChanged: (v) => st.update((x) => x.deinterlace = v),
                   ),
                 ),
-                _Text(
+                SettingsText(
                   title: 'Langues audio préférées',
                   subtitle: 'Codes séparés par des virgules (ex. fr,fre,fra,en).',
                   value: st.audioLang,
                   onChanged: (v) => st.update((x) => x.audioLang = v),
                 ),
-                _Text(
+                SettingsText(
                   title: 'Langues de sous-titres préférées',
                   subtitle: 'Vide = seulement les sous-titres marqués « par défaut » dans le fichier (ex. forcés).',
                   value: st.subtitleLang,
                   onChanged: (v) => st.update((x) => x.subtitleLang = v),
                 ),
-                _Switch(
+                SettingsSwitch(
                   title: 'Plein écran automatique',
                   subtitle: 'Passe en plein écran au lancement d\'une vidéo.',
                   value: st.autoFullscreen,
                   onChanged: (v) => st.update((x) => x.autoFullscreen = v),
                 ),
-                _Switch(
+                SettingsSwitch(
                   title: 'Épisode suivant automatique',
                   value: st.autoNextEpisode,
                   onChanged: (v) => st.update((x) => x.autoNextEpisode = v),
                 ),
               ],
             ),
-            _Section(
+            SettingsSection(
               title: 'Guide TV et mises à jour',
               children: [
-                _Option(
+                SettingsOption(
                   title: 'Actualiser le guide TV',
-                  child: _Segments<int>(
+                  child: SettingsSegments<int>(
                     value: st.epgRefreshHours,
                     options: const {6: '6 h', 12: '12 h', 24: '24 h', 0: 'Manuel'},
                     onChanged: (v) => st.update((x) => x.epgRefreshHours = v),
                   ),
                 ),
-                _Option(
+                SettingsOption(
                   title: 'Jours de programmes conservés',
-                  child: _Segments<int>(
+                  child: SettingsSegments<int>(
                     value: st.epgDays,
                     options: const {1: '1 j', 3: '3 j', 7: '7 j'},
                     onChanged: (v) => st.update((x) => x.epgDays = v),
                   ),
                 ),
-                _Option(
+                SettingsOption(
                   title: 'Actualiser les chaînes / films / séries',
-                  child: _Segments<int>(
+                  child: SettingsSegments<int>(
                     value: st.contentRefreshHours,
                     options: const {12: '12 h', 24: '24 h', 72: '3 j', 100000: 'Manuel'},
                     onChanged: (v) => st.update((x) => x.contentRefreshHours = v),
@@ -142,8 +143,10 @@ class SettingsScreen extends StatelessWidget {
                 ),
               ],
             ),
-            const _Section(title: 'Raccourcis du lecteur', children: [_Shortcuts()]),
-            const _Section(
+            const RemindersSection(),
+            const RecordingsSection(),
+            const SettingsSection(title: 'Raccourcis du lecteur', children: [_Shortcuts()]),
+            const SettingsSection(
               title: 'À propos',
               children: [
                 Padding(
@@ -163,8 +166,8 @@ class SettingsScreen extends StatelessWidget {
   }
 }
 
-class _Section extends StatelessWidget {
-  const _Section({required this.title, required this.children, this.trailing});
+class SettingsSection extends StatelessWidget {
+  const SettingsSection({super.key, required this.title, required this.children, this.trailing});
   final String title;
   final List<Widget> children;
   final Widget? trailing;
@@ -209,8 +212,8 @@ class _Section extends StatelessWidget {
   );
 }
 
-class _Option extends StatelessWidget {
-  const _Option({required this.title, required this.child, this.subtitle});
+class SettingsOption extends StatelessWidget {
+  const SettingsOption({super.key, required this.title, required this.child, this.subtitle});
   final String title;
   final String? subtitle;
   final Widget child;
@@ -239,8 +242,8 @@ class _Option extends StatelessWidget {
   );
 }
 
-class _Segments<T> extends StatelessWidget {
-  const _Segments({required this.value, required this.options, required this.onChanged});
+class SettingsSegments<T> extends StatelessWidget {
+  const SettingsSegments({super.key, required this.value, required this.options, required this.onChanged});
   final T value;
   final Map<T, String> options;
   final ValueChanged<T> onChanged;
@@ -257,33 +260,33 @@ class _Segments<T> extends StatelessWidget {
   );
 }
 
-class _Switch extends StatelessWidget {
-  const _Switch({required this.title, required this.value, required this.onChanged, this.subtitle});
+class SettingsSwitch extends StatelessWidget {
+  const SettingsSwitch({super.key, required this.title, required this.value, required this.onChanged, this.subtitle});
   final String title;
   final String? subtitle;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
-  Widget build(BuildContext context) => _Option(
+  Widget build(BuildContext context) => SettingsOption(
     title: title,
     subtitle: subtitle,
     child: Switch(value: value, onChanged: onChanged),
   );
 }
 
-class _Text extends StatefulWidget {
-  const _Text({required this.title, required this.value, required this.onChanged, this.subtitle});
+class SettingsText extends StatefulWidget {
+  const SettingsText({super.key, required this.title, required this.value, required this.onChanged, this.subtitle});
   final String title;
   final String? subtitle;
   final String value;
   final ValueChanged<String> onChanged;
 
   @override
-  State<_Text> createState() => _TextState();
+  State<SettingsText> createState() => _SettingsTextState();
 }
 
-class _TextState extends State<_Text> {
+class _SettingsTextState extends State<SettingsText> {
   late final _c = TextEditingController(text: widget.value);
 
   @override
@@ -293,7 +296,7 @@ class _TextState extends State<_Text> {
   }
 
   @override
-  Widget build(BuildContext context) => _Option(
+  Widget build(BuildContext context) => SettingsOption(
     title: widget.title,
     subtitle: widget.subtitle,
     child: SizedBox(
@@ -435,6 +438,9 @@ class _Shortcuts extends StatelessWidget {
     ('R', "Format d'image"),
     ('N', 'Épisode suivant'),
     ('I', 'Statistiques (codec, décodage, cache, débit)'),
+    ('P', 'Mini-lecteur (continuer à regarder en naviguant)'),
+    ('O', 'Fenêtre flottante par-dessus les autres apps (Windows)'),
+    ('Manette', 'Croix / stick : se déplacer · A : valider · B : retour · X : pause'),
     ('Échap', 'Quitter le plein écran / retour'),
   ];
 

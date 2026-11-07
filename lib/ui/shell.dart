@@ -202,6 +202,7 @@ class _TopBar extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  const _RecordingDot(),
                   const _Clock(),
                   const SizedBox(width: 12),
                   _GlassIcon(
@@ -356,6 +357,34 @@ class _SourceButton extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// "REC" while recordings are in progress.
+class _RecordingDot extends StatelessWidget {
+  const _RecordingDot();
+
+  @override
+  Widget build(BuildContext context) {
+    final s = AppScope.of(context);
+    return ValueListenableBuilder<int>(
+      valueListenable: s.recordings.activeCount,
+      builder: (context, n, _) => n == 0
+          ? const SizedBox.shrink()
+          : Tooltip(
+              message: n == 1 ? 'Un enregistrement en cours' : '$n enregistrements en cours',
+              child: Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: Row(
+                  children: [
+                    const Icon(Icons.fiber_manual_record_rounded, size: 12, color: AppColors.live),
+                    const SizedBox(width: 4),
+                    Text(n == 1 ? 'REC' : 'REC $n', style: labelStyle(color: AppColors.text, size: 12)),
+                  ],
+                ),
+              ),
+            ),
     );
   }
 }

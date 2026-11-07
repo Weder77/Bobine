@@ -8,6 +8,7 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../services.dart';
+import 'program_actions.dart';
 import 'widgets/common.dart';
 
 /// Lets the Guide toolbar drive the grid (scroll, now, day) and shows which
@@ -27,9 +28,19 @@ class EpgGridController {
 /// built) and each row only lays out the programmes inside the visible time
 /// window, so it stays smooth with thousands of channels.
 class EpgGrid extends StatefulWidget {
-  const EpgGrid({super.key, required this.channels, required this.onPlay, this.controller, this.epgVersion = 0});
+  const EpgGrid({
+    super.key,
+    required this.channels,
+    required this.onPlay,
+    this.onProgram,
+    this.controller,
+    this.epgVersion = 0,
+  });
   final List<Channel> channels;
   final ValueChanged<int> onPlay;
+
+  /// A programme was clicked (replay, reminder, recording…).
+  final void Function(int channelIndex, Program program)? onProgram;
   final EpgGridController? controller;
 
   /// Changes when a guide import finishes: cached rows are reloaded.
@@ -52,6 +63,12 @@ class _EpgGridState extends State<EpgGrid> {
   final _offset = ValueNotifier<double>(0);
   final Map<String, List<Program>> _cache = {};
   Timer? _clock;
+
+  /// Programmes with a reminder / a recording, as `channel|start` keys.
+  Set<String> _reminders = const {};
+  Set<String> _recordings = const {};
+
+  static String _mark(String channelExt, DateTime start) => '$channelExt|${start.millisecondsSinceEpoch ~/ 60000}';
 
   @override
   void initState() {
@@ -169,6 +186,12 @@ class _EpgGridState extends State<EpgGrid> {
 
   @override
   Widget build(BuildContext context) {
+    _reminders = {for (final r in _s.repo.reminders()) _mark(r.channelExt, r.start)};
+    _recordings = {
+      for (final r in _s.repo.recordings())
+        if (r.status == RecordingStatus.scheduled || r.status == RecordingStatus.recording)
+          _mark(r.channelExt, r.start.add(const Duration(minutes: 1))),
+    };
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF0C0E13),
@@ -415,7 +438,9 @@ class _EpgGridState extends State<EpgGrid> {
               ),
               child: InkWell(
                 borderRadius: BorderRadius.circular(10),
-                onTap: () => live ? widget.onPlay(index) : _showDetails(c, p, index),
+                onTap: () => widget.onProgram != null
+                    ? widget.onProgram!(index, p)
+                    : (live ? widget.onPlay(index) : _showDetails(c, p, index)),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: width < 44
@@ -424,15 +449,33 @@ class _EpgGridState extends State<EpgGrid> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              p.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: past ? AppColors.faint : AppColors.text,
-                              ),
+                            Row(
+                              children: [
+                                if (past && canReplay(c, p, now)) ...[
+                                  const Icon(Icons.replay_rounded, size: 14, color: AppColors.textSoft),
+                                  const SizedBox(width: 4),
+                                ],
+                                if (_reminders.contains(_mark(c.extId, p.start))) ...[
+                                  const Icon(Icons.notifications_active_rounded, size: 14, color: AppColors.accent),
+                                  const SizedBox(width: 4),
+                                ],
+                                if (_recordings.contains(_mark(c.extId, p.start))) ...[
+                                  const Icon(Icons.fiber_manual_record_rounded, size: 12, color: AppColors.live),
+                                  const SizedBox(width: 4),
+                                ],
+                                Expanded(
+                                  child: Text(
+                                    p.title,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: past && !canReplay(c, p, now) ? AppColors.faint : AppColors.text,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 2),
                             Text(

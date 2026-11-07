@@ -10,9 +10,18 @@ import 'package:lumen/data/repository.dart';
   final repo = Repository(openMemoryDatabase());
   final id = repo.insertSource(name: 'S', type: SourceType.m3u, url: 'http://x');
   final db = repo.db;
-  db.execute("INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (10, ?, 'live', 'fr', 'France', 0)", [id]);
-  db.execute("INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (11, ?, 'live', 'xx', 'Adultes 18+', 1)", [id]);
-  db.execute("INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (12, ?, 'live', 'sp', 'Sport', 2)", [id]);
+  db.execute(
+    "INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (10, ?, 'live', 'fr', 'France', 0)",
+    [id],
+  );
+  db.execute(
+    "INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (11, ?, 'live', 'xx', 'Adultes 18+', 1)",
+    [id],
+  );
+  db.execute(
+    "INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (12, ?, 'live', 'sp', 'Sport', 2)",
+    [id],
+  );
   void ch(String ext, int cat, String name, String epg, int pos) => db.execute(
     'INSERT INTO channels (source_id, ext_id, category_id, name, search, epg_id, match_key, position) '
     'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -73,7 +82,11 @@ void main() {
     final (repo, id) = _fixture();
     final channel = repo.channelByExt(id, 'c')!;
     final now = DateTime.now();
-    final p = Program(start: now.add(const Duration(minutes: 10)), stop: now.add(const Duration(hours: 1)), title: 'Match');
+    final p = Program(
+      start: now.add(const Duration(minutes: 10)),
+      stop: now.add(const Duration(hours: 1)),
+      title: 'Match',
+    );
     expect(repo.toggleReminder(channel, p), isTrue);
     expect(repo.hasReminder(id, 'c', p.start), isTrue);
     expect(repo.reminders().single.title, 'Match');

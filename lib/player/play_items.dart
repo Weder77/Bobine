@@ -34,3 +34,31 @@ PlayItem episodeItem(Source s, Series? series, Episode e) => PlayItem(
   userAgent: s.userAgent,
   seriesExt: e.seriesExt,
 );
+
+/// A past programme of a live channel, played like a film (seekable).
+PlayItem? replayItem(Source s, Channel c, Program p) {
+  final url = ReplayUrls.build(s, c, p);
+  if (url == null) return null;
+  return PlayItem(
+    kind: ContentKind.live,
+    sourceId: s.id,
+    extId: c.extId,
+    url: url,
+    title: p.title,
+    subtitle: '${c.name} · replay',
+    image: c.logo,
+    userAgent: s.userAgent,
+    isReplay: true,
+  );
+}
+
+/// A finished recording on disk.
+PlayItem recordingItem(Recording r) => PlayItem(
+  kind: ContentKind.movie,
+  sourceId: r.sourceId,
+  extId: 'rec:${r.id}',
+  url: r.path ?? '',
+  title: r.title,
+  subtitle: '${r.channelName} · enregistrement',
+  saveProgress: false,
+);

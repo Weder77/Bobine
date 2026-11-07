@@ -166,3 +166,11 @@ String? asString(Object? v) {
   if (v is List) return v.isEmpty ? null : asString(v.first);
   return v.toString();
 }
+
+/// A file name safe on Windows, macOS and Linux (at most 120 characters).
+String safeFileName(String name) {
+  var s = name.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
+  s = s.replaceAll(RegExp(r'[. ]+$'), '');
+  if (s.length > 120) s = s.substring(0, 120).trim();
+  return s.isEmpty ? 'Lumen' : s;
+}

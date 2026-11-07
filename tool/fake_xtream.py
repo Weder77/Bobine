@@ -41,7 +41,7 @@ def api(action, q):
     if action == "get_live_streams":
         return [{"num": i + 1, "name": n, "stream_type": "live", "stream_id": 100 + i,
                  "stream_icon": f"{BASE}/img/logo{i}.png", "epg_channel_id": epg,
-                 "category_id": cat, "tv_archive": 1 if i == 0 else 0, "tv_archive_duration": 7}
+                 "category_id": cat, "tv_archive": 1 if i < 2 else 0, "tv_archive_duration": 7}
                 for i, (n, epg, cat) in enumerate(CHANNELS)]
     if action == "get_vod_categories":
         return [{"category_id": "10", "category_name": "Action"}, {"category_id": "11", "category_name": "Drame"}]
@@ -176,6 +176,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.serve_file(f, "image/png")
         if p.startswith("/live/"):
             return self.serve_file(os.path.join(MEDIA, "live.ts"), "video/mp2t")
+        if p.startswith("/timeshift/"):
+            # Replay of a past programme: served like a film (seekable).
+            print("timeshift", p, flush=True)
+            return self.serve_file(os.path.join(MEDIA, "movie.mkv"), "video/x-matroska", throttle=True)
         if p.startswith("/movie/"):
             return self.serve_file(os.path.join(MEDIA, "movie.mkv"), "video/x-matroska", throttle=True)
         if p.startswith("/series/"):

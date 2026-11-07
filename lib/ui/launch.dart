@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
@@ -57,6 +59,28 @@ class Launch {
         series: series,
       ),
     );
+  }
+
+  /// Plays a past programme of a live channel (replay), seekable.
+  static Future<void> replay(BuildContext context, Channel c, Program p) async {
+    final s = AppScope.of(context);
+    final source = s.repo.source(c.sourceId);
+    if (source == null) return;
+    final item = replayItem(source, c, p);
+    if (item == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pas de replay pour cette chaîne.")));
+      return;
+    }
+    await PlayerScreen.open(context, PlayerSession(item: item));
+  }
+
+  /// Plays a finished recording.
+  static Future<void> recording(BuildContext context, Recording r) async {
+    if (r.path == null || !File(r.path!).existsSync()) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fichier introuvable.')));
+      return;
+    }
+    await PlayerScreen.open(context, PlayerSession(item: recordingItem(r)));
   }
 
   /// Resumes an entry of "Continuer à regarder".

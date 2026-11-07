@@ -11,6 +11,8 @@ import 'data/import/import_service.dart';
 import 'data/models.dart';
 import 'data/repository.dart';
 import 'data/settings.dart';
+import 'features/recording_service.dart';
+import 'features/reminder_service.dart';
 import 'player/pip.dart';
 import 'player/playback_tracker.dart';
 import 'player/player_service.dart';
@@ -50,6 +52,8 @@ class AppServices {
     required this.epg,
     required this.tracker,
     required this.pip,
+    required this.reminders,
+    required this.recordings,
   });
 
   final String dbPath;
@@ -65,6 +69,12 @@ class AppServices {
 
   /// Mini-player and floating window.
   final PipController pip;
+
+  /// "Me le rappeler" on future programmes.
+  final ReminderService reminders;
+
+  /// Recordings of live channels.
+  final RecordingService recordings;
 
   /// Parental code typed this session (locked categories visible).
   bool parentalUnlocked = false;
@@ -97,6 +107,8 @@ class AppServices {
     final player = PlayerService(settings, mpvCache.path)..init();
     final tracker = PlaybackTracker(player, repo, onSaved: library.userChanged);
     final pip = PipController(player);
+    final reminders = ReminderService(repo, settings);
+    final recordings = RecordingService(repo, settings, onChanged: library.userChanged);
 
     final services = AppServices._(
       dbPath: dbPath,
@@ -108,6 +120,8 @@ class AppServices {
       epg: epg,
       tracker: tracker,
       pip: pip,
+      reminders: reminders,
+      recordings: recordings,
     );
     services._ensureActiveSource();
     services._applyProfile();

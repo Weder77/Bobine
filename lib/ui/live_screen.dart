@@ -14,6 +14,7 @@ import '../player/play_items.dart';
 import '../services.dart';
 import 'epg_grid.dart';
 import 'launch.dart';
+import 'program_actions.dart';
 import 'shell.dart';
 import 'widgets/common.dart';
 import 'widgets/live_card.dart';
@@ -630,6 +631,13 @@ class _LiveScreenState extends State<LiveScreen> {
                             icon: const Icon(Icons.calendar_view_week_rounded, size: 21),
                             label: const Text('Guide TV'),
                           ),
+                          if (current != null && canReplay(c, current))
+                            OutlinedButton.icon(
+                              onPressed: () => Launch.replay(context, c, current),
+                              icon: const Icon(Icons.replay_rounded, size: 21),
+                              label: const Text('Depuis le début'),
+                            ),
+                          _recordButton(c, current),
                           RoundAction(
                             icon: fav ? Icons.star_rounded : Icons.star_outline_rounded,
                             tooltip: fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
@@ -659,20 +667,33 @@ class _LiveScreenState extends State<LiveScreen> {
                           Text('À SUIVRE', style: labelStyle()),
                           const SizedBox(height: 8),
                           for (final p in upcoming)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3),
-                              child: Row(
-                                children: [
-                                  SizedBox(width: 52, child: Text(formatClock(p.start), style: _timeStyle)),
-                                  Expanded(
-                                    child: Text(
-                                      p.title,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => showProgramActions(context, c, p, channels: _visible),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 3),
+                                child: Row(
+                                  children: [
+                                    SizedBox(width: 52, child: Text(formatClock(p.start), style: _timeStyle)),
+                                    if (_s.repo.hasReminder(c.sourceId, c.extId, p.start))
+                                      const Padding(
+                                        padding: EdgeInsets.only(right: 6),
+                                        child: Icon(
+                                          Icons.notifications_active_rounded,
+                                          size: 14,
+                                          color: AppColors.accent,
+                                        ),
+                                      ),
+                                    Expanded(
+                                      child: Text(
+                                        p.title,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                             ),
                         ],
@@ -684,6 +705,33 @@ class _LiveScreenState extends State<LiveScreen> {
           );
         },
       ),
+    );
+  }
+
+  /// Records the current programme (or stops the recording of this channel).
+  Widget _recordButton(Channel c, Program? current) {
+    final active = _s.repo
+        .recordings()
+        .where((r) => r.status == RecordingStatus.recording && r.sourceId == c.sourceId && r.channelExt == c.extId)
+        .firstOrNull;
+    return RoundAction(
+      icon: active != null ? Icons.stop_rounded : Icons.fiber_manual_record_rounded,
+      tooltip: active != null
+          ? "Arrêter l'enregistrement"
+          : (current != null ? 'Enregistrer cette émission' : 'Enregistrer'),
+      color: AppColors.live,
+      onPressed: () async {
+        if (active != null) {
+          await _s.recordings.stop(active.id);
+        } else {
+          _s.recordings.recordNow(c, current: current);
+          if (mounted) {
+            ScaffoldMessenger.of(context)
+                .showSnackBar(SnackBar(content: Text('Enregistrement de « ${current?.title ?? c.name} » démarré')));
+          }
+        }
+        if (mounted) setState(() {});
+      },
     );
   }
 
@@ -810,6 +858,7 @@ class _LiveScreenState extends State<LiveScreen> {
                     channels: _visible,
                     epgVersion: _s.library.epg,
                     onPlay: (i) => _fullscreen(i),
+                    onProgram: (i, p) => showProgramActions(context, _visible[i], p, channels: _visible),
                   ),
                 ),
         ),
