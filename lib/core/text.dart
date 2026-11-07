@@ -174,3 +174,12 @@ String safeFileName(String name) {
   if (s.length > 120) s = s.substring(0, 120).trim();
   return s.isEmpty ? 'Bobine' : s;
 }
+
+/// Picture quality written in a title ("4K", "FHD", "HD"), or null.
+String? qualityOf(String name) {
+  final n = name.toLowerCase();
+  if (RegExp(r'\b(4k|uhd|2160p?)\b').hasMatch(n)) return '4K';
+  if (RegExp(r'\b(fhd|1080p?)\b').hasMatch(n)) return 'FHD';
+  if (RegExp(r'\b(hd|720p?)\b').hasMatch(n)) return 'HD';
+  return null;
+}

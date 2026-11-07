@@ -34,6 +34,7 @@ class AppSettings extends ChangeNotifier {
     reminderLeadMinutes = (json['reminderLeadMinutes'] as int?) ?? 2;
     checkUpdates = (json['checkUpdates'] as bool?) ?? true;
     askProfileAtStart = (json['askProfileAtStart'] as bool?) ?? true;
+    heroAutoplay = (json['heroAutoplay'] as bool?) ?? true;
   }
 
   static const _key = 'settings';
@@ -84,6 +85,9 @@ class AppSettings extends ChangeNotifier {
   /// Show "Qui regarde ?" at start when there are several profiles.
   late bool askProfileAtStart;
 
+  /// The billboards of the home, films and series pages change by themselves.
+  late bool heroAutoplay;
+
   void update(void Function(AppSettings s) change) {
     change(this);
     _save();
@@ -118,6 +122,7 @@ class AppSettings extends ChangeNotifier {
     'reminderLeadMinutes': reminderLeadMinutes,
     'checkUpdates': checkUpdates,
     'askProfileAtStart': askProfileAtStart,
+    'heroAutoplay': heroAutoplay,
   };
 
   /// Keys left out of backups: they only make sense on this computer.

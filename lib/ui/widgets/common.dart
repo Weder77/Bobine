@@ -20,6 +20,7 @@ class HoverBuilder extends StatefulWidget {
     this.autofocus = false,
     this.onFocus,
     this.onContextMenu,
+    this.onHighlight,
   });
   final Widget Function(BuildContext context, bool hovered) builder;
   final MouseCursor cursor;
@@ -39,6 +40,9 @@ class HoverBuilder extends StatefulWidget {
   /// Menu key / Maj+F10 while focused (right click is handled by the card).
   final ValueChanged<Offset>? onContextMenu;
 
+  /// Hovered or focused changed (to lift the card above its neighbours).
+  final ValueChanged<bool>? onHighlight;
+
   @override
   State<HoverBuilder> createState() => _HoverBuilderState();
 }
@@ -47,13 +51,22 @@ class _HoverBuilderState extends State<HoverBuilder> {
   bool _hover = false;
   bool _focus = false;
 
+  void _set({bool? hover, bool? focus}) {
+    final before = _hover || _focus;
+    setState(() {
+      _hover = hover ?? _hover;
+      _focus = focus ?? _focus;
+    });
+    if (before != (_hover || _focus)) widget.onHighlight?.call(_hover || _focus);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.onActivate == null) {
       return MouseRegion(
         cursor: widget.cursor,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
+        onEnter: (_) => _set(hover: true),
+        onExit: (_) => _set(hover: false),
         child: widget.builder(context, _hover),
       );
     }
@@ -85,9 +98,9 @@ class _HoverBuilderState extends State<HoverBuilder> {
               SingleActivator(LogicalKeyboardKey.f10, shift: true): _ContextMenuIntent(),
             },
       mouseCursor: widget.cursor,
-      onShowHoverHighlight: (v) => setState(() => _hover = v),
+      onShowHoverHighlight: (v) => _set(hover: v),
       onShowFocusHighlight: (v) {
-        setState(() => _focus = v);
+        _set(focus: v);
         if (v) widget.onFocus?.call();
       },
       actions: {

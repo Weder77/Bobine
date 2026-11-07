@@ -107,6 +107,13 @@ class TmdbInfo {
   return (t, y);
 }
 
+/// Name to show for a provider title: without year, language or quality
+/// markers ("FR - Odyssée (2018) [4K]" → "Odyssée").
+String displayTitle(String raw) {
+  final t = cleanTitle(raw).$1;
+  return t.isEmpty ? raw : t;
+}
+
 /// Fetches artwork, synopsis, cast and trailer from The Movie Database,
 /// with the user's own key. Results are kept 30 days (7 for "no match").
 class TmdbService {

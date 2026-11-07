@@ -209,22 +209,14 @@ class Repository {
 
   // --------------------------------------------------------------- channels
 
-  List<Channel> channels(int sourceId, {int? categoryId}) {
-    if (categoryId == null) {
-      return db
-          .select(
-            'SELECT * FROM channels WHERE source_id = ? AND ${_visible('channels', ContentKind.live, sourceId)} '
-            'ORDER BY position',
-            [sourceId],
-          )
-          .map(Channel.fromRow)
-          .toList();
-    }
+  List<Channel> channels(int sourceId, {int? categoryId, int? limit}) {
+    final where = categoryId == null ? '' : ' AND category_id = $categoryId';
+    final lim = limit == null ? '' : ' LIMIT $limit';
     return db
         .select(
-          'SELECT * FROM channels WHERE source_id = ? AND category_id = ? '
-          'AND ${_visible('channels', ContentKind.live, sourceId)} ORDER BY position',
-          [sourceId, categoryId],
+          'SELECT * FROM channels WHERE source_id = ?$where '
+          'AND ${_visible('channels', ContentKind.live, sourceId)} ORDER BY position$lim',
+          [sourceId],
         )
         .map(Channel.fromRow)
         .toList();

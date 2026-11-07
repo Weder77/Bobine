@@ -18,6 +18,15 @@ String formatRuntime(int? seconds) {
   return '${h}h${m.toString().padLeft(2, '0')}';
 }
 
+/// "2 h 30", "1 h 02", "45 min" (the design's way of writing a length).
+String formatSpan(Duration d) {
+  final total = d.inMinutes < 1 && d.inSeconds > 0 ? 1 : d.inMinutes;
+  final h = total ~/ 60;
+  final m = total % 60;
+  if (h == 0) return '$m min';
+  return '$h h ${m.toString().padLeft(2, '0')}';
+}
+
 const _days = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const _months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
