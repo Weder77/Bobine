@@ -5,7 +5,6 @@ import '../../core/theme.dart';
 import '../../player/mini_player.dart';
 import '../../services.dart';
 import '../launch.dart';
-import 'common.dart';
 
 /// "It starts now" card for a programme the user asked to be reminded of.
 class ReminderBanner extends StatelessWidget {
@@ -21,15 +20,21 @@ class ReminderBanner extends StatelessWidget {
         final starts = r.start.isAfter(DateTime.now())
             ? 'Dans ${r.start.difference(DateTime.now()).inMinutes + 1} min'
             : 'Commence maintenant';
+        // Bottom left: clear of the top bar menus and of the mini-player.
         return Positioned(
-          top: 104,
-          right: 48,
+          left: 32,
+          bottom: 32,
           width: 380,
           child: Material(
             type: MaterialType.transparency,
-            child: Glass(
-              radius: 18,
+            child: Container(
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+              decoration: BoxDecoration(
+                color: AppColors.surface3,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.borderStrong),
+                boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 30, offset: Offset(0, 12))],
+              ),
               child: Row(
                 children: [
                   const Icon(Icons.notifications_active_rounded, color: AppColors.accent),

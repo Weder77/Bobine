@@ -54,6 +54,9 @@ Future<bool> switchToProfile(BuildContext context, Profile p) async {
     }
   }
   s.switchProfile(p.id);
+  // From the top bar or the settings: start again from Accueil, with the
+  // new profile's favourites and progress ("Qui regarde ?" has no shell).
+  if (context.mounted) ShellNavigation.of(context)?.goTo(ShellTab.home);
   return true;
 }
 
