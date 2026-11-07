@@ -1,6 +1,7 @@
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme.dart';
 import 'net_image.dart';
@@ -18,6 +19,7 @@ class HoverBuilder extends StatefulWidget {
     this.focusScale = 1,
     this.autofocus = false,
     this.onFocus,
+    this.onContextMenu,
   });
   final Widget Function(BuildContext context, bool hovered) builder;
   final MouseCursor cursor;
@@ -33,6 +35,9 @@ class HoverBuilder extends StatefulWidget {
 
   /// Called when the keyboard focus arrives.
   final VoidCallback? onFocus;
+
+  /// Menu key / Maj+F10 while focused (right click is handled by the card).
+  final ValueChanged<Offset>? onContextMenu;
 
   @override
   State<HoverBuilder> createState() => _HoverBuilderState();
@@ -73,6 +78,12 @@ class _HoverBuilderState extends State<HoverBuilder> {
     }
     return FocusableActionDetector(
       autofocus: widget.autofocus,
+      shortcuts: widget.onContextMenu == null
+          ? null
+          : const {
+              SingleActivator(LogicalKeyboardKey.contextMenu): _ContextMenuIntent(),
+              SingleActivator(LogicalKeyboardKey.f10, shift: true): _ContextMenuIntent(),
+            },
       mouseCursor: widget.cursor,
       onShowHoverHighlight: (v) => setState(() => _hover = v),
       onShowFocusHighlight: (v) {
@@ -86,10 +97,22 @@ class _HoverBuilderState extends State<HoverBuilder> {
             return null;
           },
         ),
+        if (widget.onContextMenu != null)
+          _ContextMenuIntent: CallbackAction<_ContextMenuIntent>(
+            onInvoke: (_) {
+              final box = context.findRenderObject() as RenderBox?;
+              if (box != null) widget.onContextMenu!(box.localToGlobal(box.size.center(Offset.zero)));
+              return null;
+            },
+          ),
       },
       child: child,
     );
   }
+}
+
+class _ContextMenuIntent extends Intent {
+  const _ContextMenuIntent();
 }
 
 /// White ring around [child] while something inside it has the keyboard /
@@ -300,6 +323,7 @@ class PosterCard extends StatelessWidget {
     this.progress,
     this.favorite = false,
     this.width = 168,
+    this.onContextMenu,
   });
 
   final String title;
@@ -311,11 +335,15 @@ class PosterCard extends StatelessWidget {
   final double width;
   final VoidCallback onTap;
 
+  /// Right click / long press / menu key: quick actions at that position.
+  final ValueChanged<Offset>? onContextMenu;
+
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: HoverBuilder(
         onActivate: onTap,
+        onContextMenu: onContextMenu,
         focusScale: 1.04,
         builder: (context, hover) {
           return Semantics(
@@ -323,6 +351,8 @@ class PosterCard extends StatelessWidget {
             label: title,
             child: GestureDetector(
               onTap: onTap,
+              onSecondaryTapUp: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
+              onLongPressStart: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
               child: SizedBox(
                 width: width,
                 child: Column(
@@ -444,6 +474,7 @@ class LandscapeCard extends StatelessWidget {
     this.progress,
     this.width = 300,
     this.onRemove,
+    this.onContextMenu,
   });
 
   final String title;
@@ -455,11 +486,15 @@ class LandscapeCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onRemove;
 
+  /// Right click / long press / menu key: quick actions at that position.
+  final ValueChanged<Offset>? onContextMenu;
+
   @override
   Widget build(BuildContext context) {
     return RepaintBoundary(
       child: HoverBuilder(
         onActivate: onTap,
+        onContextMenu: onContextMenu,
         focusScale: 1.04,
         builder: (context, hover) {
           return Semantics(
@@ -467,6 +502,8 @@ class LandscapeCard extends StatelessWidget {
             label: title,
             child: GestureDetector(
               onTap: onTap,
+              onSecondaryTapUp: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
+              onLongPressStart: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
               child: SizedBox(
                 width: width,
                 child: Column(

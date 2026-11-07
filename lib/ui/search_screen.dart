@@ -10,6 +10,7 @@ import '../core/theme.dart';
 import '../data/repository.dart';
 import '../services.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'widgets/common.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -129,8 +130,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 final c = r.channels[i];
                 return HoverBuilder(
                   onActivate: () => Launch.channel(context, c, r.channels),
+                  onContextMenu: (at) => showChannelActions(context, c, r.channels, at),
                   builder: (context, hover) => GestureDetector(
                     onTap: () => Launch.channel(context, c, r.channels),
+                    onSecondaryTapUp: (d) => showChannelActions(context, c, r.channels, d.globalPosition),
                     child: Container(
                       width: 280,
                       padding: const EdgeInsets.all(14),
@@ -173,6 +176,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   image: m.poster,
                   rating: m.rating,
                   onTap: () => Launch.openMovie(context, m),
+                  onContextMenu: (at) => showMovieActions(context, m, at),
                 );
               },
             ),
@@ -191,6 +195,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   image: sr.poster,
                   rating: sr.rating,
                   onTap: () => Launch.openSeries(context, sr),
+                  onContextMenu: (at) => showSeriesActions(context, sr, at),
                 );
               },
             ),

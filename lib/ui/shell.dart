@@ -303,6 +303,8 @@ class _TabButton extends StatelessWidget {
   }
 }
 
+/// Round icon of the top bar: the icon lights up and a soft disc appears
+/// on hover (amber while its page is open).
 class _IconAction extends StatelessWidget {
   const _IconAction({required this.icon, required this.tooltip, required this.selected, required this.onTap});
   final IconData icon;
@@ -311,14 +313,38 @@ class _IconAction extends StatelessWidget {
   final VoidCallback onTap;
 
   @override
-  Widget build(BuildContext context) => IconButton(
-    tooltip: tooltip,
-    onPressed: onTap,
-    iconSize: 26,
-    style: IconButton.styleFrom(
-      backgroundColor: selected ? AppColors.accent.withValues(alpha: 0.14) : Colors.transparent,
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(milliseconds: 500),
+    child: HoverBuilder(
+      onActivate: onTap,
+      focusRingRadius: 999,
+      builder: (context, hover) => Semantics(
+        button: true,
+        selected: selected,
+        label: tooltip,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: selected
+                  ? AppColors.accent.withValues(alpha: hover ? 0.24 : 0.14)
+                  : (hover ? const Color(0x1FFFFFFF) : const Color(0x00FFFFFF)),
+            ),
+            child: Icon(
+              icon,
+              size: 26,
+              color: selected ? AppColors.accent : (hover ? AppColors.text : const Color(0xFFC4CAD4)),
+            ),
+          ),
+        ),
+      ),
     ),
-    icon: Icon(icon, color: selected ? AppColors.accent : const Color(0xFFC4CAD4)),
   );
 }
 

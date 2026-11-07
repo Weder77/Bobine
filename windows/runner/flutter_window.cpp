@@ -60,7 +60,7 @@ constexpr GamepadKey kGamepadKeys[] = {
     {XINPUT_GAMEPAD_B, VK_ESCAPE, false},
     {XINPUT_GAMEPAD_BACK, VK_ESCAPE, false},
     {XINPUT_GAMEPAD_X, VK_SPACE, false},
-    {XINPUT_GAMEPAD_Y, 'F', false},
+    {XINPUT_GAMEPAD_Y, VK_APPS, true},  // menu key: quick actions, full screen in the player
     {XINPUT_GAMEPAD_LEFT_SHOULDER, VK_PRIOR, true},
     {XINPUT_GAMEPAD_RIGHT_SHOULDER, VK_NEXT, true},
 };

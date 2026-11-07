@@ -444,7 +444,11 @@ class _Shortcuts extends StatelessWidget {
     ('I', 'Statistiques (codec, décodage, cache, débit)'),
     ('P', 'Mini-lecteur (continuer à regarder en naviguant)'),
     ('O', 'Fenêtre flottante par-dessus les autres apps (Windows)'),
-    ('Manette', 'Croix / stick : se déplacer · A : valider · B : retour · X : pause'),
+    ('Clic droit / touche Menu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
+    (
+      'Manette',
+      'Croix / stick : se déplacer · A : valider · B : retour · X : pause · Y : actions rapides (plein écran dans le lecteur)',
+    ),
     ('Échap', 'Quitter le plein écran / retour'),
   ];
 

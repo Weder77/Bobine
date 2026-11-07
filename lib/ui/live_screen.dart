@@ -14,6 +14,7 @@ import '../player/play_items.dart';
 import '../services.dart';
 import 'epg_grid.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'program_actions.dart';
 import 'settings_family.dart';
 import 'shell.dart';
@@ -726,45 +727,10 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 
   /// Right-click menu of a channel card.
-  Future<void> _channelMenu(Channel c, Offset at) async {
-    final fav = _favs.contains(c.extId);
-    final size = MediaQuery.sizeOf(context);
-    final v = await showMenu<String>(
-      context: context,
-      position: RelativeRect.fromLTRB(at.dx, at.dy, size.width - at.dx, size.height - at.dy),
-      items: [
-        const PopupMenuItem(value: 'play', child: Text('Regarder en plein écran')),
-        PopupMenuItem(value: 'fav', child: Text(fav ? 'Retirer des favoris' : 'Ajouter aux favoris')),
-        const PopupMenuItem(value: 'record', child: Text('Enregistrer maintenant')),
-        const PopupMenuItem(value: 'hide', child: Text('Masquer la chaîne')),
-      ],
-    );
-    if (!mounted) return;
-    switch (v) {
-      case 'play':
-        _fullscreen(_visible.indexOf(c));
-      case 'fav':
-        _toggleFav(c);
-      case 'record':
-        _s.recordings.recordNow(c, current: _s.epg.now(c));
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Enregistrement de « ${c.name} » démarré')));
-      case 'hide':
-        _s.repo.setChannelHidden(c.sourceId, c.extId, true);
-        _s.visibilityChanged();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('« ${c.name} » est masquée. Réglages → Catégories et chaînes pour la retrouver.'),
-            action: SnackBarAction(
-              label: 'Annuler',
-              onPressed: () {
-                _s.repo.setChannelHidden(c.sourceId, c.extId, false);
-                _s.visibilityChanged();
-              },
-            ),
-          ),
-        );
-    }
-  }
+  /// Right click on a channel (shared quick actions; "Regarder" keeps the
+  /// preview stream).
+  Future<void> _channelMenu(Channel c, Offset at) =>
+      showChannelActions(context, c, _visible, at, onPlay: () => _fullscreen(_visible.indexOf(c)));
 
   /// Records the current programme (or stops the recording of this channel).
   Widget _recordButton(Channel c, Program? current) {

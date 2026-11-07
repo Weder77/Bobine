@@ -8,6 +8,7 @@ import '../data/models.dart';
 import '../features/tmdb.dart';
 import '../services.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'widgets/common.dart';
 import 'widgets/detail_layout.dart';
 
@@ -205,6 +206,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
                       onTap: () =>
                           Navigator.of(context)
                               .pushReplacement(MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m))),
+                      onContextMenu: (at) => showMovieActions(context, m, at),
                     );
                   },
                 ),

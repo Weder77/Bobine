@@ -515,6 +515,42 @@ class Repository {
     return out;
   }
 
+  /// Marks a film or an episode as seen (it leaves "Reprendre"), or with
+  /// [seen] false forgets that it was watched.
+  void setWatched(
+    int sourceId,
+    ContentKind kind,
+    String extId, {
+    required bool seen,
+    required String title,
+    String? subtitle,
+    String? image,
+    String? seriesExt,
+  }) {
+    if (!seen) return removeProgress(sourceId, kind, extId);
+    final old = progress(sourceId, kind, extId);
+    final duration = old != null && old.duration.inMilliseconds > 0 ? old.duration.inMilliseconds : 1;
+    write(
+      () => db.execute(
+        'INSERT OR REPLACE INTO progress (profile_id, source_id, kind, ext_id, position_ms, duration_ms, finished, '
+        'updated_at, title, subtitle, image, series_ext) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)',
+        [
+          profileId,
+          sourceId,
+          kind.db,
+          extId,
+          duration,
+          duration,
+          DateTime.now().millisecondsSinceEpoch,
+          old?.title ?? title,
+          old?.subtitle ?? subtitle,
+          old?.image ?? image,
+          old?.seriesExt ?? seriesExt,
+        ],
+      ),
+    );
+  }
+
   void removeProgress(int sourceId, ContentKind kind, String extId) => write(
     () => db.execute(
       'DELETE FROM progress WHERE profile_id = $profileId AND source_id = ? AND kind = ? AND ext_id = ?',
