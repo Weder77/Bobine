@@ -41,7 +41,7 @@ void SendKey(WORD vk, bool extended) {
   inputs[0].ki.dwFlags = extended ? KEYEVENTF_EXTENDEDKEY : 0;
   inputs[1] = inputs[0];
   inputs[1].ki.dwFlags |= KEYEVENTF_KEYUP;
-  SendInput(2, inputs, sizeof(INPUT));
+  SendInput(2, inputs, static_cast<int>(sizeof(INPUT)));
 }
 
 struct GamepadKey {
@@ -184,9 +184,10 @@ void FlutterWindow::SetFloating(bool on) {
     const int width = static_cast<int>(480 * scale);
     const int height = static_cast<int>(270 * scale);
     const int margin = static_cast<int>(24 * scale);
-    SetWindowLongPtr(hwnd, GWL_STYLE,
-                     (saved_style_ & ~WS_OVERLAPPEDWINDOW) | WS_POPUP |
-                         WS_VISIBLE);
+    const LONG_PTR style =
+        (saved_style_ & ~static_cast<LONG_PTR>(WS_OVERLAPPEDWINDOW)) |
+        static_cast<LONG_PTR>(WS_POPUP) | static_cast<LONG_PTR>(WS_VISIBLE);
+    SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowPos(hwnd, HWND_TOPMOST, info.rcWork.right - width - margin,
                  info.rcWork.bottom - height - margin, width, height,
                  SWP_FRAMECHANGED | SWP_SHOWWINDOW);
@@ -215,16 +216,17 @@ void FlutterWindow::PollGamepad() {
     buttons = state.Gamepad.wButtons;
     // The left stick moves like the d-pad.
     constexpr SHORT kDeadZone = 16000;
-    if (state.Gamepad.sThumbLY > kDeadZone) buttons |= XINPUT_GAMEPAD_DPAD_UP;
-    if (state.Gamepad.sThumbLY < -kDeadZone) {
-      buttons |= XINPUT_GAMEPAD_DPAD_DOWN;
-    }
+    // (WORD arithmetic is done in int: casts keep /W4 /WX quiet.)
+    WORD stick = 0;
+    if (state.Gamepad.sThumbLY > kDeadZone) stick = XINPUT_GAMEPAD_DPAD_UP;
+    if (state.Gamepad.sThumbLY < -kDeadZone) stick = XINPUT_GAMEPAD_DPAD_DOWN;
     if (state.Gamepad.sThumbLX < -kDeadZone) {
-      buttons |= XINPUT_GAMEPAD_DPAD_LEFT;
+      stick = static_cast<WORD>(stick | XINPUT_GAMEPAD_DPAD_LEFT);
     }
     if (state.Gamepad.sThumbLX > kDeadZone) {
-      buttons |= XINPUT_GAMEPAD_DPAD_RIGHT;
+      stick = static_cast<WORD>(stick | XINPUT_GAMEPAD_DPAD_RIGHT);
     }
+    buttons = static_cast<WORD>(buttons | stick);
     break;
   }
   if (!connected) {
@@ -232,12 +234,12 @@ void FlutterWindow::PollGamepad() {
     return;
   }
   const ULONGLONG now = GetTickCount64();
-  const WORD pressed = buttons & ~gamepad_buttons_;
+  const WORD pressed = static_cast<WORD>(buttons & ~gamepad_buttons_);
   for (const auto& key : kGamepadKeys) {
     if ((pressed & key.button) != 0) SendKey(key.vk, key.extended);
   }
   // Holding a direction repeats it, like a keyboard key.
-  const WORD held = buttons & kDirections;
+  const WORD held = static_cast<WORD>(buttons & kDirections);
   if ((pressed & kDirections) != 0) {
     gamepad_repeat_at_ = now + 400;
   } else if (held != 0 && now >= gamepad_repeat_at_) {
