@@ -47,14 +47,24 @@ jobs:
       - name: Version
         id: version
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $v = ((Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value)
           "value=$v" >> $env:GITHUB_OUTPUT
+          $release = $false
           if ($env:GITHUB_REF -like 'refs/tags/v*') {
             $tag = $env:GITHUB_REF_NAME.TrimStart('v')
             if ($tag -ne $v) { throw "Le tag v$tag ne correspond pas à la version $v de pubspec.yaml" }
+            $release = $true
+          } elseif ($env:GITHUB_REF -eq 'refs/heads/main' -and $env:GITHUB_EVENT_NAME -eq 'push') {
+            # A version not yet published, merged into main: release it.
+            gh release view "v$v" --repo $env:GITHUB_REPOSITORY *> $null
+            $release = ($LASTEXITCODE -ne 0)
           }
-          Write-Host "Lumen $v"
+          "release=$($release.ToString().ToLower())" >> $env:GITHUB_OUTPUT
+          Write-Host "Lumen $v — publication : $release"
+          exit 0
 
       - name: Archive
         shell: pwsh
@@ -86,10 +96,14 @@ jobs:
           path: dist/Lumen-Setup-*.exe
           retention-days: 30
 
-      - name: Publication (tags v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+      # Tag v* pushed, or new version merged into main (the tag is then created here).
+      - name: Publication de la Release
+        if: steps.version.outputs.release == 'true'
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.value }}
+          name: Lumen ${{ steps.version.outputs.value }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: |
             Lumen-windows-x64.zip
