@@ -27,6 +27,7 @@ void main() {
     opened.add(r);
     return r;
   }
+
   late String base;
   final now = DateTime.now();
 
@@ -41,7 +42,9 @@ void main() {
         case '/playlist.m3u':
           res.write('#EXTM3U x-tvg-url="$base/xmltv.php?username=u&password=p"\n');
           for (var i = 0; i < 1500; i++) {
-            res.write('#EXTINF:-1 tvg-id="ch$i" tvg-logo="$base/logo$i.png" group-title="Groupe ${i % 5}",Chaîne $i HD\n');
+            res.write(
+              '#EXTINF:-1 tvg-id="ch$i" tvg-logo="$base/logo$i.png" group-title="Groupe ${i % 5}",Chaîne $i HD\n',
+            );
             res.write('$base/live/u/p/$i.ts\n');
           }
           res.write('#EXTINF:-1 group-title="Films",Dune (2021)\n$base/movie/u/p/900.mkv\n');
@@ -49,35 +52,62 @@ void main() {
           res.write('#EXTINF:-1 group-title="Séries",Lupin S01E02\n$base/series/u/p/902.mp4\n');
         case '/player_api.php':
           if (q['password'] != 'p') {
-            res.write(jsonEncode({'user_info': {'auth': 0}}));
+            res.write(
+              jsonEncode({
+                'user_info': {'auth': 0},
+              }),
+            );
             break;
           }
           final data = switch (q['action']) {
             null => {
-                'user_info': {'auth': 1, 'status': 'Active', 'exp_date': '1893456000', 'max_connections': '2'},
-                'server_info': {'url': '127.0.0.1'},
-              },
+              'user_info': {'auth': 1, 'status': 'Active', 'exp_date': '1893456000', 'max_connections': '2'},
+              'server_info': {'url': '127.0.0.1'},
+            },
             'get_live_categories' => [
-                {'category_id': '1', 'category_name': 'France'},
-                {'category_id': 2, 'category_name': 'Sport'},
-              ],
+              {'category_id': '1', 'category_name': 'France'},
+              {'category_id': 2, 'category_name': 'Sport'},
+            ],
             'get_live_streams' => [
-                for (var i = 0; i < 300; i++)
-                  {'num': i + 1, 'name': 'FR: Chaîne $i', 'stream_id': 1000 + i, 'stream_icon': '',
-                   'epg_channel_id': i == 0 ? 'ch0' : null, 'category_id': i.isEven ? '1' : '2',
-                   'tv_archive': i == 1 ? 1 : 0, 'tv_archive_duration': '7'},
-              ],
-            'get_vod_categories' => [{'category_id': '10', 'category_name': 'Action'}],
+              for (var i = 0; i < 300; i++)
+                {
+                  'num': i + 1,
+                  'name': 'FR: Chaîne $i',
+                  'stream_id': 1000 + i,
+                  'stream_icon': '',
+                  'epg_channel_id': i == 0 ? 'ch0' : null,
+                  'category_id': i.isEven ? '1' : '2',
+                  'tv_archive': i == 1 ? 1 : 0,
+                  'tv_archive_duration': '7',
+                },
+            ],
+            'get_vod_categories' => [
+              {'category_id': '10', 'category_name': 'Action'},
+            ],
             'get_vod_streams' => [
-                {'name': 'Mad Max (2015)', 'stream_id': '5', 'rating': '8.1', 'added': '1700000000',
-                 'category_id': '10', 'container_extension': 'mkv'},
-                {'name': 'Sans catégorie', 'stream_id': 6, 'rating_5based': 3, 'category_id': '99'},
-              ],
-            'get_series_categories' => {'0': {'category_id': '20', 'category_name': 'Drame'}},
+              {
+                'name': 'Mad Max (2015)',
+                'stream_id': '5',
+                'rating': '8.1',
+                'added': '1700000000',
+                'category_id': '10',
+                'container_extension': 'mkv',
+              },
+              {'name': 'Sans catégorie', 'stream_id': 6, 'rating_5based': 3, 'category_id': '99'},
+            ],
+            'get_series_categories' => {
+              '0': {'category_id': '20', 'category_name': 'Drame'},
+            },
             'get_series' => [
-                {'name': 'Dark', 'series_id': 77, 'cover': 'http://img/dark.jpg', 'releaseDate': '2017-12-01',
-                 'category_id': '20', 'backdrop_path': ['http://img/dark_b.jpg']},
-              ],
+              {
+                'name': 'Dark',
+                'series_id': 77,
+                'cover': 'http://img/dark.jpg',
+                'releaseDate': '2017-12-01',
+                'category_id': '20',
+                'backdrop_path': ['http://img/dark_b.jpg'],
+              },
+            ],
             _ => <Object>[],
           };
           res.write(jsonEncode(data));
@@ -89,8 +119,10 @@ void main() {
             var t = now.subtract(const Duration(hours: 3));
             for (var i = 0; i < 24; i++) {
               final e = t.add(const Duration(minutes: 30));
-              xml.write('<programme start="${_xmltvTime(t)}" stop="${_xmltvTime(e)}" channel="$id">'
-                  '<title>Émission $i</title><desc>Desc $i</desc></programme>');
+              xml.write(
+                '<programme start="${_xmltvTime(t)}" stop="${_xmltvTime(e)}" channel="$id">'
+                '<title>Émission $i</title><desc>Desc $i</desc></programme>',
+              );
               t = e;
             }
           }
@@ -150,8 +182,7 @@ void main() {
   test('Xtream import, URLs, favourites and progress survive refresh', () async {
     final path = '${tmp.path}/xt.db';
     final repo = track(Repository(openAppDatabase(path)));
-    final id = repo.insertSource(
-        name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
+    final id = repo.insertSource(name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
     final r = await importXtream(path, id, null);
     expect(r.live, 300);
     expect(r.movies, 2);
@@ -171,8 +202,14 @@ void main() {
     expect(repo.channels(id)[1].catchupDays, 7);
 
     repo.toggleFavorite(id, ContentKind.live, ch.extId);
-    repo.saveProgress(sourceId: id, kind: ContentKind.movie, extId: movie.extId,
-        position: const Duration(minutes: 40), duration: const Duration(minutes: 120), title: movie.name);
+    repo.saveProgress(
+      sourceId: id,
+      kind: ContentKind.movie,
+      extId: movie.extId,
+      position: const Duration(minutes: 40),
+      duration: const Duration(minutes: 120),
+      title: movie.name,
+    );
     await importXtream(path, id, null); // refresh replaces content
     expect(repo.favoriteChannels(id).single.extId, ch.extId);
     expect(repo.continueWatching(id).single.title, 'Mad Max (2015)');
@@ -184,8 +221,7 @@ void main() {
 
     // EPG through the isolate-based service (checks isolate message safety).
     var epgChanged = false;
-    final service = ImportService(
-        dbPath: path, onContentChanged: (_) {}, onEpgChanged: (_) => epgChanged = true);
+    final service = ImportService(dbPath: path, onContentChanged: (_) {}, onEpgChanged: (_) => epgChanged = true);
     await service.refresh(source, content: true, epg: true);
     expect(epgChanged, isTrue);
     expect(repo.epgProgramCount(id), greaterThan(20));
@@ -199,12 +235,14 @@ void main() {
   test('EPG offset shifts programme times', () async {
     final path = '${tmp.path}/offset.db';
     final repo = track(Repository(openAppDatabase(path)));
-    final a = repo.insertSource(
-        name: 'A', type: SourceType.m3u, url: '$base/playlist.m3u',
-        epgUrl: '$base/xmltv.php');
+    final a = repo.insertSource(name: 'A', type: SourceType.m3u, url: '$base/playlist.m3u', epgUrl: '$base/xmltv.php');
     final b = repo.insertSource(
-        name: 'B', type: SourceType.m3u, url: '$base/playlist.m3u',
-        epgUrl: '$base/xmltv.php', epgOffset: 90);
+      name: 'B',
+      type: SourceType.m3u,
+      url: '$base/playlist.m3u',
+      epgUrl: '$base/xmltv.php',
+      epgOffset: 90,
+    );
     expect(repo.source(b)!.epgOffsetMinutes, 90);
     await importEpg(path, a, 3, null);
     await importEpg(path, b, 3, null);
@@ -217,20 +255,29 @@ void main() {
     expect(shifted.start.difference(first.start), const Duration(minutes: 90));
   });
 
-  test('migration v1 -> v2 adds epg_offset', () {
+  test('migration v1 -> current keeps sources, favourites and progress (profile 1)', () {
     final path = '${tmp.path}/migrate.db';
-    openAppDatabase(path).close();
     final raw = sqlite3.open(path);
-    raw.execute('ALTER TABLE sources DROP COLUMN epg_offset');
+    createSchemaV1(raw);
     raw.execute('PRAGMA user_version = 1');
     raw.execute(
-        "INSERT INTO sources (name, type, url, created_at) VALUES ('old', 'm3u', 'http://x/list.m3u', 0)");
+      "INSERT INTO sources (id, name, type, url, created_at) VALUES (1, 'old', 'm3u', 'http://x/list.m3u', 0)",
+    );
+    raw.execute("INSERT INTO favorites VALUES (1, 'movie', 'm42', 5)");
+    raw.execute("INSERT INTO progress VALUES (1, 'movie', 'm42', 60000, 600000, 0, 7, 'Film', NULL, NULL, NULL)");
     raw.close();
     final repo = track(Repository(openAppDatabase(path)));
     expect(repo.db.select('PRAGMA user_version').first.columnAt(0), kSchemaVersion);
     final src = repo.sources().single;
     expect(src.epgOffsetMinutes, 0);
     expect(src.url, 'http://x/list.m3u');
+    expect(repo.profiles().single.id, 1);
+    expect(repo.favoriteKeys(1, ContentKind.movie), {'m42'});
+    expect(repo.progress(1, ContentKind.movie, 'm42')?.position, const Duration(minutes: 1));
+    // Another profile starts empty.
+    repo.profileId = repo.createProfile(name: 'Léa', color: 0xFF7FA6FF);
+    expect(repo.favoriteKeys(1, ContentKind.movie), isEmpty);
+    expect(repo.progress(1, ContentKind.movie, 'm42'), isNull);
   });
 
   test('a programme that started long ago is still listed while running', () {
@@ -238,10 +285,10 @@ void main() {
     final id = repo.insertSource(name: 'S', type: SourceType.m3u, url: 'http://x');
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     // 24 h block that started 10 h ago, then a normal programme.
-    repo.db.execute('INSERT INTO epg_programs VALUES (?, ?, ?, ?, ?, ?)',
-        [id, 'news', now - 10 * 3600, now + 14 * 3600, 'Info en continu', null]);
-    repo.db.execute('INSERT INTO epg_programs VALUES (?, ?, ?, ?, ?, ?)',
-        [id, 'news', now + 14 * 3600, now + 15 * 3600, 'Journal', null]);
+    const insert =
+        'INSERT INTO epg_programs (source_id, channel, start, stop, title, description) VALUES (?, ?, ?, ?, ?, ?)';
+    repo.db.execute(insert, [id, 'news', now - 10 * 3600, now + 14 * 3600, 'Info en continu', null]);
+    repo.db.execute(insert, [id, 'news', now + 14 * 3600, now + 15 * 3600, 'Journal', null]);
     final list = repo.programs(id, 'news', DateTime.now(), DateTime.now().add(const Duration(days: 1)));
     expect(list.map((p) => p.title), ['Info en continu', 'Journal']);
   });

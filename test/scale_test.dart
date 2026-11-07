@@ -23,17 +23,23 @@ void main() {
 
     final m3u = StringBuffer('#EXTM3U\n');
     for (var i = 0; i < liveCount; i++) {
-      m3u.write('#EXTINF:-1 tvg-id="ch$i" tvg-logo="http://img/l$i.png" group-title="Pays ${i % 200}",'
-          'FR: Chaîne numéro $i HD\nhttp://srv/live/u/p/$i.ts\n');
+      m3u.write(
+        '#EXTINF:-1 tvg-id="ch$i" tvg-logo="http://img/l$i.png" group-title="Pays ${i % 200}",'
+        'FR: Chaîne numéro $i HD\nhttp://srv/live/u/p/$i.ts\n',
+      );
     }
     for (var i = 0; i < movieCount; i++) {
-      m3u.write('#EXTINF:-1 tvg-logo="http://img/m$i.jpg" group-title="Films ${i % 150}",'
-          'Film Épique $i (${1960 + i % 65})\nhttp://srv/movie/u/p/$i.mkv\n');
+      m3u.write(
+        '#EXTINF:-1 tvg-logo="http://img/m$i.jpg" group-title="Films ${i % 150}",'
+        'Film Épique $i (${1960 + i % 65})\nhttp://srv/movie/u/p/$i.mkv\n',
+      );
     }
     for (var i = 0; i < episodeCount; i++) {
       final show = i ~/ 10;
-      m3u.write('#EXTINF:-1 group-title="Séries ${show % 80}",Série $show S0${1 + (i % 10) ~/ 5}E${(i % 5) + 1}\n'
-          'http://srv/series/u/p/$i.mp4\n');
+      m3u.write(
+        '#EXTINF:-1 group-title="Séries ${show % 80}",Série $show S0${1 + (i % 10) ~/ 5}E${(i % 5) + 1}\n'
+        'http://srv/series/u/p/$i.mp4\n',
+      );
     }
     File(m3uPath).writeAsStringSync(m3u.toString());
 
@@ -53,8 +59,10 @@ void main() {
       var k = 0;
       while (d.isBefore(now.add(const Duration(days: 4)))) {
         final e = d.add(Duration(minutes: 30 + (k % 4) * 15));
-        xml.write('<programme start="${t(d)}" stop="${t(e)}" channel="ch$c"><title lang="fr">'
-            'Programme $k &amp; co</title><desc lang="fr">Description du programme $k.</desc></programme>\n');
+        xml.write(
+          '<programme start="${t(d)}" stop="${t(e)}" channel="ch$c"><title lang="fr">'
+          'Programme $k &amp; co</title><desc lang="fr">Description du programme $k.</desc></programme>\n',
+        );
         d = e;
         k++;
       }

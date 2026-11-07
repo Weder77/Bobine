@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/models.dart';
 import '../player/play_items.dart';
 import '../player/player_screen.dart';
+import '../player/player_session.dart';
 import '../services.dart';
 import 'movie_detail_screen.dart';
 import 'series_detail_screen.dart';

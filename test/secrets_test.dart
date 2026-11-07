@@ -29,13 +29,14 @@ void main() {
     // A legacy row written in clear by an older version.
     openAppDatabase(path).close();
     final raw = sqlite3.open(path);
-    raw.execute("INSERT INTO sources (name, type, url, username, password, created_at) "
-        "VALUES ('old', 'xtream', 'http://srv:8080', 'bob', 'hunter2', 0)");
+    raw.execute(
+      "INSERT INTO sources (name, type, url, username, password, created_at) "
+      "VALUES ('old', 'xtream', 'http://srv:8080', 'bob', 'hunter2', 0)",
+    );
     raw.close();
 
     final repo = Repository(openAppDatabase(path)); // migrates legacy secrets
-    final id = repo.insertSource(
-        name: 'new', type: SourceType.m3u, url: 'http://srv/get.php?username=a&password=b');
+    final id = repo.insertSource(name: 'new', type: SourceType.m3u, url: 'http://srv/get.php?username=a&password=b');
     final stored = repo.db.select('SELECT url, password FROM sources ORDER BY id');
     expect(stored[0]['password'], startsWith(Secrets.prefix));
     expect(stored[1]['url'], startsWith(Secrets.prefix));

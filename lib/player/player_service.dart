@@ -22,6 +22,8 @@ class PlayItem {
     this.image,
     this.userAgent,
     this.seriesExt,
+    this.isReplay = false,
+    this.saveProgress = true,
   });
 
   final ContentKind kind;
@@ -34,7 +36,16 @@ class PlayItem {
   final String? userAgent;
   final String? seriesExt;
 
-  bool get isLive => kind == ContentKind.live;
+  /// A past programme of a live channel (catch-up): seekable like a film.
+  final bool isReplay;
+
+  /// Whether the position is remembered ("Reprendre"): films and episodes.
+  final bool saveProgress;
+
+  bool get isLive => kind == ContentKind.live && !isReplay;
+
+  /// Remembers the position for "Reprendre".
+  bool get tracksProgress => saveProgress && !isReplay && kind != ContentKind.live;
 }
 
 /// A contiguous range of the stream that is already in the demuxer cache.

@@ -1,9 +1,10 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../core/secrets.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 2;
+const int kSchemaVersion = 3;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -53,6 +54,7 @@ void _migrate(Database db) {
       // EPG time shift (minutes) for guides published with a wrong timezone.
       db.execute('ALTER TABLE sources ADD COLUMN epg_offset INTEGER NOT NULL DEFAULT 0');
     }
+    if (version < 3) _migrateV3(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -73,6 +75,147 @@ void _protectLegacySecrets(Database db) {
     }
   }
 }
+
+/// v3: local profiles, category / channel preferences (hide, lock, order),
+/// programme reminders, recordings, TMDB cache, replay and guide search.
+void _migrateV3(Database db) {
+  final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+  // Replay: how the provider builds catch-up addresses (M3U playlists).
+  db.execute('ALTER TABLE channels ADD COLUMN catchup_type TEXT');
+  db.execute('ALTER TABLE channels ADD COLUMN catchup_source TEXT');
+  // Name key used to find a channel's guide when it has no guide id.
+  db.execute('ALTER TABLE channels ADD COLUMN match_key TEXT');
+  db.execute('CREATE INDEX idx_channels_epg ON channels(source_id, lower(epg_id))');
+  db.execute('CREATE INDEX idx_channels_match ON channels(source_id, match_key)');
+  db.execute('UPDATE sources SET content_updated_at = NULL');
+  // Accent-free programme titles for the guide search. Guides are re-imported
+  // at the next start (epg_updated_at cleared) so it gets filled.
+  db.execute('ALTER TABLE epg_programs ADD COLUMN search TEXT');
+  db.execute('UPDATE sources SET epg_updated_at = NULL');
+
+  db.execute('''
+    CREATE TABLE profiles (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      color INTEGER NOT NULL,
+      kids INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL
+    )''');
+  db.execute("INSERT INTO profiles (id, name, color, kids, created_at) VALUES (1, 'Moi', ${0xFFFFB547}, 0, $now)");
+
+  // User data now belongs to a profile.
+  db.execute('''
+    CREATE TABLE favorites_v3 (
+      profile_id INTEGER NOT NULL DEFAULT 1 REFERENCES profiles(id) ON DELETE CASCADE,
+      source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      ext_id TEXT NOT NULL,
+      added_at INTEGER NOT NULL,
+      PRIMARY KEY (profile_id, source_id, kind, ext_id)
+    ) WITHOUT ROWID''');
+  db.execute('INSERT INTO favorites_v3 SELECT 1, source_id, kind, ext_id, added_at FROM favorites');
+  db.execute('DROP TABLE favorites');
+  db.execute('ALTER TABLE favorites_v3 RENAME TO favorites');
+
+  db.execute('''
+    CREATE TABLE progress_v3 (
+      profile_id INTEGER NOT NULL DEFAULT 1 REFERENCES profiles(id) ON DELETE CASCADE,
+      source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      ext_id TEXT NOT NULL,
+      position_ms INTEGER NOT NULL,
+      duration_ms INTEGER NOT NULL,
+      finished INTEGER NOT NULL DEFAULT 0,
+      updated_at INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      subtitle TEXT,
+      image TEXT,
+      series_ext TEXT,
+      PRIMARY KEY (profile_id, source_id, kind, ext_id)
+    ) WITHOUT ROWID''');
+  db.execute(
+    'INSERT INTO progress_v3 SELECT 1, source_id, kind, ext_id, position_ms, duration_ms, finished, updated_at, '
+    'title, subtitle, image, series_ext FROM progress',
+  );
+  db.execute('DROP TABLE progress');
+  db.execute('ALTER TABLE progress_v3 RENAME TO progress');
+  db.execute('CREATE INDEX idx_progress_recent ON progress(profile_id, source_id, updated_at DESC)');
+
+  db.execute('''
+    CREATE TABLE recent_v3 (
+      profile_id INTEGER NOT NULL DEFAULT 1 REFERENCES profiles(id) ON DELETE CASCADE,
+      source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      ext_id TEXT NOT NULL,
+      watched_at INTEGER NOT NULL,
+      PRIMARY KEY (profile_id, source_id, ext_id)
+    ) WITHOUT ROWID''');
+  db.execute('INSERT INTO recent_v3 SELECT 1, source_id, ext_id, watched_at FROM recent_channels');
+  db.execute('DROP TABLE recent_channels');
+  db.execute('ALTER TABLE recent_v3 RENAME TO recent_channels');
+
+  // Category preferences, keyed by the provider's category id (row ids change
+  // at every import).
+  db.execute('''
+    CREATE TABLE category_prefs (
+      source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      ext_id TEXT NOT NULL,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      locked INTEGER NOT NULL DEFAULT 0,
+      position INTEGER,
+      PRIMARY KEY (source_id, kind, ext_id)
+    ) WITHOUT ROWID''');
+  db.execute('''
+    CREATE TABLE channel_prefs (
+      source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      ext_id TEXT NOT NULL,
+      hidden INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (source_id, ext_id)
+    ) WITHOUT ROWID''');
+
+  db.execute('''
+    CREATE TABLE reminders (
+      id INTEGER PRIMARY KEY,
+      profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+      source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      channel_ext TEXT NOT NULL,
+      channel_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      start INTEGER NOT NULL,
+      stop INTEGER NOT NULL,
+      UNIQUE (profile_id, source_id, channel_ext, start)
+    )''');
+
+  db.execute('''
+    CREATE TABLE recordings (
+      id INTEGER PRIMARY KEY,
+      source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+      channel_ext TEXT NOT NULL,
+      channel_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      start INTEGER NOT NULL,
+      stop INTEGER NOT NULL,
+      path TEXT,
+      status TEXT NOT NULL,
+      error TEXT,
+      size INTEGER,
+      created_at INTEGER NOT NULL
+    )''');
+
+  db.execute('''
+    CREATE TABLE tmdb_cache (
+      source_id INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      ext_id TEXT NOT NULL,
+      json TEXT,
+      fetched_at INTEGER NOT NULL,
+      PRIMARY KEY (source_id, kind, ext_id)
+    ) WITHOUT ROWID''');
+}
+
+/// The first schema, as created by Lumen 1.0 (to test migrations).
+@visibleForTesting
+void createSchemaV1(Database db) => _createV1(db);
 
 void _createV1(Database db) {
   db.execute('''

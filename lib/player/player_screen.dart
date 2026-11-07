@@ -14,52 +14,24 @@ import '../data/models.dart';
 import '../services.dart';
 import '../ui/widgets/common.dart';
 import 'play_items.dart';
+import 'player_panels.dart';
+import 'player_session.dart';
 import 'player_service.dart';
 import 'player_widgets.dart';
-
-class PlayerSession {
-  const PlayerSession({
-    required this.item,
-    this.start,
-    this.channels,
-    this.channelIndex = 0,
-    this.episodes,
-    this.series,
-    this.keepAlive = false,
-  });
-
-  final PlayItem item;
-
-  /// Resume position.
-  final Duration? start;
-
-  /// Live: channels of the current list, for zapping.
-  final List<Channel>? channels;
-  final int channelIndex;
-
-  /// Series: all episodes, for "next episode".
-  final List<Episode>? episodes;
-  final Series? series;
-
-  /// Keep the stream running when leaving (live preview continues behind).
-  final bool keepAlive;
-}
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key, required this.session});
   final PlayerSession session;
 
-  static Future<void> open(BuildContext context, PlayerSession session) {
-    return Navigator.of(context).push(
-      PageRouteBuilder(
-        opaque: true,
-        transitionDuration: const Duration(milliseconds: 180),
-        reverseTransitionDuration: const Duration(milliseconds: 150),
-        pageBuilder: (_, _, _) => PlayerScreen(session: session),
-        transitionsBuilder: (_, anim, _, child) => FadeTransition(opacity: anim, child: child),
-      ),
-    );
-  }
+  static Future<void> open(BuildContext context, PlayerSession session) => Navigator.of(context).push(route(session));
+
+  static Route<void> route(PlayerSession session) => PageRouteBuilder(
+    opaque: true,
+    transitionDuration: const Duration(milliseconds: 180),
+    reverseTransitionDuration: const Duration(milliseconds: 150),
+    pageBuilder: (_, _, _) => PlayerScreen(session: session),
+    transitionsBuilder: (_, anim, _, child) => FadeTransition(opacity: anim, child: child),
+  );
 
   @override
   State<PlayerScreen> createState() => _PlayerScreenState();
@@ -115,7 +87,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   String _aid = '';
   String _sid = '';
 
-  Timer? _hideTimer, _osdTimer, _digitTimer, _tick, _saveTimer, _nextTimer;
+  Timer? _hideTimer, _osdTimer, _digitTimer, _tick, _nextTimer;
+
+  /// Shrunk into the mini-player / floating window: playback goes on.
+  bool _minimized = false;
   int _tickCount = 0;
 
   bool get _isLive => _item.isLive;
@@ -132,6 +107,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _source = _s.repo.source(_item.sourceId);
     _volumeBeforeMute = _ps.player.state.volume > 0 ? _ps.player.state.volume : 100;
 
+    // This screen now shows the video: no mini-player at the same time.
+    _s.pip.release();
     unawaited(_ps.play(_item, start: widget.session.start));
     if (_isLive) _s.repo.touchChannel(_item.sourceId, _item.extId);
 
@@ -155,7 +132,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     // Light-weight UI clock: position 4×/s, cache ranges 1×/s, stats 1×/s.
     _tick = Timer.periodic(const Duration(milliseconds: 250), (_) => _onTick());
-    _saveTimer = Timer.periodic(const Duration(seconds: 10), (_) => _saveProgress());
 
     _fullscreen = AppWindow.fullscreen.value;
     if (!_fullscreen && _s.settings.autoFullscreen) _setFullscreen(true);
@@ -164,8 +140,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
-    _saveProgress(notify: true);
-    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick, _saveTimer, _nextTimer]) {
+    _s.tracker.flush();
+    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick, _nextTimer]) {
       t?.cancel();
     }
     for (final s in _subs) {
@@ -174,7 +150,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // Deferred: these notify listeners, which must not happen while the
     // widget tree is being unmounted.
     final ps = _ps;
-    final keepAlive = widget.session.keepAlive;
+    final keepAlive = widget.session.keepAlive || _minimized;
     final wasFullscreen = _fullscreen;
     scheduleMicrotask(() {
       if (wasFullscreen) AppWindow.setFullscreen(false);
@@ -227,47 +203,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   // ------------------------------------------------------------ progress
 
-  void _saveProgress({bool notify = false}) {
-    if (_isLive) return;
-    final pos = _ps.player.state.position;
-    final dur = _ps.player.state.duration;
-    if (dur.inSeconds <= 0 || pos.inSeconds < 5) return;
-    _s.repo.saveProgress(
-      sourceId: _item.sourceId,
-      kind: _item.kind,
-      extId: _item.extId,
-      position: pos,
-      duration: dur,
-      title: _item.title,
-      subtitle: _item.subtitle,
-      image: _item.image,
-      seriesExt: _item.seriesExt,
-    );
-    // Called from dispose(): listeners must not rebuild while the tree is
-    // being unmounted, so the notification is deferred to the next frame.
-    if (notify) {
-      final library = _s.library;
-      WidgetsBinding.instance.addPostFrameCallback((_) => library.userChanged());
-      WidgetsBinding.instance.scheduleFrame();
+  /// Keeps playing in the mini-player ([floating]: in a small window above
+  /// the other apps, Windows only) and goes back to browsing.
+  Future<void> _minimize({bool floating = false}) async {
+    if (_minimized) return;
+    final session = widget.session.copyWith(item: _item, channelIndex: _chIndex, clearStart: true);
+    _minimized = true;
+    _s.tracker.flush();
+    if (floating) {
+      await _s.pip.float(session);
+    } else {
+      _s.pip.show(session);
     }
+    if (mounted) Navigator.of(context).maybePop();
   }
 
   void _onCompleted() {
     if (!mounted || _isLive) return;
-    final dur = _ps.player.state.duration;
-    if (dur.inSeconds > 0) {
-      _s.repo.saveProgress(
-        sourceId: _item.sourceId,
-        kind: _item.kind,
-        extId: _item.extId,
-        position: dur,
-        duration: dur,
-        title: _item.title,
-        subtitle: _item.subtitle,
-        image: _item.image,
-        seriesExt: _item.seriesExt,
-      );
-    }
+    _s.tracker.markFinished(_item);
     if (_nextEpisode != null && _s.settings.autoNextEpisode) {
       setState(() => _nextCountdown = 8);
       _nextTimer?.cancel();
@@ -446,7 +399,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final next = _nextEpisode;
     if (next == null || _source == null) return;
     _nextTimer?.cancel();
-    _saveProgress();
+    _s.tracker.flush();
     final p = _s.repo.progress(_item.sourceId, ContentKind.episode, next.extId);
     setState(() {
       _nextCountdown = null;
@@ -499,6 +452,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       Navigator.of(context).maybePop();
     } else if (k == LogicalKeyboardKey.keyM) {
       if (!repeat) _toggleMute();
+    } else if (k == LogicalKeyboardKey.keyP) {
+      if (!repeat) _minimize();
+    } else if (k == LogicalKeyboardKey.keyO && AppWindow.canFloat) {
+      if (!repeat) _minimize(floating: true);
     } else if (k == LogicalKeyboardKey.keyI) {
       if (!repeat) setState(() => _showStats = !_showStats);
     } else if (k == LogicalKeyboardKey.keyA) {
@@ -604,11 +561,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 if (_osd != null) _buildOsd(),
                 if (_digits.isNotEmpty) _buildDigits(),
                 _buildError(),
-                if (_showStats) _buildStats(),
+                if (_showStats) StatsPanel(stats: _stats),
                 _buildControls(),
-                if (_tracksPanel) _buildTracksPanel(),
-                if (_isLive) _buildChannelPanel(),
-                if (_nextCountdown != null) _buildNextCard(),
+                if (_tracksPanel)
+                  TracksPanel(
+                    tracks: _ps.player.state.tracks,
+                    audioId: _aid,
+                    subtitleId: _sid,
+                    onAudio: _selectAudio,
+                    onSubtitle: _selectSubtitle,
+                    onClose: () => _setTracksPanel(false),
+                  ),
+                if (_isLive)
+                  ChannelPanel(
+                    open: _channelPanel,
+                    channels: _channels,
+                    selected: _chIndex,
+                    epg: _s.epg,
+                    scroll: _panelScroll,
+                    onPick: _playChannel,
+                    onClose: _toggleChannelPanel,
+                  ),
+                if (_nextCountdown != null && _nextEpisode != null)
+                  NextEpisodeCard(
+                    episode: _nextEpisode!,
+                    countdown: _nextCountdown!,
+                    onPlay: _playNextEpisode,
+                    onCancel: () {
+                      _nextTimer?.cancel();
+                      setState(() => _nextCountdown = null);
+                    },
+                  ),
               ],
             ),
           ),
@@ -655,7 +638,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
         decoration: BoxDecoration(
-          color: _glass,
+          color: playerGlass,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
         ),
@@ -670,7 +653,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     child: Container(
       padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 8),
       decoration: BoxDecoration(
-        color: _glass,
+        color: playerGlass,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.accent, width: 1.5),
       ),
@@ -698,7 +681,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
             constraints: const BoxConstraints(maxWidth: 520),
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
-              color: _glass,
+              color: playerGlass,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
@@ -739,51 +722,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
       },
     );
   }
-
-  Widget _buildStats() => Positioned(
-    top: 104,
-    left: 32,
-    child: IgnorePointer(
-      child: Container(
-        width: 360,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: _glass,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'STATISTIQUES · I',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, letterSpacing: 0.8, color: AppColors.accent),
-            ),
-            const SizedBox(height: 10),
-            for (final (k, v) in _stats)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 130,
-                      child: Text(k, style: const TextStyle(color: AppColors.muted, fontSize: 13.5)),
-                    ),
-                    Expanded(
-                      child: Text(
-                        v.isEmpty ? '—' : v,
-                        style: const TextStyle(fontSize: 13.5, fontFeatures: tabularFigures),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    ),
-  );
 
   Widget _buildControls() {
     return IgnorePointer(
@@ -948,7 +886,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       ? const SizedBox.shrink()
                       : Tooltip(
                           message: 'Déjà téléchargé devant la lecture : avancer dans cette zone est instantané',
-                          child: _CachePill(ahead),
+                          child: CachePill(ahead),
                         );
                 },
               ),
@@ -1245,6 +1183,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onSelected: (a) => setState(() => _aspect = a),
       ),
       gap,
+      OverlayButton(icon: Icons.picture_in_picture_alt_rounded, tooltip: 'Mini-lecteur (P)', onPressed: _minimize),
+      gap,
+      if (AppWindow.canFloat) ...[
+        OverlayButton(
+          icon: Icons.open_in_new_rounded,
+          tooltip: 'Fenêtre flottante par-dessus tes autres apps (O)',
+          onPressed: () => _minimize(floating: true),
+        ),
+        gap,
+      ],
       OverlayButton(
         icon: Icons.bar_chart_rounded,
         tooltip: 'Statistiques (I)',
@@ -1258,327 +1206,5 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onPressed: () => _setFullscreen(!_fullscreen),
       ),
     ];
-  }
-
-  /// "Audio" and "Sous-titres" side by side, above the controls.
-  Widget _buildTracksPanel() {
-    final tracks = _ps.player.state.tracks;
-    final audio = tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
-    final subs = tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no').toList();
-    final noSub = !subs.any((t) => t.id == _sid);
-    return Positioned.fill(
-      child: Stack(
-        children: [
-          Positioned.fill(
-            child: GestureDetector(behavior: HitTestBehavior.opaque, onTap: () => _setTracksPanel(false)),
-          ),
-          Positioned(
-            right: 40,
-            bottom: 140,
-            child: Container(
-              width: 600,
-              constraints: const BoxConstraints(maxHeight: 460),
-              padding: const EdgeInsets.fromLTRB(28, 24, 28, 20),
-              decoration: BoxDecoration(
-                color: const Color(0xF51C1C21),
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 60, offset: Offset(0, 24))],
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _TrackColumn(
-                      title: 'Audio',
-                      empty: 'Une seule piste',
-                      entries: [
-                        for (var i = 0; i < audio.length; i++)
-                          (
-                            audioTrackTitle(audio[i], i),
-                            audioTrackDetail(audio[i]),
-                            audio[i].id == _aid,
-                            () => _selectAudio(audio[i]),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 28),
-                  Expanded(
-                    child: _TrackColumn(
-                      title: 'Sous-titres',
-                      entries: [
-                        ('Désactivés', '', noSub, () => _selectSubtitle(SubtitleTrack.no())),
-                        for (var i = 0; i < subs.length; i++)
-                          (
-                            subtitleTrackTitle(subs[i], i),
-                            subtitleTrackDetail(subs[i]),
-                            subs[i].id == _sid,
-                            () => _selectSubtitle(subs[i]),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildChannelPanel() {
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-      top: 0,
-      bottom: 0,
-      right: _channelPanel ? 0 : -400,
-      width: 380,
-      child: Material(
-        color: const Color(0xF507080B),
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: AppColors.border)),
-          ),
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 12, 12),
-                child: Row(
-                  children: [
-                    Expanded(child: Text('Chaînes', style: displayStyle(24))),
-                    IconButton(
-                      tooltip: 'Fermer (C)',
-                      onPressed: _toggleChannelPanel,
-                      icon: const Icon(Icons.close_rounded),
-                    ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: _channelPanel
-                    ? ListView.builder(
-                        controller: _panelScroll,
-                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                        itemExtent: 66,
-                        itemCount: _channels.length,
-                        itemBuilder: (context, i) {
-                          final c = _channels[i];
-                          final sel = i == _chIndex;
-                          final now = _s.epg.now(c);
-                          return Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
-                            child: Material(
-                              color: sel ? const Color(0x24FFFFFF) : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(12),
-                                onTap: () => _playChannel(i),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                                  child: Row(
-                                    children: [
-                                      SizedBox(
-                                        width: 34,
-                                        child: Text(
-                                          '${c.number ?? i + 1}',
-                                          style: TextStyle(
-                                            color: sel ? AppColors.text : AppColors.faint,
-                                            fontWeight: FontWeight.w700,
-                                            fontFeatures: tabularFigures,
-                                          ),
-                                        ),
-                                      ),
-                                      ChannelLogo(name: c.name, url: c.logo, size: 40),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              c.name,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                fontWeight: FontWeight.w600,
-                                                color: AppColors.text,
-                                              ),
-                                            ),
-                                            if (now != null)
-                                              Text(
-                                                now.title,
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
-                                              ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      )
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildNextCard() {
-    final next = _nextEpisode;
-    if (next == null) return const SizedBox.shrink();
-    return Positioned(
-      right: 32,
-      bottom: 170,
-      child: Container(
-        width: 360,
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: AppColors.surface2,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.borderStrong),
-          boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 60, offset: Offset(0, 24))],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('ÉPISODE SUIVANT DANS $_nextCountdown S', style: labelStyle(color: AppColors.accent)),
-            const SizedBox(height: 6),
-            Text(
-              '${next.code} · ${next.displayTitle}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: displayStyle(19, weight: FontWeight.w700),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                FilledButton.icon(
-                  onPressed: _playNextEpisode,
-                  icon: const Icon(Icons.play_arrow_rounded),
-                  label: const Text('Lancer'),
-                ),
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: () {
-                    _nextTimer?.cancel();
-                    setState(() => _nextCountdown = null);
-                  },
-                  child: const Text('Annuler'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/// Dark glass used by the panels drawn over the video.
-const _glass = Color(0xD10A0A0C);
-
-/// "⚡ +04:12 déjà en cache · saut instantané".
-class _CachePill extends StatelessWidget {
-  const _CachePill(this.ahead);
-  final Duration ahead;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-    decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Icon(Icons.bolt_rounded, size: 15, color: AppColors.accent),
-        const SizedBox(width: 5),
-        Text(
-          '+${formatDuration(ahead)} en cache',
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFFDDE1E8),
-            fontFeatures: tabularFigures,
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-/// One column of the "Audio & sous-titres" panel.
-class _TrackColumn extends StatelessWidget {
-  const _TrackColumn({required this.title, required this.entries, this.empty});
-  final String title;
-  final List<(String, String, bool, VoidCallback)> entries;
-  final String? empty;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(title, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 10),
-        if (entries.isEmpty && empty != null) Text(empty!, style: const TextStyle(color: AppColors.muted)),
-        Flexible(
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final (label, detail, selected, onTap) in entries)
-                  HoverBuilder(
-                    builder: (context, hover) => Semantics(
-                      button: true,
-                      selected: selected,
-                      child: GestureDetector(
-                        onTap: onTap,
-                        behavior: HitTestBehavior.opaque,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              SizedBox(width: 30, child: selected ? const Icon(Icons.check_rounded, size: 20) : null),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      label,
-                                      style: TextStyle(
-                                        fontSize: 17,
-                                        fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                                        color: selected || hover ? AppColors.text : const Color(0xFFB8B9BF),
-                                      ),
-                                    ),
-                                    if (detail.isNotEmpty)
-                                      Text(detail, style: const TextStyle(fontSize: 13, color: AppColors.faint)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
   }
 }

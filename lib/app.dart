@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/theme.dart';
+import 'player/mini_player.dart';
 import 'services.dart';
 import 'ui/onboarding_screen.dart';
 import 'ui/shell.dart';
@@ -21,6 +22,8 @@ class LumenApp extends StatelessWidget {
         locale: const Locale('fr', 'FR'),
         supportedLocales: const [Locale('fr', 'FR'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
+        navigatorKey: appNavigatorKey,
+        builder: (context, child) => PipLayer(child: child ?? const SizedBox.shrink()),
         home: const _RootGate(),
       ),
     );

@@ -174,6 +174,8 @@ void WindowClassRegistrar::UnregisterWindowClass() {
   class_registered_ = false;
 }
 
+bool Win32Window::floating_mode = false;
+
 Win32Window::Win32Window() {
   ++g_active_window_count;
 }
@@ -281,6 +283,11 @@ Win32Window::MessageHandler(HWND hwnd,
       const UINT dpi = FlutterDesktopGetDpiForMonitor(
           MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST));
       const double scale = dpi / 96.0;
+      if (floating_mode) {
+        info->ptMinTrackSize.x = static_cast<LONG>(240 * scale);
+        info->ptMinTrackSize.y = static_cast<LONG>(135 * scale);
+        return 0;
+      }
       info->ptMinTrackSize.x = static_cast<LONG>(1024 * scale);
       info->ptMinTrackSize.y = static_cast<LONG>(640 * scale);
       return 0;

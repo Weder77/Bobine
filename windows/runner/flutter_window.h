@@ -2,7 +2,9 @@
 #define RUNNER_FLUTTER_WINDOW_H_
 
 #include <flutter/dart_project.h>
+#include <flutter/encodable_value.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -28,6 +30,20 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // "lumen/window": floating picture-in-picture window and its dragging.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      window_channel_;
+
+  // Small borderless always-on-top window (true) or back to normal (false).
+  void SetFloating(bool on);
+  WINDOWPLACEMENT saved_placement_{};
+  LONG_PTR saved_style_ = 0;
+
+  // Game controllers drive the app like a keyboard (arrows, Enter, Escape).
+  void PollGamepad();
+  WORD gamepad_buttons_ = 0;
+  ULONGLONG gamepad_repeat_at_ = 0;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

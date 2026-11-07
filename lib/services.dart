@@ -11,6 +11,8 @@ import 'data/import/import_service.dart';
 import 'data/models.dart';
 import 'data/repository.dart';
 import 'data/settings.dart';
+import 'player/pip.dart';
+import 'player/playback_tracker.dart';
 import 'player/player_service.dart';
 import 'ui/widgets/net_image.dart';
 
@@ -46,6 +48,8 @@ class AppServices {
     required this.imports,
     required this.player,
     required this.epg,
+    required this.tracker,
+    required this.pip,
   });
 
   final String dbPath;
@@ -55,6 +59,15 @@ class AppServices {
   final ImportService imports;
   final PlayerService player;
   final EpgCache epg;
+
+  /// Saves "Reprendre" positions wherever the video plays.
+  final PlaybackTracker tracker;
+
+  /// Mini-player and floating window.
+  final PipController pip;
+
+  /// Parental code typed this session (locked categories visible).
+  bool parentalUnlocked = false;
 
   static Future<AppServices> create() async {
     final support = await getApplicationSupportDirectory();
@@ -71,7 +84,8 @@ class AppServices {
     final epg = EpgCache(repo);
     final imports = ImportService(
       dbPath: dbPath,
-      onContentChanged: (_) {
+      onContentChanged: (sourceId) {
+        repo.autoLockAdult(sourceId);
         epg.clear();
         library.contentChanged();
       },
@@ -81,6 +95,8 @@ class AppServices {
       },
     );
     final player = PlayerService(settings, mpvCache.path)..init();
+    final tracker = PlaybackTracker(player, repo, onSaved: library.userChanged);
+    final pip = PipController(player);
 
     final services = AppServices._(
       dbPath: dbPath,
@@ -90,8 +106,11 @@ class AppServices {
       imports: imports,
       player: player,
       epg: epg,
+      tracker: tracker,
+      pip: pip,
     );
     services._ensureActiveSource();
+    services._applyProfile();
     return services;
   }
 
@@ -146,6 +165,65 @@ class AppServices {
         unawaited(refresh(s, content: contentStale && isActive, epg: epgStale).catchError((Object _) {}));
       }
     }
+  }
+
+  // ------------------------------------------------------------- profiles
+
+  Profile get profile => repo.profile(settings.activeProfileId) ?? repo.profiles().first;
+
+  void _applyProfile() {
+    if (repo.profile(settings.activeProfileId) == null) settings.activeProfileId = repo.profiles().first.id;
+    repo.profileId = settings.activeProfileId;
+    _applyVisibility();
+  }
+
+  /// Locked categories are hidden while the parental code was not typed,
+  /// and always in a kids profile.
+  void _applyVisibility() {
+    repo.hideLocked = settings.parentalEnabled && (!parentalUnlocked || profile.kids);
+  }
+
+  void switchProfile(int id) {
+    if (repo.profile(id) == null) return;
+    settings.update((s) => s.activeProfileId = id);
+    parentalUnlocked = false;
+    _applyProfile();
+    epg.clear();
+    library.contentChanged();
+    library.userChanged();
+  }
+
+  /// Checks the parental code and shows locked categories until [lockParental].
+  bool unlockParental(String pin) {
+    if (!settings.parentalEnabled || pin != settings.parentalPin) return false;
+    parentalUnlocked = true;
+    _applyVisibility();
+    library.contentChanged();
+    return true;
+  }
+
+  void lockParental() {
+    parentalUnlocked = false;
+    _applyVisibility();
+    library.contentChanged();
+  }
+
+  /// Sets (or with null removes) the parental code.
+  void setParentalPin(String? pin) {
+    settings.update((s) => s.parentalPin = pin);
+    parentalUnlocked = false;
+    for (final src in repo.sources()) {
+      repo.autoLockAdult(src.id);
+    }
+    _applyVisibility();
+    library.contentChanged();
+  }
+
+  /// Re-reads hidden / locked state after the user changed category settings.
+  void visibilityChanged() {
+    _applyVisibility();
+    epg.clear();
+    library.contentChanged();
   }
 
   void toggleFavorite(ContentKind kind, String extId, int sourceId) {

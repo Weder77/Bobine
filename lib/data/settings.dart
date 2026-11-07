@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/secrets.dart';
 import 'repository.dart';
 
 /// User preferences, persisted as JSON in the `kv` table.
@@ -23,6 +24,13 @@ class AppSettings extends ChangeNotifier {
     contentRefreshHours = (json['contentRefreshHours'] as int?) ?? 24;
     epgDays = (json['epgDays'] as int?) ?? 3;
     volume = (json['volume'] as num?)?.toDouble() ?? 100;
+    activeProfileId = (json['activeProfileId'] as int?) ?? 1;
+    parentalPin = Secrets.reveal(json['parentalPin'] as String?);
+    tmdbKey = Secrets.reveal(json['tmdbKey'] as String?);
+    recordingsDir = json['recordingsDir'] as String?;
+    reminderLeadMinutes = (json['reminderLeadMinutes'] as int?) ?? 2;
+    checkUpdates = (json['checkUpdates'] as bool?) ?? true;
+    askProfileAtStart = (json['askProfileAtStart'] as bool?) ?? true;
   }
 
   static const _key = 'settings';
@@ -52,6 +60,27 @@ class AppSettings extends ChangeNotifier {
   late int epgDays;
   late double volume;
 
+  /// Profile whose favourites and progress are shown.
+  late int activeProfileId;
+
+  /// Parental code (4 digits) or null when parental control is off. Stored
+  /// encrypted on Windows like the source passwords.
+  String? parentalPin;
+  bool get parentalEnabled => parentalPin != null && parentalPin!.isNotEmpty;
+
+  /// The Movie Database key (v3 key or v4 read token), or null.
+  String? tmdbKey;
+
+  /// Folder for recordings (null: Videos/Lumen).
+  String? recordingsDir;
+
+  /// How many minutes before a programme its reminder pops up.
+  late int reminderLeadMinutes;
+  late bool checkUpdates;
+
+  /// Show "Qui regarde ?" at start when there are several profiles.
+  late bool askProfileAtStart;
+
   void update(void Function(AppSettings s) change) {
     change(this);
     _save();
@@ -80,6 +109,13 @@ class AppSettings extends ChangeNotifier {
         'contentRefreshHours': contentRefreshHours,
         'epgDays': epgDays,
         'volume': volume,
+        'activeProfileId': activeProfileId,
+        'parentalPin': Secrets.protect(parentalPin),
+        'tmdbKey': Secrets.protect(tmdbKey),
+        'recordingsDir': recordingsDir,
+        'reminderLeadMinutes': reminderLeadMinutes,
+        'checkUpdates': checkUpdates,
+        'askProfileAtStart': askProfileAtStart,
       }),
     );
   }

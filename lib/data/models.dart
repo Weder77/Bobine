@@ -111,6 +111,8 @@ class ContentCategory {
     required this.extId,
     required this.name,
     this.count = 0,
+    this.hidden = false,
+    this.locked = false,
   });
   final int id;
   final ContentKind kind;
@@ -118,12 +120,20 @@ class ContentCategory {
   final String name;
   final int count;
 
+  /// Hidden by the user (Réglages → Catégories).
+  final bool hidden;
+
+  /// Behind the parental code.
+  final bool locked;
+
   factory ContentCategory.fromRow(Row r) => ContentCategory(
     id: r['id'] as int,
     kind: ContentKind.fromDb(r['kind'] as String),
     extId: r['ext_id'] as String,
     name: r['name'] as String,
     count: (r['cnt'] as int?) ?? 0,
+    hidden: (r['p_hidden'] as int?) == 1,
+    locked: (r['p_locked'] as int?) == 1,
   );
 }
 
@@ -140,6 +150,8 @@ class Channel {
     this.epgId,
     this.number,
     this.catchupDays = 0,
+    this.catchupType,
+    this.catchupSource,
   });
   final int id;
   final int sourceId;
@@ -155,6 +167,14 @@ class Channel {
   final int? number;
   final int catchupDays;
 
+  /// M3U replay mode ("default", "append", "shift", "flussonic", "xc"…).
+  final String? catchupType;
+
+  /// M3U replay address template (`catchup-source`).
+  final String? catchupSource;
+
+  bool get hasReplay => catchupDays > 0;
+
   factory Channel.fromRow(Row r) => Channel(
     id: r['id'] as int,
     sourceId: r['source_id'] as int,
@@ -167,6 +187,8 @@ class Channel {
     epgId: r['epg_id'] as String?,
     number: r['number'] as int?,
     catchupDays: (r['catchup_days'] as int?) ?? 0,
+    catchupType: r['catchup_type'] as String?,
+    catchupSource: r['catchup_source'] as String?,
   );
 }
 
@@ -382,4 +404,101 @@ class ProgressEntry {
     image: r['image'] as String?,
     seriesExt: r['series_ext'] as String?,
   );
+}
+
+/// A local profile: its own favourites, progress and recent channels.
+class Profile {
+  const Profile({required this.id, required this.name, required this.color, this.kids = false});
+  final int id;
+  final String name;
+  final int color;
+
+  /// Kids profile: categories behind the parental code are never shown.
+  final bool kids;
+
+  String get initial => name.trim().isEmpty ? '?' : String.fromCharCode(name.trim().runes.first).toUpperCase();
+
+  factory Profile.fromRow(Row r) =>
+      Profile(id: r['id'] as int, name: r['name'] as String, color: r['color'] as int, kids: (r['kids'] as int) == 1);
+}
+
+/// "Remind me" set on a future programme.
+class Reminder {
+  const Reminder({
+    required this.id,
+    required this.sourceId,
+    required this.channelExt,
+    required this.channelName,
+    required this.title,
+    required this.start,
+    required this.stop,
+  });
+  final int id;
+  final int sourceId;
+  final String channelExt;
+  final String channelName;
+  final String title;
+  final DateTime start;
+  final DateTime stop;
+
+  factory Reminder.fromRow(Row r) => Reminder(
+    id: r['id'] as int,
+    sourceId: r['source_id'] as int,
+    channelExt: r['channel_ext'] as String,
+    channelName: r['channel_name'] as String,
+    title: r['title'] as String,
+    start: DateTime.fromMillisecondsSinceEpoch((r['start'] as int) * 1000),
+    stop: DateTime.fromMillisecondsSinceEpoch((r['stop'] as int) * 1000),
+  );
+}
+
+enum RecordingStatus { scheduled, recording, done, failed, cancelled }
+
+/// A recording of a live channel to a file.
+class Recording {
+  const Recording({
+    required this.id,
+    required this.sourceId,
+    required this.channelExt,
+    required this.channelName,
+    required this.title,
+    required this.start,
+    required this.stop,
+    required this.status,
+    this.path,
+    this.error,
+    this.size,
+  });
+  final int id;
+  final int sourceId;
+  final String channelExt;
+  final String channelName;
+  final String title;
+  final DateTime start;
+  final DateTime stop;
+  final RecordingStatus status;
+  final String? path;
+  final String? error;
+  final int? size;
+
+  factory Recording.fromRow(Row r) => Recording(
+    id: r['id'] as int,
+    sourceId: r['source_id'] as int,
+    channelExt: r['channel_ext'] as String,
+    channelName: r['channel_name'] as String,
+    title: r['title'] as String,
+    start: DateTime.fromMillisecondsSinceEpoch((r['start'] as int) * 1000),
+    stop: DateTime.fromMillisecondsSinceEpoch((r['stop'] as int) * 1000),
+    status: RecordingStatus.values.firstWhere((s) => s.name == r['status'], orElse: () => RecordingStatus.failed),
+    path: r['path'] as String?,
+    error: r['error'] as String?,
+    size: r['size'] as int?,
+  );
+}
+
+/// A guide programme found by the search, with its channel.
+class ProgramHit {
+  const ProgramHit(this.channel, this.program);
+  final Channel channel;
+  final Program program;
 }

@@ -86,6 +86,8 @@ class _LiveScreenState extends State<LiveScreen> {
   }
 
   void _stopPreview() {
+    // The mini-player keeps playing while the user browses.
+    if (_s.pip.active) return;
     if (_s.player.current.value?.isLive ?? false) _s.player.stop();
   }
 

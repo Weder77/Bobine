@@ -97,8 +97,9 @@ class _Batch {
     }
 
     insertAll(
-      'INSERT INTO channels (source_id, ext_id, category_id, name, search, logo, url, epg_id, number, catchup_days, position) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO channels (source_id, ext_id, category_id, name, search, logo, url, epg_id, number, catchup_days, '
+      'catchup_type, catchup_source, match_key, position) '
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       channels,
     );
     insertAll(
@@ -186,7 +187,10 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
             e.url,
             e.tvgId,
             asInt(e.attr('tvg-chno') ?? e.attr('channel-number')),
-            asInt(e.attr('catchup-days')) ?? 0,
+            asInt(e.attr('catchup-days') ?? e.attr('tvg-rec') ?? e.attr('timeshift')) ?? 0,
+            e.attr('catchup') ?? e.attr('catchup-type'),
+            e.attr('catchup-source'),
+            channelMatchKey(e.name),
             batch.channels.length,
           ]);
         case M3uKind.movie:
@@ -360,6 +364,9 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
         asString(s['epg_channel_id']),
         asInt(s['num']),
         archive,
+        archive > 0 ? 'xc' : null,
+        null,
+        channelMatchKey(name),
         batch.channels.length,
       ]);
     }
@@ -433,7 +440,8 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
 
     final now = _now();
     final shift = source.epgOffsetMinutes * 60;
-    final minStop = now - 6 * 3600;
+    // Past week kept for replay (catch-up) from the guide.
+    final minStop = now - 7 * 86400;
     final maxStart = now + days * 86400;
 
     final programmes = <List<Object?>>[];
@@ -447,7 +455,7 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
         final start = rawStart + shift;
         final stop = rawStop + shift;
         if (stop < minStop || start > maxStart) return;
-        programmes.add([channel.toLowerCase(), start, stop, title, desc]);
+        programmes.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title)]);
       },
       onChannel: (id, names) {
         final lid = id.toLowerCase();
@@ -478,8 +486,8 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       db.execute('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
       db.execute('DELETE FROM epg_channels WHERE source_id = ?', [sourceId]);
       final p = db.prepare(
-        'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description) '
-        'VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description, search) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?)',
       );
       var i = 0;
       for (final row in programmes) {

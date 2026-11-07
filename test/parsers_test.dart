@@ -104,27 +104,39 @@ http://srv/plain/stream4.ts
     });
 
     test('time parsing variants', () {
-      expect(parseXmltvTime('202401312000 -0230'),
-          DateTime.utc(2024, 1, 31, 22, 30).millisecondsSinceEpoch ~/ 1000);
+      expect(parseXmltvTime('202401312000 -0230'), DateTime.utc(2024, 1, 31, 22, 30).millisecondsSinceEpoch ~/ 1000);
       expect(parseXmltvTime('bad'), isNull);
     });
   });
 
   group('Xtream', () {
     test('series info with map-of-seasons episodes', () {
-      final info = parseSeriesInfo({
-        'info': {'plot': 'Plot', 'backdrop_path': ['http://img/b.jpg'], 'rating': '8.1'},
-        'episodes': {
-          '2': [
-            {'id': '22', 'episode_num': '1', 'title': 'S2E1', 'container_extension': 'mkv',
-             'info': {'duration_secs': 1500, 'movie_image': 'http://img/e.jpg'}},
-          ],
-          '1': [
-            {'id': '11', 'episode_num': 2, 'season': 1, 'title': 'S1E2'},
-            {'id': '10', 'episode_num': 1, 'season': 1, 'title': 'S1E1', 'info': []},
-          ],
+      final info = parseSeriesInfo(
+        {
+          'info': {
+            'plot': 'Plot',
+            'backdrop_path': ['http://img/b.jpg'],
+            'rating': '8.1',
+          },
+          'episodes': {
+            '2': [
+              {
+                'id': '22',
+                'episode_num': '1',
+                'title': 'S2E1',
+                'container_extension': 'mkv',
+                'info': {'duration_secs': 1500, 'movie_image': 'http://img/e.jpg'},
+              },
+            ],
+            '1': [
+              {'id': '11', 'episode_num': 2, 'season': 1, 'title': 'S1E2'},
+              {'id': '10', 'episode_num': 1, 'season': 1, 'title': 'S1E1', 'info': []},
+            ],
+          },
         },
-      }, 1, '500');
+        1,
+        '500',
+      );
       expect(info.episodes.map((e) => e.extId), ['10', '11', '22']);
       expect(info.episodes.last.season, 2);
       expect(info.episodes.last.durationSec, 1500);
@@ -134,7 +146,8 @@ http://srv/plain/stream4.ts
 
     test('credentials from get.php link', () {
       final c = XtreamCredentials.tryParse(
-          'http://line.example.com:8080/get.php?username=bob&password=s3cr3t&type=m3u_plus&output=ts')!;
+        'http://line.example.com:8080/get.php?username=bob&password=s3cr3t&type=m3u_plus&output=ts',
+      )!;
       expect(c.server, 'http://line.example.com:8080');
       expect(c.username, 'bob');
       expect(c.password, 's3cr3t');
@@ -150,7 +163,12 @@ http://srv/plain/stream4.ts
       expect(d.videoCodec, 'HEVC');
       expect(d.audioCodec, 'E-AC3');
       expect(d.qualityTags, ['4K', 'HDR', '5.1']);
-      expect(parseVodInfo({'info': {'video': [], 'audio': []}}).qualityTags, isEmpty);
+      expect(
+        parseVodInfo({
+          'info': {'video': [], 'audio': []},
+        }).qualityTags,
+        isEmpty,
+      );
     });
 
     test('vod duration formats', () {
@@ -174,10 +192,14 @@ http://srv/plain/stream4.ts
     });
 
     test('credentials are masked in messages', () {
-      expect(redactCredentials('Adresse invalide : http://h/player_api.php?username=bob&password=s3cr3t&action=x'),
-          'Adresse invalide : http://h/player_api.php?username=bob&password=***&action=x');
-      expect(redactCredentials('Failed to open http://h:8080/live/bob/s3cr3t/123.ts.'),
-          'Failed to open http://h:8080/live/bob/***/123.ts.');
+      expect(
+        redactCredentials('Adresse invalide : http://h/player_api.php?username=bob&password=s3cr3t&action=x'),
+        'Adresse invalide : http://h/player_api.php?username=bob&password=***&action=x',
+      );
+      expect(
+        redactCredentials('Failed to open http://h:8080/live/bob/s3cr3t/123.ts.'),
+        'Failed to open http://h:8080/live/bob/***/123.ts.',
+      );
       expect(redactCredentials('Connexion impossible'), 'Connexion impossible');
     });
 
