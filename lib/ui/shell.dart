@@ -7,6 +7,7 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../features/updater.dart';
 import '../services.dart';
+import 'catalog_controller.dart';
 import 'catalog_screen.dart';
 import 'guide_screen.dart';
 import 'home_screen.dart';
@@ -74,11 +75,23 @@ class _AppShellState extends State<AppShell> {
   /// Groups and channels shared by Direct and Guide TV.
   late final LiveCatalog _live;
 
+  /// Films and Séries pages, shared with the header's sub-bar.
+  late final CatalogController _movies;
+  late final CatalogController _series;
+
+  CatalogController? get _catalog => switch (_index) {
+    ShellTab.movies => _movies,
+    ShellTab.series => _series,
+    _ => null,
+  };
+
   @override
   void initState() {
     super.initState();
     _s = AppScope.of(context);
     _live = LiveCatalog(_s);
+    _movies = CatalogController(_s, series: false);
+    _series = CatalogController(_s, series: true);
     _s.imports.addListener(_onImports);
     _s.updates.addListener(_onUpdates);
     HardwareKeyboard.instance.addHandler(_onKey);
@@ -106,6 +119,8 @@ class _AppShellState extends State<AppShell> {
   @override
   void dispose() {
     _live.dispose();
+    _movies.dispose();
+    _series.dispose();
     HardwareKeyboard.instance.removeHandler(_onKey);
     _searchCtl.dispose();
     _searchFocus.dispose();
@@ -182,8 +197,8 @@ class _AppShellState extends State<AppShell> {
     ShellTab.home => const HomeScreen(),
     ShellTab.live => LiveScreen(catalog: _live),
     ShellTab.guide => GuideScreen(catalog: _live),
-    ShellTab.movies => const CatalogScreen(series: false),
-    ShellTab.series => const CatalogScreen(series: true),
+    ShellTab.movies => CatalogScreen(controller: _movies),
+    ShellTab.series => CatalogScreen(controller: _series),
     _ => const SettingsScreen(),
   };
 
@@ -231,15 +246,22 @@ class _AppShellState extends State<AppShell> {
                     left: 0,
                     right: 0,
                     top: 0,
-                    child: _TopBar(
-                      index: _index,
-                      onSelect: _go,
-                      opaque: opaque,
-                      searchOpen: _searchOpen,
-                      searchController: _searchCtl,
-                      searchFocus: _searchFocus,
-                      onOpenSearch: _openSearch,
-                      onCloseSearch: _closeSearch,
+                    child: ListenableBuilder(
+                      listenable: Listenable.merge([_movies, _series]),
+                      builder: (context, _) {
+                        final catalog = _searchOpen ? null : _catalog;
+                        return _TopBar(
+                          index: _index,
+                          onSelect: _go,
+                          opaque: opaque || catalog?.mode == CatalogMode.grid,
+                          searchOpen: _searchOpen,
+                          searchController: _searchCtl,
+                          searchFocus: _searchFocus,
+                          onOpenSearch: _openSearch,
+                          onCloseSearch: _closeSearch,
+                          subBar: catalog == null ? null : CatalogSubBar(controller: catalog),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -269,6 +291,7 @@ class _TopBar extends StatelessWidget {
     required this.searchFocus,
     required this.onOpenSearch,
     required this.onCloseSearch,
+    this.subBar,
   });
   final int index;
   final ValueChanged<int> onSelect;
@@ -278,6 +301,9 @@ class _TopBar extends StatelessWidget {
   final FocusNode searchFocus;
   final VoidCallback onOpenSearch;
   final VoidCallback onCloseSearch;
+
+  /// Second line (Films / Séries).
+  final Widget? subBar;
 
   @override
   Widget build(BuildContext context) {
@@ -312,63 +338,73 @@ class _TopBar extends StatelessWidget {
             ),
           ),
         ),
-        Container(
-          height: kTopBarHeight,
-          padding: const EdgeInsets.symmetric(horizontal: 48),
-          child: Row(
-            children: [
-              HoverBuilder(
-                onActivate: () => onSelect(ShellTab.home),
-                focusRingRadius: 10,
-                builder: (context, _) => GestureDetector(
-                  onTap: () => onSelect(ShellTab.home),
-                  behavior: HitTestBehavior.opaque,
-                  child: Semantics(label: 'Bobine', button: true, child: const BobineLogo()),
-                ),
-              ),
-              SizedBox(width: gap),
-              // Five short tabs: they fit in the smallest window (1024 px).
-              if (showNav)
-                for (final (tab, label) in _textTabs) ...[
-                  _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
-                  if (tab != ShellTab.series) SizedBox(width: (width * 0.022).clamp(18.0, 30.0)),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: kTopBarHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 48),
+              child: Row(
+                children: [
+                  HoverBuilder(
+                    onActivate: () => onSelect(ShellTab.home),
+                    focusRingRadius: 10,
+                    builder: (context, _) => GestureDetector(
+                      onTap: () => onSelect(ShellTab.home),
+                      behavior: HitTestBehavior.opaque,
+                      child: Semantics(label: 'Bobine', button: true, child: const BobineLogo()),
+                    ),
+                  ),
+                  SizedBox(width: gap),
+                  // Five short tabs: they fit in the smallest window (1024 px).
+                  if (showNav)
+                    for (final (tab, label) in _textTabs) ...[
+                      _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
+                      if (tab != ShellTab.series) SizedBox(width: (width * 0.022).clamp(18.0, 30.0)),
+                    ],
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const _RecordingDot(),
+                        if (searchOpen)
+                          Flexible(
+                            child: _SearchField(
+                              controller: searchController,
+                              focus: searchFocus,
+                              onClose: onCloseSearch,
+                            ),
+                          )
+                        else
+                          _IconAction(
+                            icon: Icons.search_rounded,
+                            tooltip: 'Rechercher ( / )',
+                            selected: false,
+                            onTap: onOpenSearch,
+                          ),
+                        const SizedBox(width: 14),
+                        _IconAction(
+                          icon: Icons.tune_rounded,
+                          tooltip: 'Paramètres',
+                          selected: index == ShellTab.settings && !searchOpen,
+                          onTap: () => onSelect(ShellTab.settings),
+                        ),
+                        const SizedBox(width: 14),
+                        ListenableBuilder(
+                          listenable: Listenable.merge([s.settings, s.library]),
+                          builder: (context, _) => ProfileMenuButton(onManage: () => onSelect(ShellTab.settings)),
+                        ),
+                        const SizedBox(width: 20),
+                        const _Clock(),
+                      ],
+                    ),
+                  ),
                 ],
-              SizedBox(width: gap),
-              Expanded(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    const _RecordingDot(),
-                    if (searchOpen)
-                      Flexible(
-                        child: _SearchField(controller: searchController, focus: searchFocus, onClose: onCloseSearch),
-                      )
-                    else
-                      _IconAction(
-                        icon: Icons.search_rounded,
-                        tooltip: 'Rechercher ( / )',
-                        selected: false,
-                        onTap: onOpenSearch,
-                      ),
-                    const SizedBox(width: 14),
-                    _IconAction(
-                      icon: Icons.tune_rounded,
-                      tooltip: 'Paramètres',
-                      selected: index == ShellTab.settings && !searchOpen,
-                      onTap: () => onSelect(ShellTab.settings),
-                    ),
-                    const SizedBox(width: 14),
-                    ListenableBuilder(
-                      listenable: Listenable.merge([s.settings, s.library]),
-                      builder: (context, _) => ProfileMenuButton(onManage: () => onSelect(ShellTab.settings)),
-                    ),
-                    const SizedBox(width: 20),
-                    const _Clock(),
-                  ],
-                ),
               ),
-            ],
-          ),
+            ),
+            ?subBar,
+          ],
         ),
       ],
     );

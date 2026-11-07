@@ -160,14 +160,19 @@ class Repository {
 
   /// Categories of [kind] in the user's order. Hidden (and, when
   /// [hideLocked], locked) ones are left out unless [includeHidden].
-  List<ContentCategory> categories(int sourceId, ContentKind kind, {bool includeHidden = false}) {
+  List<ContentCategory> categories(
+    int sourceId,
+    ContentKind kind, {
+    bool includeHidden = false,
+    bool includeLocked = false,
+  }) {
     final table = _table(kind);
     final hiddenChannels = kind == ContentKind.live
         ? ' AND t.ext_id NOT IN (SELECT ext_id FROM channel_prefs WHERE source_id = c.source_id AND hidden = 1)'
         : '';
     final filter = includeHidden
         ? ''
-        : ' AND COALESCE(p.hidden, 0) = 0${hideLocked ? ' AND COALESCE(p.locked, 0) = 0' : ''}';
+        : ' AND COALESCE(p.hidden, 0) = 0${hideLocked && !includeLocked ? ' AND COALESCE(p.locked, 0) = 0' : ''}';
     return db
         .select(
           'SELECT c.*, p.hidden AS p_hidden, p.locked AS p_locked, '

@@ -2,15 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../core/format.dart';
-import '../core/text.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
-import '../features/tmdb.dart';
 import '../services.dart';
 import 'launch.dart';
 import 'quick_actions.dart';
 import 'shell.dart';
+import 'titles.dart';
 import 'widgets/billboard.dart';
 import 'widgets/common.dart';
 import 'widgets/rows.dart';
@@ -36,8 +34,6 @@ class _HomeData {
 
   bool get empty => liveCount == 0 && movieCount == 0 && seriesCount == 0;
 }
-
-String _favKey(ContentKind kind, String extId) => '${kind.db}:$extId';
 
 class _HomeScreenState extends State<HomeScreen> {
   late final AppServices _s;
@@ -86,13 +82,8 @@ class _HomeScreenState extends State<HomeScreen> {
       d.top = r.trending(id);
       d.recentMovies = r.movies(id, sort: CatalogSort.added, limit: 30);
       d.recentSeries = r.series(id, sort: CatalogSort.added, limit: 30);
-      final favMovies = r.favoriteMovies(id);
-      final favSeries = r.favoriteSeries(id);
-      d.favorites = [...favMovies, ...favSeries];
-      d.favoriteKeys = {
-        for (final m in favMovies) _favKey(ContentKind.movie, m.extId),
-        for (final sr in favSeries) _favKey(ContentKind.series, sr.extId),
-      };
+      d.favorites = [...r.favoriteMovies(id), ...r.favoriteSeries(id)];
+      d.favoriteKeys = TitleCards.loadFavorites(_s, id);
     }
     if (mounted) setState(() => _d = d);
     _prefetchTmdb();
@@ -118,168 +109,23 @@ class _HomeScreenState extends State<HomeScreen> {
     return list;
   }
 
-  /// Fetches the TMDB details (backdrop, synopsis, genres) of the billboard
-  /// and Top 10 once, then redraws.
   final Set<String> _tmdbAsked = {};
-  void _prefetchTmdb() {
-    if (!_s.tmdb.enabled) return;
-    for (final t in [..._heroTitles(), ..._d.top]) {
-      if (t is Movie && _tmdbAsked.add('m:${t.sourceId}:${t.extId}')) {
-        _s.tmdb.movie(t).then((info) {
-          if (info != null && mounted) setState(() {});
-        });
-      } else if (t is Series && _tmdbAsked.add('s:${t.sourceId}:${t.extId}')) {
-        _s.tmdb.series(t).then((info) {
-          if (info != null && mounted) setState(() {});
-        });
-      }
-    }
-  }
+  void _prefetchTmdb() => TitleCards.prefetch(_s, [..._heroTitles(), ..._d.top], _tmdbAsked, () {
+    if (mounted) setState(() {});
+  });
 
-  HeroEntry _movieHero(Movie m, String kicker) {
-    final t = _s.tmdb.cachedMovie(m);
-    final fav = _d.favoriteKeys.contains(_favKey(ContentKind.movie, m.extId));
-    return HeroEntry(
-      key: 'm${m.extId}',
-      kicker: kicker,
-      title: displayTitle(m.name),
-      rating: m.rating ?? t?.rating,
-      year: '${m.year ?? cleanTitle(m.name).$2 ?? t?.year ?? ''}',
-      genre: t?.genres.take(2).join(', '),
-      duration: t?.runtimeMinutes == null ? null : formatSpan(Duration(minutes: t!.runtimeMinutes!)),
-      quality: qualityOf(m.name),
-      synopsis: t?.overview,
-      backdrop: t?.backdrop,
-      poster: m.poster ?? t?.poster,
-      primaryLabel: 'Lecture',
-      onPrimary: () => Launch.movie(context, m),
-      onInfo: () => Launch.openMovie(context, m),
-      favorite: fav,
-      onFavorite: () => _s.toggleFavorite(ContentKind.movie, m.extId, m.sourceId),
-    );
-  }
-
-  HeroEntry _seriesHero(Series sr, String kicker) {
-    final t = _s.tmdb.cachedSeries(sr);
-    final fav = _d.favoriteKeys.contains(_favKey(ContentKind.series, sr.extId));
-    final started = _s.repo.lastEpisodeProgress(sr.sourceId, sr.extId) != null;
-    return HeroEntry(
-      key: 's${sr.extId}',
-      kicker: kicker,
-      title: displayTitle(sr.name),
-      rating: sr.rating ?? t?.rating,
-      year: '${sr.year ?? t?.year ?? ''}',
-      genre: (t?.genres.isNotEmpty ?? false) ? t!.genres.take(2).join(', ') : sr.genre,
-      quality: qualityOf(sr.name),
-      synopsis: (sr.plot != null && sr.plot!.isNotEmpty) ? sr.plot : t?.overview,
-      backdrop: t?.backdrop ?? sr.backdrop,
-      poster: sr.poster ?? t?.poster,
-      primaryLabel: started ? 'Reprendre' : 'Lecture S01E01',
-      onPrimary: () => playSeries(context, sr),
-      onInfo: () => Launch.openSeries(context, sr),
-      favorite: fav,
-      onFavorite: () => _s.toggleFavorite(ContentKind.series, sr.extId, sr.sourceId),
-    );
-  }
-
-  HeroEntry _resumeHero(ProgressEntry p) {
-    final episode = p.kind == ContentKind.episode;
-    final movie = episode ? null : _s.repo.movieByExt(p.sourceId, p.extId);
-    final series = episode && p.seriesExt != null ? _s.repo.seriesByExt(p.sourceId, p.seriesExt!) : null;
-    final base = movie != null
-        ? _movieHero(movie, 'Film · Reprendre')
-        : series != null
-        ? _seriesHero(series, 'Série · Tu en es à ${p.subtitle?.split(' · ').first ?? "l'épisode"}')
-        : null;
-    final left = 'reste ${formatSpan(p.duration - p.position)}';
-    return HeroEntry(
-      key: 'r${p.extId}',
-      kicker: base?.kicker ?? (episode ? 'Série · Reprendre' : 'Film · Reprendre'),
-      title: displayTitle(series?.name ?? p.title),
-      rating: base?.rating,
-      year: base?.year,
-      genre: base?.genre,
-      duration: base?.duration,
-      quality: base?.quality,
-      synopsis: base?.synopsis,
-      backdrop: base?.backdrop,
-      poster: base?.poster ?? p.image,
-      progress: p.fraction,
-      progressLabel: episode && p.subtitle != null ? '${p.subtitle} · $left' : left,
-      primaryLabel: 'Reprendre',
-      onPrimary: () => Launch.resume(context, p),
-      onInfo: base?.onInfo,
-      favorite: base?.favorite ?? false,
-      onFavorite: base?.onFavorite,
-    );
-  }
-
-  List<HeroEntry> _heroEntries() {
+  List<HeroEntry> _heroEntries(TitleCards cards) {
     final first = _d.top.firstOrNull;
     String kicker(Object t, String kind) => t == first ? "N° 1 aujourd'hui" : '$kind · Nouveauté';
     return [
       for (final t in _heroTitles())
         if (t is ProgressEntry)
-          _resumeHero(t)
+          cards.resumeHero(t)
         else if (t is Movie)
-          _movieHero(t, kicker(t, 'Film'))
+          cards.movieHero(t, kicker(t, 'Film'))
         else
-          _seriesHero(t as Series, kicker(t, 'Série')),
+          cards.seriesHero(t as Series, kicker(t, 'Série')),
     ];
-  }
-
-  // ------------------------------------------------------------------ rows
-
-  PosterItem _moviePoster(Movie m) {
-    final t = _s.tmdb.cachedMovie(m);
-    return PosterItem(
-      key: 'm${m.extId}',
-      title: displayTitle(m.name),
-      poster: m.poster ?? t?.poster,
-      year: m.year ?? cleanTitle(m.name).$2 ?? t?.year,
-      rating: m.rating ?? t?.rating,
-      genre: t?.genres.firstOrNull,
-      favorite: _d.favoriteKeys.contains(_favKey(ContentKind.movie, m.extId)),
-      onPlay: () => Launch.movie(context, m),
-      onFavorite: () => _s.toggleFavorite(ContentKind.movie, m.extId, m.sourceId),
-      onContextMenu: (at) => showMovieActions(context, m, at),
-    );
-  }
-
-  PosterItem _seriesPoster(Series sr) {
-    final t = _s.tmdb.cachedSeries(sr);
-    return PosterItem(
-      key: 's${sr.extId}',
-      title: displayTitle(sr.name),
-      poster: sr.poster ?? t?.poster,
-      year: sr.year ?? t?.year,
-      rating: sr.rating ?? t?.rating,
-      genre: sr.genre?.split(RegExp(r'[,/]')).first.trim() ?? t?.genres.firstOrNull,
-      favorite: _d.favoriteKeys.contains(_favKey(ContentKind.series, sr.extId)),
-      onPlay: () => playSeries(context, sr),
-      onFavorite: () => _s.toggleFavorite(ContentKind.series, sr.extId, sr.sourceId),
-      onContextMenu: (at) => showSeriesActions(context, sr, at),
-    );
-  }
-
-  PosterItem _poster(Object o) => o is Movie ? _moviePoster(o) : _seriesPoster(o as Series);
-
-  TopItem _topItem(Object o) {
-    if (o is Movie) {
-      return TopItem(
-        title: displayTitle(o.name),
-        poster: o.poster,
-        onPlay: () => Launch.movie(context, o),
-        onContextMenu: (at) => showMovieActions(context, o, at),
-      );
-    }
-    final sr = o as Series;
-    return TopItem(
-      title: displayTitle(sr.name),
-      poster: sr.poster,
-      onPlay: () => playSeries(context, sr),
-      onContextMenu: (at) => showSeriesActions(context, sr, at),
-    );
   }
 
   List<LiveNowItem> _liveNow() {
@@ -307,7 +153,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final nav = ShellNavigation.of(context);
     final size = MediaQuery.sizeOf(context);
-    final hero = _heroEntries();
+    final cards = TitleCards(context, _s, _d.favoriteKeys);
+    final hero = _heroEntries(cards);
     final live = _liveNow();
     final heroH = Billboard.heightFor(size, 640, 820, 0.88);
 
@@ -328,22 +175,22 @@ class _HomeScreenState extends State<HomeScreen> {
       if (_d.top.isNotEmpty)
         _Row(
           title: const RowTitle(title: "Top 10 aujourd'hui", sub: 'films et séries sur ta source', big: true),
-          child: TopTenRail(items: [for (final t in _d.top) _topItem(t)]),
+          child: TopTenRail(items: [for (final t in _d.top) cards.top(t)]),
         ),
       if (_d.recentMovies.isNotEmpty)
         _Row(
           title: RowTitle(title: 'Films ajoutés récemment', onMore: () => nav?.goTo(ShellTab.movies)),
-          child: PosterRail(items: [for (final m in _d.recentMovies) _moviePoster(m)]),
+          child: PosterRail(items: [for (final m in _d.recentMovies) cards.moviePoster(m)]),
         ),
       if (_d.recentSeries.isNotEmpty)
         _Row(
           title: RowTitle(title: 'Séries ajoutées récemment', onMore: () => nav?.goTo(ShellTab.series)),
-          child: PosterRail(items: [for (final sr in _d.recentSeries) _seriesPoster(sr)]),
+          child: PosterRail(items: [for (final sr in _d.recentSeries) cards.seriesPoster(sr)]),
         ),
       if (_d.favorites.isNotEmpty)
         _Row(
           title: const RowTitle(title: 'Ma liste'),
-          child: PosterRail(items: [for (final o in _d.favorites) _poster(o)]),
+          child: PosterRail(items: [for (final o in _d.favorites) cards.poster(o)]),
         ),
     ];
 

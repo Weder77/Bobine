@@ -219,6 +219,7 @@ class PosterItem {
     this.badge,
     this.favorite = false,
     this.onFavorite,
+    this.onInfo,
     this.onContextMenu,
   });
   final String key;
@@ -231,6 +232,9 @@ class PosterItem {
   final bool favorite;
   final VoidCallback onPlay;
   final VoidCallback? onFavorite;
+
+  /// "Plus d'infos": the detail page.
+  final VoidCallback? onInfo;
   final ValueChanged<Offset>? onContextMenu;
 }
 
@@ -385,6 +389,10 @@ class _PosterHover extends StatelessWidget {
                     onTap: m.onFavorite!,
                     tooltip: m.favorite ? 'Retirer de ma liste' : 'Ajouter à ma liste',
                   ),
+                ],
+                if (m.onInfo != null) ...[
+                  const Spacer(),
+                  CircleAction(icon: Icons.info_outline_rounded, onTap: m.onInfo!, tooltip: "Plus d'infos"),
                 ],
               ],
             ),
