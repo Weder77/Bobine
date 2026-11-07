@@ -31,7 +31,7 @@ class ShellTab {
 const _textTabs = [
   (ShellTab.home, 'Accueil'),
   (ShellTab.live, 'Live TV'),
-  (ShellTab.guide, 'Guide'),
+  (ShellTab.guide, 'Guide TV'),
   (ShellTab.movies, 'Films'),
   (ShellTab.series, 'Séries'),
 ];
@@ -148,6 +148,7 @@ class _AppShellState extends State<AppShell> {
       child: Scaffold(
         body: Column(
           children: [
+            _TopBar(index: _index, onSelect: _go),
             Expanded(
               child: Stack(
                 children: [
@@ -159,23 +160,9 @@ class _AppShellState extends State<AppShell> {
                         // Hidden tabs stay out of the arrow / Tab navigation.
                         child: ExcludeFocus(
                           excluding: i != _index,
-                          child: TickerMode(
-                            enabled: i == _index,
-                            // The home hero runs under the floating bar; the
-                            // other pages start below it.
-                            child: Padding(
-                              padding: EdgeInsets.only(top: i == ShellTab.home ? 0 : kTopBarHeight),
-                              child: _page(i),
-                            ),
-                          ),
+                          child: TickerMode(enabled: i == _index, child: _page(i)),
                         ),
                       ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    child: _TopBar(index: _index, onSelect: _go),
-                  ),
                 ],
               ),
             ),
@@ -187,11 +174,11 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/// Height taken by the floating top bar.
-const kTopBarHeight = 100.0;
+/// Height of the top bar.
+const kTopBarHeight = 76.0;
 
-/// Floating "liquid glass" bar: source on the left, tabs in the middle,
-/// clock and settings on the right.
+/// Top bar: logo, text tabs with an amber underline, then search, settings,
+/// profile / source menu and the clock.
 class _TopBar extends StatelessWidget {
   const _TopBar({required this.index, required this.onSelect});
   final int index;
@@ -199,63 +186,65 @@ class _TopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(48, 26, 48, 0),
-      child: SizedBox(
-        height: 54,
-        child: Row(
-          children: [
-            _SourceButton(onManage: () => onSelect(ShellTab.settings)),
-            Expanded(
-              child: Center(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: Glass(
-                    height: 54,
-                    padding: const EdgeInsets.all(6),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _GlassIcon(
-                          icon: Icons.search_rounded,
-                          tooltip: 'Rechercher (Ctrl K)',
-                          selected: index == ShellTab.search,
-                          onTap: () => onSelect(ShellTab.search),
-                        ),
-                        for (final (tab, label) in _textTabs)
-                          _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
-                      ],
-                    ),
-                  ),
+    final s = AppScope.of(context);
+    return Container(
+      height: kTopBarHeight,
+      padding: const EdgeInsets.symmetric(horizontal: 32),
+      color: AppColors.bg,
+      child: Row(
+        children: [
+          HoverBuilder(
+            onActivate: () => onSelect(ShellTab.home),
+            focusRingRadius: 10,
+            builder: (context, _) => GestureDetector(
+              onTap: () => onSelect(ShellTab.home),
+              behavior: HitTestBehavior.opaque,
+              child: const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+                child: Row(
+                  children: [
+                    LumenMark(size: 36),
+                    SizedBox(width: 12),
+                    Text('LUMEN', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 3)),
+                  ],
                 ),
               ),
             ),
-            Glass(
-              height: 54,
-              padding: const EdgeInsets.fromLTRB(20, 6, 6, 6),
+          ),
+          const SizedBox(width: 44),
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const _RecordingDot(),
-                  ListenableBuilder(
-                    listenable: Listenable.merge([AppScope.of(context).settings, AppScope.of(context).library]),
-                    builder: (context, _) => ProfileMenuButton(onManage: () => onSelect(ShellTab.settings)),
-                  ),
-                  const SizedBox(width: 12),
-                  const _Clock(),
-                  const SizedBox(width: 12),
-                  _GlassIcon(
-                    icon: Icons.tune_rounded,
-                    tooltip: 'Réglages',
-                    selected: index == ShellTab.settings,
-                    filled: true,
-                    onTap: () => onSelect(ShellTab.settings),
-                  ),
+                  for (final (tab, label) in _textTabs)
+                    _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+          const _RecordingDot(),
+          _IconAction(
+            icon: Icons.search_rounded,
+            tooltip: 'Recherche (Ctrl K)',
+            selected: index == ShellTab.search,
+            onTap: () => onSelect(ShellTab.search),
+          ),
+          const SizedBox(width: 4),
+          _IconAction(
+            icon: Icons.tune_rounded,
+            tooltip: 'Réglages',
+            selected: index == ShellTab.settings,
+            onTap: () => onSelect(ShellTab.settings),
+          ),
+          const SizedBox(width: 14),
+          ListenableBuilder(
+            listenable: Listenable.merge([s.settings, s.library]),
+            builder: (context, _) => ProfileMenuButton(onManage: () => onSelect(ShellTab.settings)),
+          ),
+          const SizedBox(width: 28),
+          const _Clock(),
+        ],
       ),
     );
   }
@@ -269,139 +258,68 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final text = Text(
-      label,
-      style: TextStyle(fontSize: 15.5, fontWeight: selected ? FontWeight.w700 : FontWeight.w500, color: AppColors.text),
-    );
     return HoverBuilder(
       onActivate: onTap,
-      focusRingRadius: 999,
+      focusRingRadius: 10,
       builder: (context, hover) => Semantics(
         button: true,
         selected: selected,
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
-          child: selected
-              ? Glass(
-                  strong: true,
-                  shadow: false,
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Center(child: text),
-                )
-              : AnimatedContainer(
-                  duration: const Duration(milliseconds: 140),
-                  height: 42,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: BoxDecoration(
-                    color: hover ? const Color(0x1AFFFFFF) : Colors.transparent,
-                    borderRadius: BorderRadius.circular(999),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18),
+            child: SizedBox(
+              height: kTopBarHeight,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 6),
+                  AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 150),
+                    style: TextStyle(
+                      fontFamily: AppFonts.body,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: selected ? AppColors.text : (hover ? const Color(0xFFD5DAE3) : AppColors.muted),
+                    ),
+                    child: Text(label),
                   ),
-                  alignment: Alignment.center,
-                  child: text,
-                ),
+                  const SizedBox(height: 7),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutCubic,
+                    width: selected ? 26 : 0,
+                    height: 3,
+                    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(2)),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-/// Round icon inside a glass bar.
-class _GlassIcon extends StatelessWidget {
-  const _GlassIcon({
-    required this.icon,
-    required this.tooltip,
-    required this.selected,
-    required this.onTap,
-    this.filled = false,
-  });
+class _IconAction extends StatelessWidget {
+  const _IconAction({required this.icon, required this.tooltip, required this.selected, required this.onTap});
   final IconData icon;
   final String tooltip;
   final bool selected;
-  final bool filled;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) => IconButton(
     tooltip: tooltip,
     onPressed: onTap,
-    iconSize: 20,
+    iconSize: 26,
     style: IconButton.styleFrom(
-      fixedSize: const Size(42, 42),
-      minimumSize: const Size(42, 42),
-      backgroundColor: selected ? const Color(0x52FFFFFF) : (filled ? const Color(0x29FFFFFF) : Colors.transparent),
-      foregroundColor: AppColors.text,
-      shape: const CircleBorder(),
+      backgroundColor: selected ? AppColors.accent.withValues(alpha: 0.14) : Colors.transparent,
     ),
-    icon: Icon(icon),
+    icon: Icon(icon, color: selected ? AppColors.accent : const Color(0xFFC4CAD4)),
   );
-}
-
-/// Lumen mark in a glass capsule; its menu switches the active source.
-class _SourceButton extends StatelessWidget {
-  const _SourceButton({required this.onManage});
-  final VoidCallback onManage;
-
-  @override
-  Widget build(BuildContext context) {
-    final s = AppScope.of(context);
-    return ListenableBuilder(
-      listenable: Listenable.merge([s.settings, s.library]),
-      builder: (context, _) {
-        final sources = s.repo.sources();
-        final active = s.activeSource;
-        return FocusRing(
-          child: PopupMenuButton<int>(
-            tooltip: active == null ? 'Sources' : 'Source : ${active.name}',
-            position: PopupMenuPosition.under,
-            offset: const Offset(0, 10),
-            onSelected: (id) => id < 0 ? onManage() : s.selectSource(id),
-            itemBuilder: (_) => [
-              for (final src in sources)
-                PopupMenuItem(
-                  value: src.id,
-                  child: Row(
-                    children: [
-                      Icon(src.id == active?.id ? Icons.check_rounded : null, size: 18, color: AppColors.text),
-                      const SizedBox(width: 10),
-                      Text(
-                        src.name,
-                        style: TextStyle(fontWeight: src.id == active?.id ? FontWeight.w700 : FontWeight.w500),
-                      ),
-                    ],
-                  ),
-                ),
-              const PopupMenuDivider(),
-              const PopupMenuItem(value: -1, child: Text('Gérer les sources…')),
-            ],
-            child: Glass(
-              height: 54,
-              padding: const EdgeInsets.fromLTRB(7, 7, 14, 7),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const LumenMark(size: 40, round: true),
-                  const SizedBox(width: 10),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 140),
-                    child: Text(
-                      active?.name ?? 'Lumen',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.keyboard_arrow_down_rounded, size: 20, color: AppColors.textSoft),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
 }
 
 /// "REC" while recordings are in progress.
@@ -418,7 +336,7 @@ class _RecordingDot extends StatelessWidget {
           : Tooltip(
               message: n == 1 ? 'Un enregistrement en cours' : '$n enregistrements en cours',
               child: Padding(
-                padding: const EdgeInsets.only(right: 12),
+                padding: const EdgeInsets.only(right: 16),
                 child: Row(
                   children: [
                     const Icon(Icons.fiber_manual_record_rounded, size: 12, color: AppColors.live),
@@ -458,7 +376,12 @@ class _ClockState extends State<_Clock> {
   @override
   Widget build(BuildContext context) => Text(
     formatClock(DateTime.now()),
-    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, fontFeatures: tabularFigures),
+    style: const TextStyle(
+      fontSize: 28,
+      fontWeight: FontWeight.w600,
+      color: Color(0xFFB9C0CC),
+      fontFeatures: tabularFigures,
+    ),
   );
 }
 

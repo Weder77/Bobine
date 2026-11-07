@@ -176,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return ScrollConfiguration(
       behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
       child: ListView(
-        padding: EdgeInsets.only(top: hero.isEmpty ? kTopBarHeight : 0, bottom: 64),
+        padding: EdgeInsets.only(top: hero.isEmpty ? 24 : 0, bottom: 64),
         children: [
           if (hero.isNotEmpty) _HeroCarousel(items: hero),
           const SizedBox(height: 40),
@@ -503,7 +503,7 @@ class _HeroContent extends StatelessWidget {
     final width = MediaQuery.sizeOf(context).width;
     final titleSize = (width * 0.075).clamp(64.0, 116.0);
     return Padding(
-      padding: const EdgeInsets.fromLTRB(36, 120, 36, 56),
+      padding: const EdgeInsets.fromLTRB(36, 40, 36, 56),
       child: Align(
         alignment: Alignment.bottomLeft,
         child: ConstrainedBox(
