@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/theme.dart';
-import '../core/version.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'settings_family.dart';
