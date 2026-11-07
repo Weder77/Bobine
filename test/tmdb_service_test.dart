@@ -2,11 +2,11 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/data/db.dart';
-import 'package:lumen/data/models.dart';
-import 'package:lumen/data/repository.dart';
-import 'package:lumen/data/settings.dart';
-import 'package:lumen/features/tmdb.dart';
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/repository.dart';
+import 'package:bobine/data/settings.dart';
+import 'package:bobine/features/tmdb.dart';
 
 void main() {
   late HttpServer server;

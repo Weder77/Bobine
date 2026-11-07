@@ -76,7 +76,7 @@ class ProfilePickerScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const LumenMark(size: 48),
+              const BobineMark(size: 48),
               const SizedBox(height: 28),
               Text('Qui regarde ?', style: displayStyle(44)),
               const SizedBox(height: 40),

@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/core/version.dart';
+import 'package:bobine/core/version.dart';
 
 void main() {
   test('kAppVersion matches pubspec.yaml', () {

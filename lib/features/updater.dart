@@ -37,14 +37,14 @@ class UpdateInfo {
 
 enum UpdateStage { idle, checking, upToDate, available, downloading, ready, error }
 
-/// Checks GitHub releases for a newer Lumen, downloads the Windows installer
+/// Checks GitHub releases for a newer Bobine, downloads the Windows installer
 /// (checking its SHA-256 when GitHub gives it) and runs it silently; the
-/// installer starts Lumen again when done.
+/// installer starts Bobine again when done.
 class UpdateService extends ChangeNotifier {
   UpdateService(this._repo, this._settings, {String? apiUrl})
     : _api =
           apiUrl ??
-          Platform.environment['LUMEN_UPDATE_URL'] ??
+          Platform.environment['BOBINE_UPDATE_URL'] ??
           'https://api.github.com/repos/$kReleaseRepo/releases/latest';
 
   final Repository _repo;
@@ -87,7 +87,7 @@ class UpdateService extends ChangeNotifier {
       final req = await client.getUrl(Uri.parse(_api)).timeout(const Duration(seconds: 15));
       req.headers
         ..set(HttpHeaders.acceptHeader, 'application/vnd.github+json')
-        ..set(HttpHeaders.userAgentHeader, 'Lumen/$kAppVersion');
+        ..set(HttpHeaders.userAgentHeader, 'Bobine/$kAppVersion');
       final res = await req.close().timeout(const Duration(seconds: 15));
       final body = await res.transform(utf8.decoder).join();
       _repo.kvSet('update_checked_at', '${DateTime.now().millisecondsSinceEpoch ~/ 1000}');
@@ -158,12 +158,12 @@ class UpdateService extends ChangeNotifier {
     progress = 0;
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
     try {
-      final dir = Directory(p.join((await getTemporaryDirectory()).path, 'lumen-update'));
+      final dir = Directory(p.join((await getTemporaryDirectory()).path, 'bobine-update'));
       if (dir.existsSync()) dir.deleteSync(recursive: true);
       dir.createSync(recursive: true);
-      final file = File(p.join(dir.path, p.basename(info!.assetName ?? 'Lumen-Setup.exe')));
+      final file = File(p.join(dir.path, p.basename(info!.assetName ?? 'Bobine-Setup.exe')));
       final req = await client.getUrl(Uri.parse(info.assetUrl!));
-      req.headers.set(HttpHeaders.userAgentHeader, 'Lumen/$kAppVersion');
+      req.headers.set(HttpHeaders.userAgentHeader, 'Bobine/$kAppVersion');
       final res = await req.close();
       if (res.statusCode >= 400) throw _UpdateError('Téléchargement refusé (${res.statusCode}).');
       final total = res.contentLength > 0 ? res.contentLength : (info.size ?? 0);
@@ -202,7 +202,7 @@ class UpdateService extends ChangeNotifier {
     }
   }
 
-  /// Runs the installer silently (it closes Lumen and starts it again).
+  /// Runs the installer silently (it closes Bobine and starts it again).
   Future<void> installAndRestart({Future<void> Function()? beforeExit}) async {
     final path = _installer;
     if (path == null || !Platform.isWindows) return;

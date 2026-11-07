@@ -136,7 +136,7 @@ class PlayerService {
   Future<void> _init() async {
     player = Player(
       configuration: PlayerConfiguration(
-        title: 'Lumen',
+        title: 'Bobine',
         // libass renders every subtitle type (ASS styling, PGS/DVB bitmaps)
         // directly into the video, which is the most compatible option.
         libass: true,

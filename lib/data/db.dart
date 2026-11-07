@@ -213,7 +213,7 @@ void _migrateV3(Database db) {
     ) WITHOUT ROWID''');
 }
 
-/// The first schema, as created by Lumen 1.0 (to test migrations).
+/// The first schema, as created by Bobine 1.0 (to test migrations).
 @visibleForTesting
 void createSchemaV1(Database db) => _createV1(db);
 

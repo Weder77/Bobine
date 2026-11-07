@@ -111,8 +111,8 @@ class TmdbInfo {
 /// with the user's own key. Results are kept 30 days (7 for "no match").
 class TmdbService {
   TmdbService(this._repo, this._settings, {String? apiBase, String? imageBase})
-    : _api = apiBase ?? Platform.environment['LUMEN_TMDB_BASE'] ?? 'https://api.themoviedb.org/3',
-      _img = imageBase ?? Platform.environment['LUMEN_TMDB_IMG'] ?? 'https://image.tmdb.org/t/p';
+    : _api = apiBase ?? Platform.environment['BOBINE_TMDB_BASE'] ?? 'https://api.themoviedb.org/3',
+      _img = imageBase ?? Platform.environment['BOBINE_TMDB_IMG'] ?? 'https://image.tmdb.org/t/p';
 
   final Repository _repo;
   final AppSettings _settings;

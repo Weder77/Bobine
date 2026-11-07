@@ -1,6 +1,6 @@
-# Lumen — lecteur IPTV desktop
+# Bobine — lecteur IPTV desktop
 
-> *Lumen* est un nom provisoire.
+> Anciennement *Lumen*. La mise à jour vers Bobine reprend automatiquement les données (sources, profils, favoris, progression) et remplace l'ancienne application.
 
 Lecteur IPTV pour **Windows, macOS et Linux**, construit avec Flutter et le moteur vidéo **libmpv** (via [media_kit](https://github.com/media-kit/media-kit)).
 L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux et sur lequel les avances / retours rapides sont instantanés.
@@ -54,7 +54,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 **Nouveautés 1.1**
 - **Mini-lecteur** (touche P) : la vidéo continue dans un coin pendant que tu navigues ; double-clic pour revenir en plein écran. Sous Windows, **fenêtre flottante** toujours au-dessus des autres applications (touche O).
 - **Replay** des chaînes qui le proposent (Xtream `tv_archive`, M3U `catchup`) : « Depuis le début » sur le direct, « Revoir » sur un programme passé du guide.
-- **Rappels** (« Me le rappeler ») et **enregistrements** (maintenant ou programmés depuis le guide) dans `Vidéos\Lumen`.
+- **Rappels** (« Me le rappeler ») et **enregistrements** (maintenant ou programmés depuis le guide) dans `Vidéos\Bobine`.
 - **Recherche dans le guide TV** : les programmes à venir et en cours apparaissent dans la recherche.
 - **Profils** (« Qui regarde ? ») avec favoris, reprises et rappels séparés, profil enfant.
 - **Contrôle parental** : code à 4 chiffres, catégories adultes verrouillées automatiquement.
@@ -109,8 +109,8 @@ Autres optimisations :
 Chaque envoi de code est compilé automatiquement sur un Windows de GitHub (tests compris) :
 
 1. Sur GitHub, ouvre l'onglet **Actions**, puis la dernière exécution **« Build »** réussie (coche verte).
-2. En bas de la page, télécharge l'artefact **`Lumen-Setup`** (installateur, sans droits administrateur) ou **`Lumen-windows-x64`** (version portable à dézipper). Il faut être connecté à GitHub.
-3. Lance **`Lumen-Setup-x.y.z.exe`**, ou dézippe l'archive et lance **`lumen.exe`**.
+2. En bas de la page, télécharge l'artefact **`Bobine-Setup`** (installateur, sans droits administrateur) ou **`Bobine-windows-x64`** (version portable à dézipper). Il faut être connecté à GitHub.
+3. Lance **`Bobine-Setup-x.y.z.exe`**, ou dézippe l'archive et lance **`bobine.exe`**.
 
 Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVersion` dans `lib/core/version.dart` (un test vérifie qu'ils sont identiques), puis fusionne dans `main` : si cette version n'existe pas encore, le CI crée le tag (`v1.1.0`) et publie l'installateur et l'archive dans les **Releases**. Pousser soi-même un tag `v*` fonctionne aussi. Les applications installées proposent ensuite la mise à jour (*Réglages → À propos et mises à jour*).
 
@@ -151,7 +151,7 @@ flutter run -d windows          # lance l'app en mode développement
 flutter build windows --release
 ```
 
-L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout le dossier** (le `.exe` a besoin des DLL à côté de lui) où tu veux, puis lance `lumen.exe`.
+L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout le dossier** (le `.exe` a besoin des DLL à côté de lui) où tu veux, puis lance `bobine.exe`.
 
 ### macOS / Linux
 
@@ -201,12 +201,12 @@ Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), 
 
 ## Données et vie privée
 
-Tout est stocké **localement** dans une base SQLite (`lumen.db`) : sources, profils, favoris, progression, rappels et réglages. Un journal (`lumen.log`, identifiants masqués) se trouve à côté.
-Sous Windows elle se trouve dans `%APPDATA%\com.lumen\Lumen\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV, sauf ce que tu actives : les titres des films et séries ouverts vers TMDB si tu as saisi une clé, et la vérification des mises à jour vers GitHub (désactivable).
+Tout est stocké **localement** dans une base SQLite (`bobine.db`) : sources, profils, favoris, progression, rappels et réglages. Un journal (`bobine.log`, identifiants masqués) se trouve à côté.
+Sous Windows elle se trouve dans `%APPDATA%\com.bobine\Bobine\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV, sauf ce que tu actives : les titres des films et séries ouverts vers TMDB si tu as saisi une clé, et la vérification des mises à jour vers GitHub (désactivable).
 
-Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `lumen.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Lumen`.
+Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `bobine.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Bobine`.
 
-Lumen est un lecteur : il ne fournit aucun contenu.
+Bobine est un lecteur : il ne fournit aucun contenu.
 
 ---
 
@@ -239,7 +239,7 @@ tool/generate_test_media.sh test_media      # nécessite ffmpeg + ImageMagick
 python3 tool/fake_xtream.py test_media 8765
 ```
 
-Puis dans Lumen, ajoute une source Xtream avec le serveur `http://127.0.0.1:8765` (identifiant et mot de passe quelconques).
+Puis dans Bobine, ajoute une source Xtream avec le serveur `http://127.0.0.1:8765` (identifiant et mot de passe quelconques).
 
 ### Tests
 

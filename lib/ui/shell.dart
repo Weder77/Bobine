@@ -82,7 +82,7 @@ class _AppShellState extends State<AppShell> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 12),
-        content: Text('Lumen ${info.version} est disponible.'),
+        content: Text('Bobine ${info.version} est disponible.'),
         action: SnackBarAction(label: 'Voir', onPressed: () => _go(ShellTab.settings)),
       ),
     );
@@ -203,9 +203,9 @@ class _TopBar extends StatelessWidget {
                 padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
                 child: Row(
                   children: [
-                    LumenMark(size: 36),
+                    BobineMark(size: 36),
                     SizedBox(width: 12),
-                    Text('LUMEN', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 3)),
+                    Text('BOBINE', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 3)),
                   ],
                 ),
               ),
@@ -411,9 +411,9 @@ class _ClockState extends State<_Clock> {
   );
 }
 
-/// App logo: a poster-style "L" on the amber brand colour.
-class LumenMark extends StatelessWidget {
-  const LumenMark({super.key, this.size = 40, this.round = false});
+/// App logo: a bold "B" on the amber brand colour, like the app icon.
+class BobineMark extends StatelessWidget {
+  const BobineMark({super.key, this.size = 40, this.round = false});
   final double size;
   final bool round;
 
@@ -423,7 +423,17 @@ class LumenMark extends StatelessWidget {
     height: size,
     decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(round ? size : size * 0.28)),
     alignment: Alignment.center,
-    child: Text('L', style: posterStyle(size * 0.68, color: AppColors.onAccent, height: 1.05)),
+    // Same letter as the app icon (tool/make_icon.py).
+    child: Text(
+      'B',
+      style: TextStyle(
+        fontFamily: AppFonts.body,
+        fontSize: size * 0.56,
+        fontWeight: FontWeight.w800,
+        color: AppColors.onAccent,
+        height: 1.1,
+      ),
+    ),
   );
 }
 

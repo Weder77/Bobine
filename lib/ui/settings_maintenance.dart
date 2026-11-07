@@ -60,7 +60,7 @@ class BackupSection extends StatelessWidget {
     final loc = await getSaveLocation(
       suggestedName: s.backup.suggestedFileName(),
       acceptedTypeGroups: const [
-        XTypeGroup(label: 'Sauvegarde Lumen', extensions: ['json']),
+        XTypeGroup(label: 'Sauvegarde Bobine', extensions: ['json']),
       ],
     );
     if (loc == null) return;
@@ -81,7 +81,7 @@ class BackupSection extends StatelessWidget {
     final s = AppScope.of(context);
     final file = await openFile(
       acceptedTypeGroups: const [
-        XTypeGroup(label: 'Sauvegarde Lumen', extensions: ['json']),
+        XTypeGroup(label: 'Sauvegarde Bobine', extensions: ['json']),
       ],
     );
     if (file == null || !context.mounted) return;
@@ -178,10 +178,10 @@ class AboutSection extends StatelessWidget {
         final busy = u.stage == UpdateStage.checking || u.stage == UpdateStage.downloading;
         final status = switch (u.stage) {
           UpdateStage.checking => 'Recherche…',
-          UpdateStage.upToDate => 'Lumen est à jour.',
-          UpdateStage.available => 'Lumen ${info!.version} est disponible.',
+          UpdateStage.upToDate => 'Bobine est à jour.',
+          UpdateStage.available => 'Bobine ${info!.version} est disponible.',
           UpdateStage.downloading => 'Téléchargement… ${(u.progress * 100).round()} %',
-          UpdateStage.ready => 'Prêt : Lumen va se fermer, s’installer puis se rouvrir.',
+          UpdateStage.ready => 'Prêt : Bobine va se fermer, s’installer puis se rouvrir.',
           UpdateStage.error => u.error ?? 'Erreur',
           UpdateStage.idle => null,
         };
@@ -189,7 +189,7 @@ class AboutSection extends StatelessWidget {
           title: 'À propos et mises à jour',
           children: [
             SettingsOption(
-              title: 'Lumen $kAppVersion',
+              title: 'Bobine $kAppVersion',
               subtitle:
                   'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Toutes les données (sources, favoris, '
                   'progression) restent sur cet ordinateur.',

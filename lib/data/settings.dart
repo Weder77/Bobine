@@ -74,7 +74,7 @@ class AppSettings extends ChangeNotifier {
   /// The Movie Database key (v3 key or v4 read token), or null.
   String? tmdbKey;
 
-  /// Folder for recordings (null: Videos/Lumen).
+  /// Folder for recordings (null: Videos/Bobine).
   String? recordingsDir;
 
   /// How many minutes before a programme its reminder pops up.

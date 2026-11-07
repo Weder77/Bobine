@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/core/text.dart';
-import 'package:lumen/data/import/m3u_parser.dart';
-import 'package:lumen/data/import/xmltv_parser.dart';
-import 'package:lumen/data/import/xtream_api.dart';
+import 'package:bobine/core/text.dart';
+import 'package:bobine/data/import/m3u_parser.dart';
+import 'package:bobine/data/import/xmltv_parser.dart';
+import 'package:bobine/data/import/xtream_api.dart';
 
 void main() {
   group('M3U', () {

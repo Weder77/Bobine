@@ -172,5 +172,5 @@ String safeFileName(String name) {
   var s = name.replaceAll(RegExp(r'[<>:"/\\|?*\x00-\x1F]'), ' ').replaceAll(RegExp(r'\s+'), ' ').trim();
   s = s.replaceAll(RegExp(r'[. ]+$'), '');
   if (s.length > 120) s = s.substring(0, 120).trim();
-  return s.isEmpty ? 'Lumen' : s;
+  return s.isEmpty ? 'Bobine' : s;
 }

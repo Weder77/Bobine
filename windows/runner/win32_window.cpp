@@ -8,17 +8,25 @@
 namespace {
 
 /// Registry location of the remembered window position / size.
-constexpr const wchar_t kPlacementKey[] = L"Software\\Lumen";
+constexpr const wchar_t kPlacementKey[] = L"Software\\Bobine";
+// Where the window was saved when the app was called Lumen (read once).
+constexpr const wchar_t kLegacyPlacementKey[] = L"Software\\Lumen";
 constexpr const wchar_t kPlacementValue[] = L"WindowPlacement";
 
 /// Reads the last window placement. Returns false when there is none or when
 /// its title bar would not be reachable on the monitors connected now.
 bool LoadPlacement(WINDOWPLACEMENT* placement) {
   DWORD size = sizeof(WINDOWPLACEMENT);
-  if (RegGetValueW(HKEY_CURRENT_USER, kPlacementKey, kPlacementValue,
-                   RRF_RT_REG_BINARY, nullptr, placement,
-                   &size) != ERROR_SUCCESS ||
-      size != sizeof(WINDOWPLACEMENT) ||
+  LSTATUS status = RegGetValueW(HKEY_CURRENT_USER, kPlacementKey,
+                                kPlacementValue, RRF_RT_REG_BINARY, nullptr,
+                                placement, &size);
+  if (status != ERROR_SUCCESS) {
+    size = sizeof(WINDOWPLACEMENT);
+    status = RegGetValueW(HKEY_CURRENT_USER, kLegacyPlacementKey,
+                          kPlacementValue, RRF_RT_REG_BINARY, nullptr,
+                          placement, &size);
+  }
+  if (status != ERROR_SUCCESS || size != sizeof(WINDOWPLACEMENT) ||
       placement->length != sizeof(WINDOWPLACEMENT)) {
     return false;
   }

@@ -518,7 +518,7 @@ class _HeroContent extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const LumenMark(size: 20),
+                  const BobineMark(size: 20),
                   const SizedBox(width: 8),
                   Text(item.kicker, style: labelStyle(color: AppColors.textSoft, size: 13)),
                 ],

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/features/tmdb.dart';
+import 'package:bobine/features/tmdb.dart';
 
 void main() {
   test('provider names are cleaned before searching TMDB', () {

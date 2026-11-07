@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/app_log.dart';
+import 'core/legacy.dart';
 import 'data/db.dart';
 import 'data/epg_cache.dart';
 import 'data/import/import_service.dart';
@@ -110,8 +111,10 @@ class AppServices {
     await mpvCache.create(recursive: true);
     ImageFetcher.init(p.join(cache.path, 'images'));
 
-    AppLog.install(logPath: p.join(support.path, 'lumen.log'));
-    final dbPath = p.join(support.path, 'lumen.db');
+    // Moves Lumen's data here the first time (former name of the app).
+    final dbPath = await resolveDatabase(support.path);
+    AppLog.install(logPath: p.join(support.path, 'bobine.log'));
+    if (!dbPath.startsWith(support.path)) AppLog.add('Données de Lumen ouvertes sur place : $dbPath');
     final repo = Repository(openAppDatabase(dbPath));
     final settings = AppSettings(repo);
     final library = LibraryNotifier();

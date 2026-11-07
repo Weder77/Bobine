@@ -28,9 +28,9 @@ class OnboardingScreen extends StatelessWidget {
                 children: [
                   Row(
                     children: [
-                      const LumenMark(size: 44),
+                      const BobineMark(size: 44),
                       const SizedBox(width: 14),
-                      Text('LUMEN', style: posterStyle(40).copyWith(letterSpacing: 6)),
+                      Text('BOBINE', style: posterStyle(40).copyWith(letterSpacing: 6)),
                     ],
                   ),
                   const SizedBox(height: 36),
@@ -53,7 +53,7 @@ class OnboardingScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'Lumen est un lecteur : il ne fournit aucun contenu. Tes identifiants restent sur cet ordinateur.',
+                    'Bobine est un lecteur : il ne fournit aucun contenu. Tes identifiants restent sur cet ordinateur.',
                     style: TextStyle(color: AppColors.faint, fontSize: 12),
                   ),
                 ],

@@ -44,7 +44,10 @@ class BackupException implements Exception {
 class BackupService {
   BackupService(this._repo, this._settings);
 
-  static const format = 'lumen-backup';
+  static const format = 'bobine-backup';
+
+  /// Files saved when the app was called Lumen.
+  static const _legacyFormats = {'lumen-backup'};
   static const version = 1;
 
   final Repository _repo;
@@ -53,7 +56,7 @@ class BackupService {
   String suggestedFileName([DateTime? now]) {
     final d = now ?? DateTime.now();
     String two(int v) => v.toString().padLeft(2, '0');
-    return 'lumen-sauvegarde-${d.year}-${two(d.month)}-${two(d.day)}.json';
+    return 'bobine-sauvegarde-${d.year}-${two(d.month)}-${two(d.day)}.json';
   }
 
   /// The backup as JSON. Without [credentials] the file holds no password,
@@ -105,9 +108,9 @@ class BackupService {
     try {
       json = jsonDecode(await File(path).readAsString());
     } catch (_) {
-      throw BackupException("Ce fichier n'est pas une sauvegarde Lumen lisible.");
+      throw BackupException("Ce fichier n'est pas une sauvegarde Bobine lisible.");
     }
-    if (json is! Map) throw BackupException("Ce fichier n'est pas une sauvegarde Lumen.");
+    if (json is! Map) throw BackupException("Ce fichier n'est pas une sauvegarde Bobine.");
     return restore(json.cast<String, Object?>());
   }
 
@@ -115,9 +118,11 @@ class BackupService {
   /// file adds to it (and wins on preferences; the most recent position wins
   /// for progress).
   RestoreReport restore(Map<String, Object?> j) {
-    if (j['format'] != format) throw BackupException("Ce fichier n'est pas une sauvegarde Lumen.");
+    if (j['format'] != format && !_legacyFormats.contains(j['format'])) {
+      throw BackupException("Ce fichier n'est pas une sauvegarde Bobine.");
+    }
     if ((j['version'] as int? ?? 0) > version) {
-      throw BackupException('Sauvegarde faite par une version plus récente de Lumen : mets l’app à jour.');
+      throw BackupException('Sauvegarde faite par une version plus récente de Bobine : mets l’app à jour.');
     }
     final report = RestoreReport();
     List<Map<String, Object?>> list(String key) => [

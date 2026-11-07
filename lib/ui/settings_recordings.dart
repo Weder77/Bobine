@@ -168,7 +168,7 @@ class RemindersSection extends StatelessWidget {
       children: [
         SettingsOption(
           title: 'Prévenir avant le début',
-          subtitle: "Un message apparaît dans Lumen (l'app doit être ouverte).",
+          subtitle: "Un message apparaît dans Bobine (l'app doit être ouverte).",
           child: SettingsSegments<int>(
             value: s.settings.reminderLeadMinutes,
             options: const {0: "À l'heure", 2: '2 min', 5: '5 min', 10: '10 min'},

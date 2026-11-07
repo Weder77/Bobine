@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'text.dart';
 
 /// Keeps the last messages of the app (debugPrint, Flutter and uncaught
-/// errors) for the diagnostic page, and in `lumen.log` next to the database.
+/// errors) for the diagnostic page, and in `bobine.log` next to the database.
 /// Credentials are masked before anything is kept.
 class AppLog {
   static const _max = 400;

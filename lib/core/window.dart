@@ -8,7 +8,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 /// channel, floating "picture in picture" through the Windows runner.
 class AppWindow {
   static final ValueNotifier<bool> fullscreen = ValueNotifier(false);
-  static const _channel = MethodChannel('lumen/window');
+  static const _channel = MethodChannel('bobine/window');
 
   static Future<void> setFullscreen(bool value) async {
     if (value == fullscreen.value) return;

@@ -118,7 +118,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   /// Plain text summary without any password or address with credentials.
   String _report() {
     final b = StringBuffer()
-      ..writeln('Rapport Lumen $kAppVersion — ${DateTime.now().toIso8601String().substring(0, 19)}')
+      ..writeln('Rapport Bobine $kAppVersion — ${DateTime.now().toIso8601String().substring(0, 19)}')
       ..writeln('Système : ${Platform.operatingSystem} ${Platform.operatingSystemVersion}')
       ..writeln('Dart : ${Platform.version.split(' ').first}');
     for (final e in _player.entries) {
@@ -155,7 +155,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
 
   Future<void> _save() async {
     final loc = await getSaveLocation(
-      suggestedName: 'lumen-rapport.txt',
+      suggestedName: 'bobine-rapport.txt',
       acceptedTypeGroups: const [
         XTypeGroup(label: 'Texte', extensions: ['txt']),
       ],
@@ -238,7 +238,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
           SettingsSection(
             title: 'Application',
             children: [
-              row('Lumen', kAppVersion),
+              row('Bobine', kAppVersion),
               row('Système', '${Platform.operatingSystem} · ${Platform.operatingSystemVersion}'),
               row('Dart', Platform.version.split(' ').first),
               for (final e in _player.entries) row(e.key, e.value),

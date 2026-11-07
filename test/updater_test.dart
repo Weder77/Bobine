@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/features/updater.dart';
+import 'package:bobine/features/updater.dart';
 
 void main() {
   Map<String, Object?> release(String tag, {bool pre = false}) => {
@@ -8,9 +8,9 @@ void main() {
     'html_url': 'https://github.com/o/r/releases/tag/$tag',
     'body': 'Nouveautés',
     'assets': [
-      {'name': 'Lumen-windows-x64.zip', 'browser_download_url': 'https://x/zip', 'size': 10},
+      {'name': 'Bobine-windows-x64.zip', 'browser_download_url': 'https://x/zip', 'size': 10},
       {
-        'name': 'Lumen-Setup-$tag.exe',
+        'name': 'Bobine-Setup-$tag.exe',
         'browser_download_url': 'https://x/setup',
         'size': 20,
         'digest': 'sha256:ABCDEF',
