@@ -22,7 +22,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (context, _) {
         final st = s.settings;
         return ListView(
-          padding: const EdgeInsets.fromLTRB(48, 24, 48, 56),
+          padding: settingsPadding(context),
           children: [
             Text('Réglages', style: displayStyle(34)),
             const SizedBox(height: 28),
@@ -172,40 +172,46 @@ class SettingsSection extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 30),
     child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 980),
-          child: Row(
-            children: [
-              Text(title, style: displayStyle(21)),
-              const Spacer(),
-              ?trailing,
-            ],
-          ),
+        Row(
+          children: [
+            Text(title, style: displayStyle(21)),
+            const Spacer(),
+            ?trailing,
+          ],
         ),
         const SizedBox(height: 12),
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 980),
-          child: Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: Column(
-              children: [
-                for (var i = 0; i < children.length; i++) ...[
-                  if (i > 0) const Divider(indent: 18, endIndent: 18),
-                  children[i],
-                ],
+        Container(
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            // Texts and buttons inside a card start on the left.
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                if (i > 0) const Divider(indent: 18, endIndent: 18),
+                children[i],
               ],
-            ),
+            ],
           ),
         ),
       ],
     ),
   );
+}
+
+/// Width of the settings column; it is centred in wide windows.
+const kSettingsWidth = 1040.0;
+
+/// Side padding that centres a [kSettingsWidth] column (48 px at least).
+EdgeInsets settingsPadding(BuildContext context, {double top = 24, double bottom = 56}) {
+  final width = MediaQuery.sizeOf(context).width;
+  final side = ((width - kSettingsWidth) / 2).clamp(48.0, double.infinity);
+  return EdgeInsets.fromLTRB(side, top, side, bottom);
 }
 
 class SettingsOption extends StatelessWidget {

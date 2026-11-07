@@ -225,7 +225,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
         ],
       ),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(48, 12, 48, 48),
+        padding: settingsPadding(context, top: 12, bottom: 48),
         children: [
           const Padding(
             padding: EdgeInsets.only(bottom: 20),

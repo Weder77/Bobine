@@ -112,9 +112,9 @@ Chaque envoi de code est compilé automatiquement sur un Windows de GitHub (test
 2. En bas de la page, télécharge l'artefact **`Lumen-Setup`** (installateur, sans droits administrateur) ou **`Lumen-windows-x64`** (version portable à dézipper). Il faut être connecté à GitHub.
 3. Lance **`Lumen-Setup-x.y.z.exe`**, ou dézippe l'archive et lance **`lumen.exe`**.
 
-Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVersion` dans `lib/core/version.dart` (un test vérifie qu'ils sont identiques), puis crée le tag correspondant (`v1.1.0`) : l'installateur et l'archive sont publiés dans les **Releases**, et les applications installées proposent la mise à jour (*Réglages → À propos et mises à jour*).
+Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVersion` dans `lib/core/version.dart` (un test vérifie qu'ils sont identiques), puis fusionne dans `main` : si cette version n'existe pas encore, le CI crée le tag (`v1.1.0`) et publie l'installateur et l'archive dans les **Releases**. Pousser soi-même un tag `v*` fonctionne aussi. Les applications installées proposent ensuite la mise à jour (*Réglages → À propos et mises à jour*).
 
-> La vérification des mises à jour interroge l'API publique de GitHub : elle ne voit pas les Releases d'un dépôt **privé**. Dans ce cas, installe les nouvelles versions à la main depuis l'onglet Actions ou Releases.
+> La vérification des mises à jour interroge l'API publique de GitHub : le dépôt (ou au moins ses Releases) doit être public.
 
 ### Option développeur : compiler toi-même
 
