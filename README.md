@@ -55,6 +55,12 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
 
+**Synchronisation entre appareils**
+- **Compte Bobine** (*Paramètres → Compte*) : sources (identifiants compris), profils, favoris, reprises et épisodes vus, chaînes récentes, catégories et chaînes masquées ou verrouillées, rappels, code parental, clé TMDB et réglages de lecture suivent sur tous tes ordinateurs. Le cache, le décodage, le volume et les enregistrements restent propres à chaque ordinateur.
+- **Chiffré de bout en bout** : tout est chiffré sur l'appareil (AES-256-GCM) avec une clé tirée de ton mot de passe. Le serveur ne reçoit ni ton mot de passe ni tes identifiants IPTV, ni même la liste de ce que tu regardes : seulement des éléments opaques.
+- Synchro automatique au démarrage, quelques secondes après un changement et toutes les quelques minutes. En cas de conflit, la modification la plus récente gagne ; une suppression se propage aussi.
+- Au premier branchement d'un ordinateur qui a déjà des données, ses sources et profils sont **retrouvés** sur le compte (même serveur et identifiant, même nom de profil) au lieu d'être dupliqués.
+
 **Nouveautés 1.2 : Bobine**
 - Nouveau nom, nouveau logo et **nouvelle interface** : polices Big Shoulders et Geist, vermillon sur fond chaud, accueil façon salle de cinéma, Direct en mosaïque, guide redessiné, lecteur et paramètres refaits.
 - Recherche dans l'en-tête (chaînes, programmes, films, séries, recherches récentes et tendances).
@@ -212,7 +218,9 @@ Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), 
 ## Données et vie privée
 
 Tout est stocké **localement** dans une base SQLite (`bobine.db`) : sources, profils, favoris, progression, rappels et réglages. Un journal (`bobine.log`, identifiants masqués) se trouve à côté.
-Sous Windows elle se trouve dans `%APPDATA%\com.bobine\Bobine\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV, sauf ce que tu actives : les titres des films et séries ouverts vers TMDB si tu as saisi une clé, et la vérification des mises à jour vers GitHub (désactivable).
+Sous Windows elle se trouve dans `%APPDATA%\com.bobine\Bobine\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV, sauf ce que tu actives : les titres des films et séries ouverts vers TMDB si tu as saisi une clé, la vérification des mises à jour vers GitHub (désactivable) et, si tu crées un compte, la synchronisation.
+
+**Compte et synchronisation** (facultatifs) : le compte est hébergé sur Supabase (région Europe). Ton mot de passe ne quitte jamais l'ordinateur : Bobine en tire, avec PBKDF2 (600 000 itérations), une clé de connexion envoyée au serveur et une clé de chiffrement qui reste sur l'appareil. Chaque élément est chiffré en AES-256-GCM et rangé sous un identifiant opaque (HMAC) : le serveur ne connaît que ton adresse e-mail, le nombre d'éléments et leurs dates de modification. Sans le mot de passe, personne ne peut lire ces données ; en cas d'oubli, « Mot de passe oublié » en définit un nouveau et le compte repart des données de l'ordinateur. *Paramètres → Compte → Supprimer le compte* efface tout sur le serveur.
 
 Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `bobine.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Bobine`.
 
@@ -233,15 +241,25 @@ lib/
 │   ├── settings.dart        Préférences utilisateur
 │   ├── epg_cache.dart       Association chaîne ↔ guide, « en cours » mémorisé
 │   └── import/              M3U, Xtream, XMLTV : analyse en flux + import en isolate
+├── sync/
+│   ├── sync_engine.dart     Journal des changements → envoi, réception, « le plus récent gagne »
+│   ├── sync_crypto.dart     Clés tirées du mot de passe, chiffrement AES-GCM
+│   ├── supabase_api.dart    Compte (inscription, code, connexion) et échanges avec le serveur
+│   └── sync_service.dart    État du compte et synchro automatique
 ├── player/
 │   ├── player_service.dart  Instance libmpv unique + stratégie de cache
 │   ├── player_screen.dart   Lecteur plein écran (commandes, raccourcis, zapping)
 │   ├── player_chrome.dart   Barres, panneaux (chaînes, mini-guide, pistes, épisodes), écran de pause
 │   └── player_widgets.dart  Noms des pistes audio et sous-titres
 └── ui/              Accueil, Direct + guide, Films/Séries, fiches, recherche, paramètres
-test/                Tests (analyseurs, import complet avec faux serveur, lecteur, images)
+test/                Tests (analyseurs, import complet avec faux serveur, lecteur, images, synchro)
 tool/                Faux serveur Xtream + générateur de vidéos de test
+supabase/migrations/ Table de synchro, règles d'accès et fonctions du serveur
 ```
+
+### Synchronisation : comment ça marche
+
+Chaque changement des données utilisateur est noté dans la table `sync_log` par des triggers SQLite (base v5), suppressions comprises ; rien d'autre dans le code n'a à s'en soucier. Une synchro reçoit d'abord ce qui a changé sur le compte depuis la dernière fois (`rev` croissant), l'applique là où c'est plus récent que le changement local, puis envoie les changements locaux par `sync_push`, qui ne remplace une version que par une plus récente. Les sources et profils ont un `uid` commun à tous les appareils ; le profil de départ (« Moi ») est le même partout.
 
 ### Tester sans abonnement
 
@@ -263,7 +281,7 @@ flutter test
 
 ## Feuille de route
 
-- [ ] **Synchronisation par compte** (favoris, progression, sources) entre plusieurs appareils. Les données utilisateur sont déjà indexées par des identifiants stables et horodatées pour la préparer.
+- [x] **Synchronisation par compte** (sources, profils, favoris, progression, réglages) entre plusieurs appareils, chiffrée de bout en bout.
 - [x] Replay / catch-up, rappels, enregistrements, mini-lecteur, profils, contrôle parental, TMDB, sauvegarde, manette, installateur (1.1).
 - [ ] Multi-écran (2 à 4 chaînes).
 - [ ] Portail Stalker (MAC).

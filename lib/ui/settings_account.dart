@@ -9,17 +9,20 @@ import 'settings_screen.dart';
 
 /// Paramètres → Compte: sign in, and the synchronisation between devices.
 class AccountSection extends StatelessWidget {
-  const AccountSection({super.key});
+  const AccountSection({super.key, this.sync});
+
+  /// The app's by default.
+  final SyncService? sync;
 
   @override
   Widget build(BuildContext context) {
-    final sync = AppScope.of(context).sync;
+    final sync = this.sync ?? AppScope.of(context).sync;
     return ListenableBuilder(
       listenable: sync,
       builder: (context, _) => switch (sync.status) {
-        SyncStatus.signedOut => const _SignInForm(),
-        SyncStatus.confirming => const _ConfirmForm(),
-        _ => const _AccountStatus(),
+        SyncStatus.signedOut => _SignInForm(sync),
+        SyncStatus.confirming => _ConfirmForm(sync),
+        _ => _AccountStatus(sync),
       },
     );
   }
@@ -85,14 +88,15 @@ Widget _field(
 enum _Mode { signIn, signUp, forgot, reset }
 
 class _SignInForm extends StatefulWidget {
-  const _SignInForm();
+  const _SignInForm(this.sync);
+  final SyncService sync;
 
   @override
   State<_SignInForm> createState() => _SignInFormState();
 }
 
 class _SignInFormState extends State<_SignInForm> {
-  late final SyncService _sync = AppScope.of(context).sync;
+  SyncService get _sync => widget.sync;
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirm = TextEditingController();
@@ -169,8 +173,7 @@ class _SignInFormState extends State<_SignInForm> {
   Widget build(BuildContext context) {
     final creating = _mode == _Mode.signUp;
     final title = switch (_mode) {
-      _Mode.signIn => 'Se connecter',
-      _Mode.signUp => 'Créer un compte',
+      _Mode.signIn || _Mode.signUp => 'Compte Bobine',
       _Mode.forgot || _Mode.reset => 'Mot de passe oublié',
     };
     return Column(
@@ -299,14 +302,15 @@ class _SignInFormState extends State<_SignInForm> {
 }
 
 class _ConfirmForm extends StatefulWidget {
-  const _ConfirmForm();
+  const _ConfirmForm(this.sync);
+  final SyncService sync;
 
   @override
   State<_ConfirmForm> createState() => _ConfirmFormState();
 }
 
 class _ConfirmFormState extends State<_ConfirmForm> {
-  late final SyncService _sync = AppScope.of(context).sync;
+  SyncService get _sync => widget.sync;
   final _code = TextEditingController();
   bool _busy = false;
   String? _error;
@@ -389,7 +393,8 @@ class _ConfirmFormState extends State<_ConfirmForm> {
 }
 
 class _AccountStatus extends StatelessWidget {
-  const _AccountStatus();
+  const _AccountStatus(this.sync);
+  final SyncService sync;
 
   Future<void> _delete(BuildContext context, SyncService sync) async {
     final ok = await showDialog<bool>(
@@ -420,7 +425,6 @@ class _AccountStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final sync = AppScope.of(context).sync;
     final syncing = sync.status == SyncStatus.syncing;
     final state = syncing
         ? 'Synchronisation en cours…'
