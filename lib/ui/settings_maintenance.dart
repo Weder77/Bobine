@@ -9,6 +9,7 @@ import '../features/updater.dart';
 import '../services.dart';
 import 'diagnostic_screen.dart';
 import 'settings_screen.dart';
+import 'widgets/markdown.dart';
 
 /// Réglages → Sauvegarde et diagnostic.
 class BackupSection extends StatelessWidget {
@@ -223,9 +224,12 @@ class AboutSection extends StatelessWidget {
                     if (info != null && info.notes != null && info.notes!.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 200),
+                        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 280),
                         child: SingleChildScrollView(
-                          child: Text(info.notes!, style: const TextStyle(color: AppColors.muted, height: 1.5)),
+                          child: MarkdownText(
+                            info.notes!,
+                            style: const TextStyle(fontSize: 14, color: AppColors.muted, height: 1.5),
+                          ),
                         ),
                       ),
                     ],
