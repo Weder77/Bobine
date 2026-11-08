@@ -646,7 +646,7 @@ class _ImportBanner extends StatelessWidget {
               ),
               const SizedBox(width: 12),
               Text(
-                'Mise à jour de « $name » — ${st.label}',
+                'Mise à jour de « $name » : ${st.label}',
                 style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
               ),
             ],

@@ -1065,7 +1065,7 @@ class _Shortcuts extends StatelessWidget {
   static const _rows = [
     ('Espace / K', 'Lecture / pause'),
     ('← / →', 'Reculer / avancer (Maj = ×6)'),
-    ('↑ / ↓', 'Chaîne précédente / suivante (direct) — volume (films)'),
+    ('↑ / ↓', 'Chaîne précédente / suivante (direct), volume (films)'),
     ('Pg↑ / Pg↓', 'Chaîne précédente / suivante'),
     ('0-9', 'Aller au numéro de chaîne'),
     ('C · G', 'Liste des chaînes · mini-guide (direct)'),

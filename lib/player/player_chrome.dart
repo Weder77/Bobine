@@ -1442,7 +1442,7 @@ class StatsCard extends StatelessWidget {
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
-                          v.isEmpty ? '—' : v,
+                          v.isEmpty ? 'inconnu' : v,
                           textAlign: TextAlign.right,
                           style: monoStyle(12, color: AppColors.text, height: 1.2),
                         ),
