@@ -1,4 +1,4 @@
-"""Fake Xtream Codes server for end-to-end testing of Lumen (supports HTTP Range)."""
+"""Fake Xtream Codes server for end-to-end testing of Bobine (supports HTTP Range)."""
 import json
 import os
 import re
@@ -25,10 +25,12 @@ MOVIE_TITLES = ["Horizon", "Le Phare", "Nuit Blanche", "Odyssée", "Brume", "Atl
                 "Orbite", "Marée", "Vertige", "Solstice", "Rivage", "Éclipse"]
 PROGRAMS = ["Journal de 20h", "Météo", "Le grand match", "Documentaire : Océans", "Série du soir",
             "Talk-show", "Cinéma : Horizon", "Magazine auto", "Dessins animés", "Info en continu"]
+GENRES = ["Info", "Info · Météo", "Sport · Football", "Documentaire · Nature", "Série · Policier",
+          "Divertissement", "Film · Aventure", "Magazine · Auto", "Jeunesse · Animation", "Info"]
 
 
 def tmdb(path, q, headers):
-    """Tiny stand-in for The Movie Database (LUMEN_TMDB_BASE=http://127.0.0.1:8765/tmdb/3)."""
+    """Tiny stand-in for The Movie Database (BOBINE_TMDB_BASE=http://127.0.0.1:8765/tmdb/3)."""
     key = q.get("api_key", [""])[0] or headers.get("Authorization", "").replace("Bearer ", "")
     if key != "testkey":
         return 401, {"status_message": "Invalid API key"}
@@ -47,13 +49,13 @@ def tmdb(path, q, headers):
         return 200, {
             "id": int(m.group(2)), "title": None if tv else MOVIE_TITLES[i % 12], "name": "Série" if tv else None,
             "overview": "Résumé TMDB : au bord d'un monde qui s'efface, une équipe tente de sauver ce qui peut "
-                        "l'être. Un film de test servi par le faux TMDB de Lumen.",
+                        "l'être. Un film de test servi par le faux TMDB de Bobine.",
             "tagline": "Chaque lumière a son ombre.",
             "backdrop_path": f"/backdrop{(i + 3) % 12}.png", "poster_path": f"/poster{i % 12}.png",
             "genres": [{"name": "Science-Fiction"}, {"name": "Aventure"}],
             "vote_average": 7.8, "release_date": f"{2015 + i}-03-01", "first_air_date": "2021-09-10",
             "runtime": 128, "episode_run_time": [42],
-            "credits": {"cast": [{"name": "Léa Fontaine"}, {"name": "Marc Aubry"}, {"name": "Inès Roche"}],
+            "credits": {"cast": [{"name": "Léa Fontaine", "character": "Capitaine Vega", "profile_path": "/p1.jpg"}, {"name": "Marc Aubry", "character": "Docteur Hale"}, {"name": "Inès Roche", "character": "Mina"}, {"name": "Paul Garnier", "character": "Le passeur"}],
                         "crew": [{"job": "Director", "name": "Paul Vernier"}]},
             "created_by": [{"name": "Nora Lemaire"}],
             "videos": {"results": [{"site": "YouTube", "type": "Trailer", "key": "dQw4w9WgXcQ", "iso_639_1": "fr"}]},
@@ -88,7 +90,7 @@ def api(action, q):
         i = int(q.get("vod_id", ["500"])[0]) - 500
         return {"info": {"movie_image": f"{BASE}/img/poster{i}.png",
                          "backdrop_path": [f"{BASE}/img/backdrop{i}.png"],
-                         "plot": "Un récit visuel généré pour tester Lumen : deux pistes audio (VF / VO), "
+                         "plot": "Un récit visuel généré pour tester Bobine : deux pistes audio (VF / VO), "
                                  "des sous-titres et un cache de lecture agressif pour des sauts instantanés.",
                          "cast": "Alice Martin, Bruno Leroy", "director": "Claire Dubois",
                          "genre": "Drame, Aventure", "releasedate": f"{2015 + i}-05-12",
@@ -133,9 +135,10 @@ def xmltv():
             dur = timedelta(minutes=[30, 45, 60, 90][k % 4])
             fmt = "%Y%m%d%H%M%S +0000"
             title = PROGRAMS[k % len(PROGRAMS)].replace("&", "&amp;")
+            cats = "".join(f'<category lang="fr">{g}</category>' for g in GENRES[k % len(GENRES)].split(" · "))
             out.append(f'<programme start="{t.strftime(fmt)}" stop="{(t + dur).strftime(fmt)}" channel="{epg}">'
                        f'<title lang="fr">{title}</title><desc lang="fr">Description de « {title} » '
-                       f'sur {n}.</desc></programme>')
+                       f'sur {n}.</desc>{cats}</programme>')
             t += dur
             k += 1
     out.append("</tv>")
@@ -205,11 +208,11 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/xmltv.php":
             return self.send_bytes(xmltv(), "application/xml")
         if p == "/gh/releases/latest":
-            # Fake GitHub release (LUMEN_UPDATE_URL=http://127.0.0.1:8765/gh/releases/latest).
+            # Fake GitHub release (BOBINE_UPDATE_URL=http://127.0.0.1:8765/gh/releases/latest).
             return self.send_bytes(json.dumps({
                 "tag_name": "v1.2.0", "html_url": "https://github.com/weder77/iptv/releases/tag/v1.2.0",
                 "body": "- Multi-écran\n- Corrections diverses",
-                "assets": [{"name": "Lumen-Setup-1.2.0.exe", "size": 4, "digest": "sha256:00",
+                "assets": [{"name": "Bobine-Setup-1.2.0.exe", "size": 4, "digest": "sha256:00",
                             "browser_download_url": f"{BASE}/gh/setup.exe"}]}).encode(), "application/json")
         if p.startswith("/tmdb/3/"):
             code, body = tmdb(p[len("/tmdb/3"):], q, self.headers)

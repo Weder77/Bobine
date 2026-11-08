@@ -125,7 +125,7 @@ class _ProgramDialogState extends State<_ProgramDialog> {
       actionsPadding: const EdgeInsets.fromLTRB(28, 12, 28, 24),
       title: Row(
         children: [
-          ChannelLogo(name: c.name, url: c.logo, size: 44),
+          ChannelLogo(name: s.channelName(c), url: c.logo, size: 44),
           const SizedBox(width: 14),
           Expanded(
             child: Text(p.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: displayStyle(22)),
@@ -145,7 +145,7 @@ class _ProgramDialogState extends State<_ProgramDialog> {
               children: [
                 if (time == ProgramTime.live) const LiveBadge(),
                 Text(
-                  '${c.name} · ${formatDay(p.start)} ${formatClock(p.start)} – ${formatClock(p.stop)}',
+                  '${s.channelName(c)} · ${formatDay(p.start)} ${formatClock(p.start)} – ${formatClock(p.stop)}',
                   style: const TextStyle(color: AppColors.textSoft),
                 ),
               ],

@@ -3,14 +3,14 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/sqlite3.dart';
-import 'package:lumen/data/db.dart';
-import 'package:lumen/data/epg_cache.dart';
-import 'package:lumen/data/import/import_service.dart';
-import 'package:lumen/data/import/importers.dart';
-import 'package:lumen/data/import/xtream_api.dart';
-import 'package:lumen/data/models.dart';
-import 'package:lumen/data/repository.dart';
-import 'package:lumen/data/stream_urls.dart';
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/epg_cache.dart';
+import 'package:bobine/data/import/import_service.dart';
+import 'package:bobine/data/import/importers.dart';
+import 'package:bobine/data/import/xtream_api.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/repository.dart';
+import 'package:bobine/data/stream_urls.dart';
 
 String _xmltvTime(DateTime t) {
   final u = t.toUtc();
@@ -32,7 +32,7 @@ void main() {
   final now = DateTime.now();
 
   setUpAll(() async {
-    tmp = await Directory.systemTemp.createTemp('lumen_test');
+    tmp = await Directory.systemTemp.createTemp('bobine_test');
     server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     base = 'http://127.0.0.1:${server.port}';
     server.listen((req) async {

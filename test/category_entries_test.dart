@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/ui/widgets/common.dart';
+import 'package:bobine/ui/widgets/common.dart';
 
 void main() {
   test('favourite counter is updated without touching other entries', () {

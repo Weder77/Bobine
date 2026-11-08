@@ -9,10 +9,10 @@ import 'services.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   MediaKit.ensureInitialized();
-  AppLog.add('Lumen $kAppVersion démarre');
+  AppLog.add('Bobine $kAppVersion démarre');
   try {
     final services = await AppServices.create();
-    runApp(LumenApp(services: services));
+    runApp(BobineApp(services: services));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       services.refreshStaleSources();
       // A little later: the update check must not slow the first screens.

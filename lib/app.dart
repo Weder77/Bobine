@@ -8,8 +8,8 @@ import 'ui/onboarding_screen.dart';
 import 'ui/profiles.dart';
 import 'ui/shell.dart';
 
-class LumenApp extends StatelessWidget {
-  const LumenApp({super.key, required this.services});
+class BobineApp extends StatelessWidget {
+  const BobineApp({super.key, required this.services});
   final AppServices services;
 
   @override
@@ -17,7 +17,7 @@ class LumenApp extends StatelessWidget {
     return AppScope(
       services: services,
       child: MaterialApp(
-        title: 'Lumen',
+        title: 'Bobine',
         debugShowCheckedModeBanner: false,
         theme: buildTheme(),
         locale: const Locale('fr', 'FR'),
@@ -73,7 +73,7 @@ class StartupErrorApp extends StatelessWidget {
             children: [
               const Icon(Icons.error_outline, size: 48, color: AppColors.live),
               const SizedBox(height: 16),
-              const Text('Lumen n\'a pas pu démarrer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+              const Text('Bobine n\'a pas pu démarrer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
               SelectableText(error, style: const TextStyle(color: AppColors.muted)),
             ],

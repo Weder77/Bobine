@@ -1,10 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/core/secrets.dart';
-import 'package:lumen/data/db.dart';
-import 'package:lumen/data/models.dart';
-import 'package:lumen/data/repository.dart';
+import 'package:bobine/core/secrets.dart';
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/repository.dart';
 import 'package:sqlite3/sqlite3.dart';
 
 void main() {
@@ -24,7 +24,7 @@ void main() {
   }, skip: Secrets.supported ? false : 'DPAPI only exists on Windows');
 
   test('credentials are encrypted in the database (Windows)', () {
-    final dir = Directory.systemTemp.createTempSync('lumen_secrets');
+    final dir = Directory.systemTemp.createTempSync('bobine_secrets');
     final path = '${dir.path}/s.db';
     // A legacy row written in clear by an older version.
     openAppDatabase(path).close();

@@ -47,7 +47,7 @@ class RecordingService {
     final custom = _settings.recordingsDir;
     if (custom != null && custom.trim().isNotEmpty) return custom.trim();
     final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'] ?? '.';
-    return p.join(home, Platform.isMacOS ? 'Movies' : 'Videos', 'Lumen');
+    return p.join(home, Platform.isMacOS ? 'Movies' : 'Videos', 'Bobine');
   }
 
   bool isActive(int id) => _active.containsKey(id);
@@ -144,7 +144,7 @@ class RecordingService {
       final path = p.join(dir.path, '$name.ts');
       final player = Player(
         configuration: const PlayerConfiguration(
-          title: 'Lumen (enregistrement)',
+          title: 'Bobine (enregistrement)',
           muted: true,
           logLevel: MPVLogLevel.warn,
         ),

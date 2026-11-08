@@ -7,12 +7,16 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../features/updater.dart';
 import '../services.dart';
+import 'catalog_controller.dart';
 import 'catalog_screen.dart';
+import 'guide_screen.dart';
 import 'home_screen.dart';
+import 'live_catalog.dart';
 import 'live_screen.dart';
 import 'profiles.dart';
 import 'search_screen.dart';
 import 'settings_screen.dart';
+import 'widgets/brand.dart';
 import 'widgets/common.dart';
 
 /// Pages of the main shell.
@@ -30,7 +34,7 @@ class ShellTab {
 /// Tabs shown as text in the top bar (search and settings are icons).
 const _textTabs = [
   (ShellTab.home, 'Accueil'),
-  (ShellTab.live, 'Live TV'),
+  (ShellTab.live, 'Direct'),
   (ShellTab.guide, 'Guide TV'),
   (ShellTab.movies, 'Films'),
   (ShellTab.series, 'Séries'),
@@ -60,10 +64,34 @@ class _AppShellState extends State<AppShell> {
   int _wasRunning = 0;
   late final AppServices _s;
 
+  /// Search: the header's field drives the search layer above the pages.
+  bool _searchOpen = false;
+  final _searchCtl = TextEditingController();
+  final _searchFocus = FocusNode();
+
+  /// Pages scrolled past 40 px get an opaque header.
+  final Set<int> _scrolled = {};
+
+  /// Groups and channels shared by Direct and Guide TV.
+  late final LiveCatalog _live;
+
+  /// Films and Séries pages, shared with the header's sub-bar.
+  late final CatalogController _movies;
+  late final CatalogController _series;
+
+  CatalogController? get _catalog => switch (_index) {
+    ShellTab.movies => _movies,
+    ShellTab.series => _series,
+    _ => null,
+  };
+
   @override
   void initState() {
     super.initState();
     _s = AppScope.of(context);
+    _live = LiveCatalog(_s);
+    _movies = CatalogController(_s, series: false);
+    _series = CatalogController(_s, series: true);
     _s.imports.addListener(_onImports);
     _s.updates.addListener(_onUpdates);
     HardwareKeyboard.instance.addHandler(_onKey);
@@ -82,7 +110,7 @@ class _AppShellState extends State<AppShell> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 12),
-        content: Text('Lumen ${info.version} est disponible.'),
+        content: Text('Bobine ${info.version} est disponible.'),
         action: SnackBarAction(label: 'Voir', onPressed: () => _go(ShellTab.settings)),
       ),
     );
@@ -90,29 +118,50 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    _live.dispose();
+    _movies.dispose();
+    _series.dispose();
     HardwareKeyboard.instance.removeHandler(_onKey);
+    _searchCtl.dispose();
+    _searchFocus.dispose();
     _s.imports.removeListener(_onImports);
     _s.updates.removeListener(_onUpdates);
     super.dispose();
   }
 
-  /// Ctrl/Cmd + K opens the search from anywhere in the shell. A global
-  /// handler rather than Shortcuts: after closing the player or a dialog, the
-  /// keyboard focus is not always inside the shell's widget tree.
+  /// Ctrl/Cmd + K or "/" opens the search from anywhere in the shell. A
+  /// global handler rather than Shortcuts: after closing the player or a
+  /// dialog, the keyboard focus is not always inside the shell's widget tree.
   bool _onKey(KeyEvent e) {
-    // Échap / gamepad B on another tab goes back to Accueil.
-    if (e is KeyDownEvent && e.logicalKey == LogicalKeyboardKey.escape) {
-      final typing = FocusManager.instance.primaryFocus?.context?.widget is EditableText;
-      if (!mounted || typing || _index == ShellTab.home || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    if (e is! KeyDownEvent || !mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    final typing = FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+    if (e.logicalKey == LogicalKeyboardKey.escape) {
+      // Échap / gamepad B: closes the search, then goes back to Accueil.
+      if (_searchOpen) {
+        _closeSearch();
+        return true;
+      }
+      if (typing || _index == ShellTab.home) return false;
       _go(ShellTab.home);
       return true;
     }
-    if (e is! KeyDownEvent || e.logicalKey != LogicalKeyboardKey.keyK) return false;
     final keys = HardwareKeyboard.instance;
-    if (!keys.isControlPressed && !keys.isMetaPressed) return false;
-    if (!mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
-    _go(ShellTab.search);
+    final ctrlK = e.logicalKey == LogicalKeyboardKey.keyK && (keys.isControlPressed || keys.isMetaPressed);
+    final slash = e.logicalKey == LogicalKeyboardKey.slash && !typing;
+    if (!ctrlK && !slash) return false;
+    _openSearch();
     return true;
+  }
+
+  void _openSearch() {
+    setState(() => _searchOpen = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _searchFocus.requestFocus());
+  }
+
+  void _closeSearch() {
+    _searchCtl.clear();
+    _searchFocus.unfocus();
+    setState(() => _searchOpen = false);
   }
 
   void _onImports() {
@@ -125,44 +174,96 @@ class _AppShellState extends State<AppShell> {
   }
 
   void _go(int i) {
+    if (i == ShellTab.search) return _openSearch();
     setState(() {
+      _searchOpen = false;
+      _searchCtl.clear();
       _index = i;
       _built.add(i);
     });
   }
 
+  /// Home, films and series start with a big image under the header.
+  static bool _heroPage(int i) => i == ShellTab.home || i == ShellTab.movies || i == ShellTab.series;
+
+  bool _onScroll(int i, ScrollNotification n) {
+    if (n.depth != 0 || n.metrics.axis != Axis.vertical) return false;
+    final past = n.metrics.pixels > 40;
+    if (past != _scrolled.contains(i)) setState(() => past ? _scrolled.add(i) : _scrolled.remove(i));
+    return false;
+  }
+
   Widget _page(int i) => switch (i) {
     ShellTab.home => const HomeScreen(),
-    ShellTab.live => LiveScreen(active: _index == ShellTab.live),
-    ShellTab.guide => LiveScreen(active: _index == ShellTab.guide, guide: true),
-    ShellTab.movies => const CatalogScreen(series: false),
-    ShellTab.series => const CatalogScreen(series: true),
-    ShellTab.search => SearchScreen(active: _index == ShellTab.search),
+    ShellTab.live => LiveScreen(catalog: _live),
+    ShellTab.guide => GuideScreen(catalog: _live),
+    ShellTab.movies => CatalogScreen(controller: _movies),
+    ShellTab.series => CatalogScreen(controller: _series),
     _ => const SettingsScreen(),
   };
 
   @override
   Widget build(BuildContext context) {
+    final opaque = _searchOpen || !_heroPage(_index) || _scrolled.contains(_index);
     return ShellNavigation(
       goTo: _go,
       child: Scaffold(
         body: Column(
           children: [
-            _TopBar(index: _index, onSelect: _go),
             Expanded(
               child: Stack(
                 children: [
                   for (var i = 0; i < ShellTab.count; i++)
-                    if (_built.contains(i))
+                    if (_built.contains(i) && i != ShellTab.search)
                       Offstage(
                         key: ValueKey(i), // keeps each tab's state when others get built
                         offstage: i != _index,
                         // Hidden tabs stay out of the arrow / Tab navigation.
                         child: ExcludeFocus(
-                          excluding: i != _index,
-                          child: TickerMode(enabled: i == _index, child: _page(i)),
+                          excluding: i != _index || _searchOpen,
+                          child: TickerMode(
+                            enabled: i == _index && !_searchOpen,
+                            child: NotificationListener<ScrollNotification>(
+                              onNotification: (n) => _onScroll(i, n),
+                              // Hero pages run under the header, the others start below it.
+                              child: Padding(
+                                padding: EdgeInsets.only(top: _heroPage(i) ? 0 : kTopBarHeight),
+                                child: _page(i),
+                              ),
+                            ),
+                          ),
                         ),
                       ),
+                  if (_searchOpen)
+                    Positioned.fill(
+                      top: kTopBarHeight,
+                      child: ColoredBox(
+                        color: AppColors.bg,
+                        child: SearchScreen(controller: _searchCtl, onClose: _closeSearch),
+                      ),
+                    ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 0,
+                    child: ListenableBuilder(
+                      listenable: Listenable.merge([_movies, _series]),
+                      builder: (context, _) {
+                        final catalog = _searchOpen ? null : _catalog;
+                        return _TopBar(
+                          index: _index,
+                          onSelect: _go,
+                          opaque: opaque || catalog?.mode == CatalogMode.grid,
+                          searchOpen: _searchOpen,
+                          searchController: _searchCtl,
+                          searchFocus: _searchFocus,
+                          onOpenSearch: _openSearch,
+                          onCloseSearch: _closeSearch,
+                          subBar: catalog == null ? null : CatalogSubBar(controller: catalog),
+                        );
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -174,80 +275,202 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
-/// Height of the top bar.
-const kTopBarHeight = 76.0;
+/// Height of the header row.
+const kTopBarHeight = 84.0;
 
-/// Top bar: logo, text tabs with an amber underline, then search, settings,
-/// profile / source menu and the clock.
+/// Header: logo, text tabs with a vermilion underline, then search (an icon
+/// that becomes a field), settings, profile menu and the clock. Over the
+/// big images it fades from the background; elsewhere it is opaque.
 class _TopBar extends StatelessWidget {
-  const _TopBar({required this.index, required this.onSelect});
+  const _TopBar({
+    required this.index,
+    required this.onSelect,
+    required this.opaque,
+    required this.searchOpen,
+    required this.searchController,
+    required this.searchFocus,
+    required this.onOpenSearch,
+    required this.onCloseSearch,
+    this.subBar,
+  });
   final int index;
   final ValueChanged<int> onSelect;
+  final bool opaque;
+  final bool searchOpen;
+  final TextEditingController searchController;
+  final FocusNode searchFocus;
+  final VoidCallback onOpenSearch;
+  final VoidCallback onCloseSearch;
+
+  /// Second line (Films / Séries).
+  final Widget? subBar;
 
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    return Container(
-      height: kTopBarHeight,
-      padding: const EdgeInsets.symmetric(horizontal: 32),
-      color: AppColors.bg,
-      child: Row(
-        children: [
-          HoverBuilder(
-            onActivate: () => onSelect(ShellTab.home),
-            focusRingRadius: 10,
-            builder: (context, _) => GestureDetector(
-              onTap: () => onSelect(ShellTab.home),
-              behavior: HitTestBehavior.opaque,
-              child: const Padding(
-                padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-                child: Row(
-                  children: [
-                    LumenMark(size: 36),
-                    SizedBox(width: 12),
-                    Text('LUMEN', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, letterSpacing: 3)),
-                  ],
+    final width = MediaQuery.sizeOf(context).width;
+    final gap = (width * 0.03).clamp(20.0, 48.0);
+    // Narrow windows: the field takes the room of the tabs while searching.
+    final showNav = !(searchOpen && width < 1180);
+    return Stack(
+      fit: StackFit.passthrough,
+      children: [
+        Positioned.fill(
+          child: IgnorePointer(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xCC0D0C0B), Color(0x000D0C0B)],
+                    ),
+                  ),
                 ),
-              ),
+                AnimatedOpacity(
+                  opacity: opaque ? 1 : 0,
+                  duration: const Duration(milliseconds: 300),
+                  child: const ColoredBox(color: Color(0xF70D0C0B)),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 44),
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+        ),
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              height: kTopBarHeight,
+              padding: const EdgeInsets.symmetric(horizontal: 48),
               child: Row(
                 children: [
-                  for (final (tab, label) in _textTabs)
-                    _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
+                  HoverBuilder(
+                    onActivate: () => onSelect(ShellTab.home),
+                    focusRingRadius: 10,
+                    builder: (context, _) => GestureDetector(
+                      onTap: () => onSelect(ShellTab.home),
+                      behavior: HitTestBehavior.opaque,
+                      child: Semantics(label: 'Bobine', button: true, child: const BobineLogo()),
+                    ),
+                  ),
+                  SizedBox(width: gap),
+                  // Five short tabs: they fit in the smallest window (1024 px).
+                  if (showNav)
+                    for (final (tab, label) in _textTabs) ...[
+                      _TabButton(label: label, selected: index == tab, onTap: () => onSelect(tab)),
+                      if (tab != ShellTab.series) SizedBox(width: (width * 0.022).clamp(18.0, 30.0)),
+                    ],
+                  SizedBox(width: gap),
+                  Expanded(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const _RecordingDot(),
+                        if (searchOpen)
+                          Flexible(
+                            child: _SearchField(
+                              controller: searchController,
+                              focus: searchFocus,
+                              onClose: onCloseSearch,
+                            ),
+                          )
+                        else
+                          _IconAction(
+                            icon: Icons.search_rounded,
+                            tooltip: 'Rechercher ( / )',
+                            selected: false,
+                            onTap: onOpenSearch,
+                          ),
+                        const SizedBox(width: 14),
+                        _IconAction(
+                          icon: Icons.tune_rounded,
+                          tooltip: 'Paramètres',
+                          selected: index == ShellTab.settings && !searchOpen,
+                          onTap: () => onSelect(ShellTab.settings),
+                        ),
+                        const SizedBox(width: 14),
+                        ListenableBuilder(
+                          listenable: Listenable.merge([s.settings, s.library]),
+                          builder: (context, _) => ProfileMenuButton(
+                            onManage: ({bool profiles = false}) {
+                              if (profiles) settingsPageRequest.value = 'profils';
+                              onSelect(ShellTab.settings);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        const _Clock(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-          const _RecordingDot(),
-          _IconAction(
-            icon: Icons.search_rounded,
-            tooltip: 'Recherche (Ctrl K)',
-            selected: index == ShellTab.search,
-            onTap: () => onSelect(ShellTab.search),
-          ),
-          const SizedBox(width: 4),
-          _IconAction(
-            icon: Icons.tune_rounded,
-            tooltip: 'Réglages',
-            selected: index == ShellTab.settings,
-            onTap: () => onSelect(ShellTab.settings),
-          ),
-          const SizedBox(width: 14),
-          ListenableBuilder(
-            listenable: Listenable.merge([s.settings, s.library]),
-            builder: (context, _) => ProfileMenuButton(onManage: () => onSelect(ShellTab.settings)),
-          ),
-          const SizedBox(width: 28),
-          const _Clock(),
-        ],
-      ),
+            ?subBar,
+          ],
+        ),
+      ],
     );
   }
+}
+
+/// The search field of the header (max 440 px, vermilion border, "Échap").
+class _SearchField extends StatelessWidget {
+  const _SearchField({required this.controller, required this.focus, required this.onClose});
+  final TextEditingController controller;
+  final FocusNode focus;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(maxWidth: 440),
+    child: Container(
+      height: 42,
+      padding: const EdgeInsets.fromLTRB(14, 0, 7, 0),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: AppColors.accent),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.search_rounded, size: 18, color: AppColors.textSoft),
+          const SizedBox(width: 10),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              focusNode: focus,
+              cursorColor: AppColors.accent,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              decoration: const InputDecoration(
+                isCollapsed: true,
+                filled: false,
+                hintText: 'Titres, chaînes, programmes…',
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: onClose,
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: Container(
+                height: 28,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(color: AppColors.borderInput, borderRadius: BorderRadius.circular(4)),
+                child: Text('Échap', style: monoStyle(12, color: AppColors.textSoft)),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _TabButton extends StatelessWidget {
@@ -260,41 +483,38 @@ class _TabButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return HoverBuilder(
       onActivate: onTap,
-      focusRingRadius: 10,
+      focusRingRadius: 6,
       builder: (context, hover) => Semantics(
         button: true,
         selected: selected,
         child: GestureDetector(
           onTap: onTap,
           behavior: HitTestBehavior.opaque,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: SizedBox(
-              height: kTopBarHeight,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const SizedBox(height: 6),
-                  AnimatedDefaultTextStyle(
-                    duration: const Duration(milliseconds: 150),
-                    style: TextStyle(
-                      fontFamily: AppFonts.body,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
-                      color: selected ? AppColors.text : (hover ? const Color(0xFFD5DAE3) : AppColors.muted),
-                    ),
-                    child: Text(label),
+          child: SizedBox(
+            height: kTopBarHeight,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 10),
+                AnimatedDefaultTextStyle(
+                  duration: const Duration(milliseconds: 150),
+                  style: TextStyle(
+                    fontFamily: AppFonts.body,
+                    fontSize: 15,
+                    height: 1,
+                    fontWeight: FontWeight.w500,
+                    color: selected || hover ? AppColors.text : AppColors.muted,
                   ),
-                  const SizedBox(height: 7),
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    curve: Curves.easeOutCubic,
-                    width: selected ? 26 : 0,
-                    height: 3,
-                    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(2)),
-                  ),
-                ],
-              ),
+                  child: Text(label),
+                ),
+                const SizedBox(height: 8),
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: selected ? 18 : 0,
+                  height: 2,
+                  decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(2)),
+                ),
+              ],
             ),
           ),
         ),
@@ -303,8 +523,8 @@ class _TabButton extends StatelessWidget {
   }
 }
 
-/// Round icon of the top bar: the icon lights up and a soft disc appears
-/// on hover (amber while its page is open).
+/// Square icon button of the header (40 px, rounded 8): a light veil on
+/// hover; tinted vermilion while its page is open.
 class _IconAction extends StatelessWidget {
   const _IconAction({required this.icon, required this.tooltip, required this.selected, required this.onTap});
   final IconData icon;
@@ -318,7 +538,7 @@ class _IconAction extends StatelessWidget {
     waitDuration: const Duration(milliseconds: 500),
     child: HoverBuilder(
       onActivate: onTap,
-      focusRingRadius: 999,
+      focusRingRadius: 8,
       builder: (context, hover) => Semantics(
         button: true,
         selected: selected,
@@ -326,21 +546,14 @@ class _IconAction extends StatelessWidget {
         child: GestureDetector(
           onTap: onTap,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOut,
-            width: 46,
-            height: 46,
+            duration: const Duration(milliseconds: 150),
+            width: 40,
+            height: 40,
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: selected
-                  ? AppColors.accent.withValues(alpha: hover ? 0.24 : 0.14)
-                  : (hover ? const Color(0x1FFFFFFF) : const Color(0x00FFFFFF)),
+              borderRadius: BorderRadius.circular(8),
+              color: selected ? AppColors.accentSelected : (hover ? const Color(0x1AFFFFFF) : const Color(0x00FFFFFF)),
             ),
-            child: Icon(
-              icon,
-              size: 26,
-              color: selected ? AppColors.accent : (hover ? AppColors.text : const Color(0xFFC4CAD4)),
-            ),
+            child: Icon(icon, size: 22, color: selected ? AppColors.accent : AppColors.text),
           ),
         ),
       ),
@@ -400,31 +613,8 @@ class _ClockState extends State<_Clock> {
   }
 
   @override
-  Widget build(BuildContext context) => Text(
-    formatClock(DateTime.now()),
-    style: const TextStyle(
-      fontSize: 28,
-      fontWeight: FontWeight.w600,
-      color: Color(0xFFB9C0CC),
-      fontFeatures: tabularFigures,
-    ),
-  );
-}
-
-/// App logo: a poster-style "L" on the amber brand colour.
-class LumenMark extends StatelessWidget {
-  const LumenMark({super.key, this.size = 40, this.round = false});
-  final double size;
-  final bool round;
-
-  @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(round ? size : size * 0.28)),
-    alignment: Alignment.center,
-    child: Text('L', style: posterStyle(size * 0.68, color: AppColors.onAccent, height: 1.05)),
-  );
+  Widget build(BuildContext context) =>
+      Text(formatClock(DateTime.now()), style: monoStyle(17, color: AppColors.textSoft));
 }
 
 class _ImportBanner extends StatelessWidget {

@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/player/player_service.dart';
+import 'package:bobine/player/player_service.dart';
 
 void main() {
   test('only network / loading failures are fatal', () {

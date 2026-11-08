@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/core/text.dart';
-import 'package:lumen/ui/widgets/net_image.dart';
+import 'package:bobine/core/text.dart';
+import 'package:bobine/ui/widgets/net_image.dart';
 
 /// A valid 1x1 PNG.
 const _png = [
@@ -82,7 +82,7 @@ const _png = [
 
 void main() {
   testWidgets('DiskCachedImage resolves through ResizeImage', (tester) async {
-    final dir = Directory.systemTemp.createTempSync('lumen_img2');
+    final dir = Directory.systemTemp.createTempSync('bobine_img2');
     ImageFetcher.init(dir.path);
     const url = 'http://example.invalid/a.png';
     File('${dir.path}/${stableHash(url)}').writeAsBytesSync(_png);
@@ -99,7 +99,7 @@ void main() {
   });
 
   testWidgets('NetImage shows a disk-cached image', (tester) async {
-    final dir = Directory.systemTemp.createTempSync('lumen_img');
+    final dir = Directory.systemTemp.createTempSync('bobine_img');
     ImageFetcher.init(dir.path);
     const url = 'http://example.invalid/poster.png';
     File('${dir.path}/${stableHash(url)}').writeAsBytesSync(_png);

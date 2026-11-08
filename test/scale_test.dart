@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/data/db.dart';
-import 'package:lumen/data/epg_cache.dart';
-import 'package:lumen/data/import/importers.dart';
-import 'package:lumen/data/models.dart';
-import 'package:lumen/data/repository.dart';
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/epg_cache.dart';
+import 'package:bobine/data/import/importers.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/repository.dart';
 
 /// Load test: 100 000 playlist entries and a guide of ~250 000 programmes.
 /// Thresholds are deliberately generous (CI machines vary); the printed
@@ -17,7 +17,7 @@ void main() {
   const liveCount = 20000, movieCount = 60000, episodeCount = 20000, epgChannels = 2000;
 
   setUpAll(() {
-    tmp = Directory.systemTemp.createTempSync('lumen_scale');
+    tmp = Directory.systemTemp.createTempSync('bobine_scale');
     m3uPath = '${tmp.path}/big.m3u';
     xmlPath = '${tmp.path}/big.xml';
 

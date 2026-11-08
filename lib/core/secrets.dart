@@ -8,7 +8,7 @@ import 'package:ffi/ffi.dart';
 /// they are written to the local database.
 ///
 /// Windows: DPAPI (`CryptProtectData`), bound to the current Windows user
-/// account, so a copied `lumen.db` cannot be read on another account or PC.
+/// account, so a copied `bobine.db` cannot be read on another account or PC.
 /// Other platforms: values are stored as-is for now.
 ///
 /// Values are tagged with a prefix so plain (legacy) values keep working and
@@ -83,6 +83,8 @@ class _Dpapi {
       .lookupFunction<Pointer<Void> Function(Pointer<Void>), Pointer<Void> Function(Pointer<Void>)>('LocalFree');
 
   /// Ties the encrypted values to this application.
+  // Kept from the first name (Lumen): changing it would make every saved
+  // password unreadable.
   static final List<int> _entropy = utf8.encode('Lumen IPTV v1');
 
   static List<int> protect(List<int> data) => _run(_protect, data);

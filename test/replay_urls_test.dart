@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/data/models.dart';
-import 'package:lumen/data/stream_urls.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/stream_urls.dart';
 
 void main() {
   final start = DateTime(2026, 11, 7, 20, 45);

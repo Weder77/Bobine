@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/core/text.dart';
-import 'package:lumen/data/db.dart';
-import 'package:lumen/data/models.dart';
-import 'package:lumen/data/repository.dart';
+import 'package:bobine/core/text.dart';
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/repository.dart';
 
 /// A source with two live categories (one adult-looking), three channels and
 /// a small guide.

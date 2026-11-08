@@ -126,7 +126,7 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
       breadcrumb: _category == null ? 'Films' : 'Films · $_category',
       backdrop: backdrop,
       poster: d?.poster ?? _m.poster ?? t?.poster,
-      title: _m.name,
+      title: displayTitle(_m.name),
       rating: rating,
       meta: meta,
       tags: d?.qualityTags ?? const [],

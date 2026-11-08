@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../core/theme.dart';
-import 'shell.dart';
 import 'source_form.dart';
+import 'widgets/brand.dart';
 
 class OnboardingScreen extends StatelessWidget {
   const OnboardingScreen({super.key});
@@ -15,7 +15,7 @@ class OnboardingScreen extends StatelessWidget {
           gradient: RadialGradient(
             center: Alignment(-0.6, -0.8),
             radius: 1.4,
-            colors: [Color(0xFF2A1F0E), AppColors.bg],
+            colors: [Color(0xFF2B1A13), AppColors.bg],
           ),
         ),
         child: Center(
@@ -26,15 +26,9 @@ class OnboardingScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      const LumenMark(size: 44),
-                      const SizedBox(width: 14),
-                      Text('LUMEN', style: posterStyle(40).copyWith(letterSpacing: 6)),
-                    ],
-                  ),
+                  const BobineLogo(height: 60),
                   const SizedBox(height: 36),
-                  Text('Bienvenue', style: displayStyle(44, weight: FontWeight.w800)),
+                  Text('BIENVENUE', style: posterStyle(76, height: 0.9)),
                   const SizedBox(height: 10),
                   const Text(
                     'Ajoute ton abonnement Xtream Codes ou une playlist M3U. '
@@ -46,14 +40,14 @@ class OnboardingScreen extends StatelessWidget {
                     padding: const EdgeInsets.all(26),
                     decoration: BoxDecoration(
                       color: AppColors.surface,
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: AppColors.border),
                     ),
                     child: SourceForm(onSaved: (_) {}),
                   ),
                   const SizedBox(height: 18),
                   const Text(
-                    'Lumen est un lecteur : il ne fournit aucun contenu. Tes identifiants restent sur cet ordinateur.',
+                    'Bobine est un lecteur : il ne fournit aucun contenu. Tes identifiants restent sur cet ordinateur.',
                     style: TextStyle(color: AppColors.faint, fontSize: 12),
                   ),
                 ],

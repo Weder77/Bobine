@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.lumen" "\0"
-            VALUE "FileDescription", "Lumen - lecteur IPTV" "\0"
+            VALUE "CompanyName", "com.bobine" "\0"
+            VALUE "FileDescription", "Bobine - lecteur IPTV" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "lumen" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.lumen. All rights reserved." "\0"
-            VALUE "OriginalFilename", "lumen.exe" "\0"
-            VALUE "ProductName", "Lumen" "\0"
+            VALUE "InternalName", "bobine" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.bobine. All rights reserved." "\0"
+            VALUE "OriginalFilename", "bobine.exe" "\0"
+            VALUE "ProductName", "Bobine" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

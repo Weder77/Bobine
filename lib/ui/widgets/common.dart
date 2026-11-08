@@ -20,6 +20,7 @@ class HoverBuilder extends StatefulWidget {
     this.autofocus = false,
     this.onFocus,
     this.onContextMenu,
+    this.onHighlight,
   });
   final Widget Function(BuildContext context, bool hovered) builder;
   final MouseCursor cursor;
@@ -39,6 +40,9 @@ class HoverBuilder extends StatefulWidget {
   /// Menu key / Maj+F10 while focused (right click is handled by the card).
   final ValueChanged<Offset>? onContextMenu;
 
+  /// Hovered or focused changed (to lift the card above its neighbours).
+  final ValueChanged<bool>? onHighlight;
+
   @override
   State<HoverBuilder> createState() => _HoverBuilderState();
 }
@@ -47,13 +51,22 @@ class _HoverBuilderState extends State<HoverBuilder> {
   bool _hover = false;
   bool _focus = false;
 
+  void _set({bool? hover, bool? focus}) {
+    final before = _hover || _focus;
+    setState(() {
+      _hover = hover ?? _hover;
+      _focus = focus ?? _focus;
+    });
+    if (before != (_hover || _focus)) widget.onHighlight?.call(_hover || _focus);
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.onActivate == null) {
       return MouseRegion(
         cursor: widget.cursor,
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
+        onEnter: (_) => _set(hover: true),
+        onExit: (_) => _set(hover: false),
         child: widget.builder(context, _hover),
       );
     }
@@ -85,9 +98,9 @@ class _HoverBuilderState extends State<HoverBuilder> {
               SingleActivator(LogicalKeyboardKey.f10, shift: true): _ContextMenuIntent(),
             },
       mouseCursor: widget.cursor,
-      onShowHoverHighlight: (v) => setState(() => _hover = v),
+      onShowHoverHighlight: (v) => _set(hover: v),
       onShowFocusHighlight: (v) {
-        setState(() => _focus = v);
+        _set(focus: v);
         if (v) widget.onFocus?.call();
       },
       actions: {
@@ -461,323 +474,44 @@ class RatingBadge extends StatelessWidget {
   );
 }
 
-/// Wide 16:9 card: the title is written on the image in poster capitals,
-/// progress runs along the bottom edge, details go underneath.
-class LandscapeCard extends StatelessWidget {
-  const LandscapeCard({
-    super.key,
-    required this.title,
-    required this.image,
-    required this.onTap,
-    this.subtitle,
-    this.trailing,
-    this.progress,
-    this.width = 300,
-    this.onRemove,
-    this.onContextMenu,
-  });
-
-  final String title;
-  final String? subtitle;
-  final String? trailing;
-  final String? image;
-  final double? progress;
-  final double width;
-  final VoidCallback onTap;
-  final VoidCallback? onRemove;
-
-  /// Right click / long press / menu key: quick actions at that position.
-  final ValueChanged<Offset>? onContextMenu;
-
-  @override
-  Widget build(BuildContext context) {
-    return RepaintBoundary(
-      child: HoverBuilder(
-        onActivate: onTap,
-        onContextMenu: onContextMenu,
-        focusScale: 1.04,
-        builder: (context, hover) {
-          return Semantics(
-            button: true,
-            label: title,
-            child: GestureDetector(
-              onTap: onTap,
-              onSecondaryTapUp: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
-              onLongPressStart: onContextMenu == null ? null : (d) => onContextMenu!(d.globalPosition),
-              child: SizedBox(
-                width: width,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        decoration: focusRing(on: hover, radius: 12),
-                        padding: const EdgeInsets.all(2),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Stack(
-                            fit: StackFit.expand,
-                            children: [
-                              NetImage(
-                                image,
-                                decodeWidth: width,
-                                alignment: const Alignment(0, -0.4),
-                                placeholder: const ColoredBox(color: AppColors.surface3),
-                              ),
-                              const DecoratedBox(
-                                decoration: BoxDecoration(
-                                  gradient: LinearGradient(
-                                    colors: [Color(0x00000000), Color(0xCC0A0A0C)],
-                                    begin: Alignment(0, -0.1),
-                                    end: Alignment.bottomCenter,
-                                  ),
-                                ),
-                              ),
-                              Positioned(
-                                left: 14,
-                                right: 14,
-                                bottom: 16,
-                                child: Text(
-                                  title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: posterStyle(
-                                    30,
-                                    shadows: const [Shadow(color: Color(0x80000000), blurRadius: 12)],
-                                  ),
-                                ),
-                              ),
-                              Center(
-                                child: AnimatedOpacity(
-                                  opacity: hover ? 1 : 0,
-                                  duration: const Duration(milliseconds: 150),
-                                  child: Container(
-                                    width: 52,
-                                    height: 52,
-                                    decoration: const BoxDecoration(color: AppColors.action, shape: BoxShape.circle),
-                                    child: const Icon(Icons.play_arrow_rounded, color: AppColors.onAction, size: 32),
-                                  ),
-                                ),
-                              ),
-                              if (onRemove != null && hover)
-                                Positioned(
-                                  top: 8,
-                                  right: 8,
-                                  child: IconButton(
-                                    iconSize: 16,
-                                    tooltip: 'Retirer',
-                                    onPressed: onRemove,
-                                    style: IconButton.styleFrom(backgroundColor: const Color(0xB30A0A0C)),
-                                    icon: const Icon(Icons.close_rounded),
-                                  ),
-                                ),
-                              if (progress != null)
-                                Positioned(
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  child: ProgressLine(progress!, track: const Color(0x40FFFFFF)),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (subtitle != null || trailing != null) ...[
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              subtitle ?? '',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                                color: AppColors.textSoft,
-                              ),
-                            ),
-                          ),
-                          if (trailing != null) ...[
-                            const SizedBox(width: 8),
-                            Text(trailing!, style: const TextStyle(fontSize: 14, color: AppColors.muted)),
-                          ],
-                        ],
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
-
 /// Square channel logo with initials fallback.
+/// Channel badge: a cream tile with the playlist logo, or the channel's
+/// initials in Big Shoulders ("TF1", "F2", "M6") when there is none.
 class ChannelLogo extends StatelessWidget {
   const ChannelLogo({super.key, required this.name, required this.url, this.size = 44});
   final String name;
   final String? url;
   final double size;
 
-  static String initials(String name) => name
-      .replaceAll(RegExp(r'^[A-Z]{2,3}\s*[:|]\s*'), '')
-      .trim()
-      .split(RegExp(r'\s+'))
-      .where((w) => w.isNotEmpty)
-      .take(2)
-      .map((w) => w.characters.first.toUpperCase())
-      .join();
+  static String initials(String name) {
+    final clean = name
+        .replaceAll(RegExp(r'^\s*(\|[A-Z]{2,4}\||[A-Z]{2,3}\s*[:|-])\s*'), '')
+        .replaceAll(RegExp(r'[^A-Za-z0-9À-ÿ+ ]'), ' ')
+        .replaceAll(RegExp(r'\b(hd|fhd|uhd|4k|sd|hevc)\b', caseSensitive: false), ' ')
+        .trim();
+    final words = clean.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '?';
+    if (words.length == 1) return words.first.length <= 4 ? words.first : words.first.substring(0, 3);
+    if (RegExp(r'^\d+$').hasMatch(words[1])) return '${words[0][0]}${words[1]}'.toUpperCase();
+    return '${words[0].characters.first}${words[1].characters.first}'.toUpperCase();
+  }
 
   @override
   Widget build(BuildContext context) {
     final placeholder = Center(
-      child: Text(
-        initials(name),
-        style: TextStyle(fontSize: size * 0.3, fontWeight: FontWeight.w800, color: AppColors.textSoft),
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Text(initials(name), maxLines: 1, style: posterStyle(size * 0.42, color: AppColors.onAction, height: 1)),
       ),
     );
     return Container(
       width: size,
       height: size,
       padding: EdgeInsets.all(size * 0.12),
-      decoration: BoxDecoration(color: AppColors.surface3, borderRadius: BorderRadius.circular(size * 0.24)),
+      decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(size * 0.24)),
       child: NetImage(url, fit: BoxFit.contain, decodeWidth: size, placeholder: placeholder),
     );
   }
-}
-
-/// Section header: heavy Inter title and an optional link.
-class SectionHeader extends StatelessWidget {
-  const SectionHeader(this.title, {super.key, this.actionLabel, this.onAction});
-  final String title;
-  final String? actionLabel;
-  final VoidCallback? onAction;
-
-  @override
-  Widget build(BuildContext context) => Row(
-    crossAxisAlignment: CrossAxisAlignment.center,
-    children: [
-      Expanded(
-        child: Text(title, style: displayStyle(22, weight: FontWeight.w700)),
-      ),
-      if (actionLabel != null && onAction != null) TextButton(onPressed: onAction, child: Text(actionLabel!)),
-    ],
-  );
-}
-
-/// Section title + horizontally scrolling list with arrow buttons (mouse friendly).
-class SectionRow extends StatefulWidget {
-  const SectionRow({
-    super.key,
-    required this.title,
-    required this.itemCount,
-    required this.itemBuilder,
-    required this.height,
-    this.itemWidth = 168,
-    this.trailing,
-    this.gap = 18,
-  });
-
-  final String title;
-  final int itemCount;
-  final IndexedWidgetBuilder itemBuilder;
-  final double height;
-  final double itemWidth;
-  final Widget? trailing;
-  final double gap;
-
-  @override
-  State<SectionRow> createState() => _SectionRowState();
-}
-
-class _SectionRowState extends State<SectionRow> {
-  final _controller = ScrollController();
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _page(int dir) {
-    final viewport = _controller.position.viewportDimension;
-    _controller.animateTo(
-      (_controller.offset + dir * viewport * 0.85).clamp(0.0, _controller.position.maxScrollExtent),
-      duration: const Duration(milliseconds: 380),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(48, 0, 48, 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(widget.title, style: displayStyle(22, weight: FontWeight.w700)),
-              ),
-              ?widget.trailing,
-            ],
-          ),
-        ),
-        SizedBox(
-          height: widget.height,
-          child: HoverBuilder(
-            cursor: MouseCursor.defer,
-            builder: (context, hover) => Stack(
-              children: [
-                ListView.separated(
-                  controller: _controller,
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 6),
-                  clipBehavior: Clip.none,
-                  itemCount: widget.itemCount,
-                  separatorBuilder: (_, _) => SizedBox(width: widget.gap),
-
-                  itemBuilder: widget.itemBuilder,
-                ),
-                if (hover) ...[
-                  Positioned(left: 8, top: 0, bottom: 40, child: _Arrow(Icons.chevron_left_rounded, () => _page(-1))),
-                  Positioned(right: 8, top: 0, bottom: 40, child: _Arrow(Icons.chevron_right_rounded, () => _page(1))),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Arrow extends StatelessWidget {
-  const _Arrow(this.icon, this.onTap);
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => Center(
-    child: Material(
-      color: const Color(0xD90A0A0C),
-      shape: const CircleBorder(side: BorderSide(color: Color(0x40FFFFFF))),
-      child: InkWell(
-        canRequestFocus: false,
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(padding: const EdgeInsets.all(10), child: Icon(icon, size: 26)),
-      ),
-    ),
-  );
 }
 
 class EmptyState extends StatelessWidget {
@@ -838,133 +572,6 @@ List<CategoryEntry> withFavoriteCount(List<CategoryEntry> entries, int count) =>
   for (final e in entries)
     e.id == 'fav' ? CategoryEntry(id: e.id, label: e.label, count: count, icon: e.icon, locked: e.locked) : e,
 ];
-
-/// Left category rail used by Live / Films / Séries.
-class CategoryPane extends StatefulWidget {
-  const CategoryPane({
-    super.key,
-    required this.entries,
-    required this.selected,
-    required this.onSelect,
-    this.width = 264,
-  });
-  final List<CategoryEntry> entries;
-  final String selected;
-  final ValueChanged<String> onSelect;
-  final double width;
-
-  @override
-  State<CategoryPane> createState() => _CategoryPaneState();
-}
-
-class _CategoryPaneState extends State<CategoryPane> {
-  String _filter = '';
-
-  @override
-  Widget build(BuildContext context) {
-    final f = _filter.toLowerCase();
-    final list = f.isEmpty
-        ? widget.entries
-        : widget.entries.where((e) => e.icon != null || e.label.toLowerCase().contains(f)).toList();
-    // Built-in entries (with an icon) come first, then a separator.
-    final firstCategory = list.indexWhere((e) => e.icon == null);
-    return SizedBox(
-      width: widget.width,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(36, 8, 8, 16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-              child: Text('CATÉGORIES', style: labelStyle()),
-            ),
-            TextField(
-              onChanged: (v) => setState(() => _filter = v),
-              style: const TextStyle(fontSize: 14),
-              decoration: const InputDecoration(
-                hintText: 'Filtrer',
-                prefixIcon: Icon(Icons.search_rounded, size: 18),
-                contentPadding: EdgeInsets.symmetric(vertical: 11),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Expanded(
-              child: Scrollbar(
-                child: ListView.builder(
-                  padding: const EdgeInsets.only(right: 6, bottom: 12),
-                  itemCount: list.length,
-                  itemBuilder: (context, i) {
-                    final e = list[i];
-                    final sel = e.id == widget.selected;
-                    final tile = SizedBox(
-                      height: 44,
-                      child: Material(
-                        color: sel ? AppColors.selected : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(10),
-                          onTap: () => widget.onSelect(e.id),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: Row(
-                              children: [
-                                if (e.icon != null) ...[
-                                  Icon(e.icon, size: 18, color: sel ? AppColors.text : AppColors.muted),
-                                  const SizedBox(width: 10),
-                                ],
-                                Expanded(
-                                  child: Text(
-                                    e.label,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 14.5,
-                                      fontWeight: sel ? FontWeight.w600 : FontWeight.w500,
-                                      color: sel ? AppColors.text : AppColors.textSoft,
-                                    ),
-                                  ),
-                                ),
-                                if (e.locked)
-                                  const Padding(
-                                    padding: EdgeInsets.only(right: 6),
-                                    child: Icon(Icons.lock_rounded, size: 14, color: AppColors.accent),
-                                  ),
-                                if (e.count != null)
-                                  Text(
-                                    '${e.count}',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      color: sel ? AppColors.text : AppColors.faint,
-                                      fontFeatures: tabularFigures,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                    if (i == firstCategory && i > 0) {
-                      return Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Padding(padding: EdgeInsets.symmetric(vertical: 8, horizontal: 12), child: Divider()),
-                          tile,
-                        ],
-                      );
-                    }
-                    return tile;
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 /// Small pill label.
 class Pill extends StatelessWidget {

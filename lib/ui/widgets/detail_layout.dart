@@ -113,7 +113,7 @@ class DetailLayout extends StatelessWidget {
                                       const SizedBox(height: 12),
                                     ],
                                     Text(
-                                      title,
+                                      title.toUpperCase(),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                       style: posterStyle(
@@ -352,7 +352,9 @@ class DetailSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Expanded(child: Text(title, style: displayStyle(26))),
+            Expanded(
+              child: Text(title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+            ),
             ?trailing,
           ],
         ),

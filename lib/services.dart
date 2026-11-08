@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'core/app_log.dart';
+import 'core/legacy.dart';
+import 'core/text.dart';
 import 'data/db.dart';
 import 'data/epg_cache.dart';
 import 'data/import/import_service.dart';
@@ -96,6 +98,9 @@ class AppServices {
   /// libmpv disk cache folder (diagnostic page).
   final String mpvCacheDir;
 
+  /// Programme the guide should show next (from the search).
+  final ValueNotifier<(Channel, Program)?> guideFocus = ValueNotifier(null);
+
   /// Parental code typed this session (locked categories visible).
   bool parentalUnlocked = false;
 
@@ -110,8 +115,10 @@ class AppServices {
     await mpvCache.create(recursive: true);
     ImageFetcher.init(p.join(cache.path, 'images'));
 
-    AppLog.install(logPath: p.join(support.path, 'lumen.log'));
-    final dbPath = p.join(support.path, 'lumen.db');
+    // Moves Lumen's data here the first time (former name of the app).
+    final dbPath = await resolveDatabase(support.path);
+    AppLog.install(logPath: p.join(support.path, 'bobine.log'));
+    if (!dbPath.startsWith(support.path)) AppLog.add('Données de Lumen ouvertes sur place : $dbPath');
     final repo = Repository(openAppDatabase(dbPath));
     final settings = AppSettings(repo);
     final library = LibraryNotifier();
@@ -283,6 +290,9 @@ class AppServices {
       }
     }
   }
+
+  /// Name of [c] as shown in the app (cleaned unless turned off).
+  String channelName(Channel c) => settings.cleanNames ? cleanChannelName(c.name) : c.name;
 
   void toggleFavorite(ContentKind kind, String extId, int sourceId) {
     repo.toggleFavorite(sourceId, kind, extId);

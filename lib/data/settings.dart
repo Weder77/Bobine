@@ -34,6 +34,11 @@ class AppSettings extends ChangeNotifier {
     reminderLeadMinutes = (json['reminderLeadMinutes'] as int?) ?? 2;
     checkUpdates = (json['checkUpdates'] as bool?) ?? true;
     askProfileAtStart = (json['askProfileAtStart'] as bool?) ?? true;
+    heroAutoplay = (json['heroAutoplay'] as bool?) ?? true;
+    cleanNames = (json['cleanNames'] as bool?) ?? true;
+    groupQualities = (json['groupQualities'] as bool?) ?? true;
+    subtitleScale = (json['subtitleScale'] as num?)?.toDouble() ?? 1.0;
+    preferredQuality = (json['preferredQuality'] as String?) ?? 'Auto';
   }
 
   static const _key = 'settings';
@@ -74,7 +79,7 @@ class AppSettings extends ChangeNotifier {
   /// The Movie Database key (v3 key or v4 read token), or null.
   String? tmdbKey;
 
-  /// Folder for recordings (null: Videos/Lumen).
+  /// Folder for recordings (null: Videos/Bobine).
   String? recordingsDir;
 
   /// How many minutes before a programme its reminder pops up.
@@ -83,6 +88,22 @@ class AppSettings extends ChangeNotifier {
 
   /// Show "Qui regarde ?" at start when there are several profiles.
   late bool askProfileAtStart;
+
+  /// The billboards of the home, films and series pages change by themselves.
+  late bool heroAutoplay;
+
+  /// "|FR| TF1 FHD ★" is shown as "TF1".
+  late bool cleanNames;
+
+  /// One channel for its FHD, HD and SD streams (the best one plays).
+  late bool groupQualities;
+
+  /// Size of the subtitles (mpv sub-scale: 0.75, 1 or 1.35).
+  late double subtitleScale;
+
+  /// Stream played for a channel with several qualities: 'Auto' (the best),
+  /// 'FHD', 'HD' or 'SD'.
+  late String preferredQuality;
 
   void update(void Function(AppSettings s) change) {
     change(this);
@@ -118,6 +139,11 @@ class AppSettings extends ChangeNotifier {
     'reminderLeadMinutes': reminderLeadMinutes,
     'checkUpdates': checkUpdates,
     'askProfileAtStart': askProfileAtStart,
+    'heroAutoplay': heroAutoplay,
+    'cleanNames': cleanNames,
+    'groupQualities': groupQualities,
+    'subtitleScale': subtitleScale,
+    'preferredQuality': preferredQuality,
   };
 
   /// Keys left out of backups: they only make sense on this computer.

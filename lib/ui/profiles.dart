@@ -4,11 +4,12 @@ import '../core/theme.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'shell.dart';
+import 'widgets/brand.dart';
 import 'widgets/common.dart';
 import 'widgets/pin_dialog.dart';
 
 /// Colours offered for profiles.
-const profileColors = [0xFFFFB547, 0xFF7FA6FF, 0xFFFF8FA8, 0xFF5FD3A1, 0xFFB39DFF, 0xFFFF7A59];
+const profileColors = [0xFFFF5A36, 0xFFE8C547, 0xFF6FB7A8, 0xFF7FA6FF, 0xFFC08BF0, 0xFFF3EEE8];
 
 /// Round avatar with the profile's initial.
 class ProfileAvatar extends StatelessWidget {
@@ -16,27 +17,32 @@ class ProfileAvatar extends StatelessWidget {
   final Profile profile;
   final double size;
 
-  /// Circle (top bar) instead of a rounded square.
+  /// Kept for older call sites: avatars are rounded squares now.
   final bool round;
 
   @override
-  Widget build(BuildContext context) => Container(
-    width: size,
-    height: size,
-    alignment: Alignment.center,
-    decoration: BoxDecoration(
-      color: Color(profile.color),
-      borderRadius: BorderRadius.circular(round ? size : size * 0.3),
-    ),
-    child: profile.kids
-        ? Icon(Icons.child_care_rounded, size: size * 0.55, color: const Color(0xFF15120A))
-        : round
-        ? Text(
-            profile.initial,
-            style: TextStyle(fontSize: size * 0.4, fontWeight: FontWeight.w800, color: const Color(0xFF1B1204)),
-          )
-        : Text(profile.initial, style: posterStyle(size * 0.62, color: const Color(0xFF15120A), height: 1.05)),
-  );
+  Widget build(BuildContext context) {
+    final color = Color(profile.color);
+    // Dark initial on light colours, light on dark ones.
+    final ink = color.computeLuminance() > 0.35 ? const Color(0xFF1A1503) : const Color(0xFF1A0A05);
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(size * (size >= 60 ? 0.19 : 0.23))),
+      child: profile.kids
+          ? Icon(Icons.child_care_rounded, size: size * 0.55, color: ink)
+          : Text(
+              profile.initial,
+              style: TextStyle(
+                fontFamily: AppFonts.body,
+                fontSize: size * 0.44,
+                fontWeight: FontWeight.w700,
+                color: ink,
+              ),
+            ),
+    );
+  }
 }
 
 /// Switches to [p], asking for the parental code when leaving a kids profile.
@@ -76,9 +82,9 @@ class ProfilePickerScreen extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const LumenMark(size: 48),
-              const SizedBox(height: 28),
-              Text('Qui regarde ?', style: displayStyle(44)),
+              const BobineLogo(height: 60),
+              const SizedBox(height: 36),
+              Text('QUI REGARDE ?', style: posterStyle(64, height: 0.9)),
               const SizedBox(height: 40),
               Wrap(
                 spacing: 32,
@@ -286,7 +292,9 @@ class _ProfileEditorState extends State<_ProfileEditor> {
 /// Profile avatar in the top bar: switch profile, unlock protected categories.
 class ProfileMenuButton extends StatelessWidget {
   const ProfileMenuButton({super.key, required this.onManage});
-  final VoidCallback onManage;
+
+  /// Opens the settings, on the profiles page when [profiles].
+  final void Function({bool profiles}) onManage;
 
   @override
   Widget build(BuildContext context) {
@@ -295,10 +303,13 @@ class ProfileMenuButton extends StatelessWidget {
     final profiles = s.repo.profiles();
     final sources = s.repo.sources();
     final active = s.activeSource;
-    PopupMenuItem<String> header(String text) => PopupMenuItem<String>(
-      enabled: false,
-      height: 32,
-      child: Text(text, style: labelStyle(color: AppColors.faint, size: 11)),
+    PopupMenuItem<String> row(String value, String label) => PopupMenuItem<String>(
+      value: value,
+      height: 40,
+      child: Text(
+        label,
+        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.textSoft),
+      ),
     );
     Future<void> open(BuildContext anchor) async {
       final box = anchor.findRenderObject() as RenderBox;
@@ -310,53 +321,54 @@ class ProfileMenuButton extends StatelessWidget {
       final v = await showMenu<String>(
         context: anchor,
         position: RelativeRect.fromRect(rect, Offset.zero & overlay.size),
+        constraints: const BoxConstraints.tightFor(width: 280),
         items: [
-          header('PROFIL'),
           for (final p in profiles)
             PopupMenuItem(
               value: 'p:${p.id}',
+              height: 48,
               child: Row(
                 children: [
-                  ProfileAvatar(profile: p, size: 28),
+                  ProfileAvatar(profile: p, size: 32),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: Text(
-                      p.name,
-                      style: TextStyle(fontWeight: p.id == current.id ? FontWeight.w700 : FontWeight.w500),
-                    ),
+                    child: Text(p.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   ),
-                  if (p.id == current.id) const Icon(Icons.check_rounded, size: 18),
+                  if (p.id == current.id) const Icon(Icons.check_rounded, size: 20, color: AppColors.accent),
                 ],
               ),
             ),
-          if (s.settings.parentalEnabled && !current.kids) ...[
-            const PopupMenuDivider(),
-            if (s.parentalUnlocked)
-              const PopupMenuItem(value: 'lock', child: Text('Reverrouiller les catégories protégées'))
-            else
-              const PopupMenuItem(value: 'unlock', child: Text('Afficher les catégories protégées…')),
-          ],
-          if (sources.isNotEmpty) ...[
-            const PopupMenuDivider(),
-            header('SOURCE'),
+          if (sources.length > 1)
             for (final src in sources)
               PopupMenuItem(
                 value: 's:${src.id}',
+                height: 40,
                 child: Row(
                   children: [
-                    Icon(
-                      src.id == active?.id ? Icons.radio_button_checked : Icons.radio_button_off,
-                      size: 18,
-                      color: src.id == active?.id ? AppColors.accent : AppColors.muted,
+                    const SizedBox(width: 6),
+                    const BobineReel(height: 14),
+                    const SizedBox(width: 18),
+                    Expanded(
+                      child: Text(
+                        src.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: src.id == active?.id ? AppColors.text : AppColors.muted,
+                          fontWeight: src.id == active?.id ? FontWeight.w600 : FontWeight.w500,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(child: Text(src.name)),
+                    if (src.id == active?.id) const Icon(Icons.check_rounded, size: 18, color: AppColors.accent),
                   ],
                 ),
               ),
-          ],
-          const PopupMenuDivider(),
-          const PopupMenuItem(value: 'manage', child: Text('Gérer les profils et les sources…')),
+          const PopupMenuDivider(height: 13),
+          if (s.settings.parentalEnabled && !current.kids)
+            s.parentalUnlocked
+                ? row('lock', 'Reverrouiller les catégories protégées')
+                : row('unlock', 'Afficher les catégories protégées…'),
+          row('manage', 'Gérer les profils'),
+          row('settings', 'Paramètres'),
         ],
       );
       if (v == null || !context.mounted) return;
@@ -372,28 +384,24 @@ class ProfileMenuButton extends StatelessWidget {
         s.lockParental();
       } else if (v.startsWith('s:')) {
         s.selectSource(int.parse(v.substring(2)));
-      } else if (v == 'manage') {
-        onManage();
+      } else if (v == 'manage' || v == 'settings') {
+        onManage(profiles: v == 'manage');
       }
     }
 
     return Tooltip(
-      message: active == null ? 'Profil : ${current.name}' : 'Profil : ${current.name} · Source : ${active.name}',
+      message: 'Profil : ${current.name}',
       waitDuration: const Duration(milliseconds: 500),
       child: Builder(
         builder: (anchor) => HoverBuilder(
           onActivate: () => open(anchor),
+          focusRingRadius: 8,
           builder: (context, hover) => GestureDetector(
             onTap: () => open(anchor),
-            // Hover: a white ring around the avatar.
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 160),
-              padding: const EdgeInsets.all(2.5),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: hover ? AppColors.text : const Color(0x00FFFFFF), width: 2),
-              ),
-              child: ProfileAvatar(profile: current, size: 42, round: true),
+            child: AnimatedScale(
+              scale: hover ? 1.06 : 1,
+              duration: const Duration(milliseconds: 140),
+              child: ProfileAvatar(profile: current, size: 34),
             ),
           ),
         ),

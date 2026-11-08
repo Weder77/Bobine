@@ -4,7 +4,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../core/secrets.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 3;
+const int kSchemaVersion = 4;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -55,6 +55,11 @@ void _migrate(Database db) {
       db.execute('ALTER TABLE sources ADD COLUMN epg_offset INTEGER NOT NULL DEFAULT 0');
     }
     if (version < 3) _migrateV3(db);
+    if (version < 4) {
+      // Programme genres ("Sport · Rugby"); guides are imported again.
+      db.execute('ALTER TABLE epg_programs ADD COLUMN category TEXT');
+      db.execute('UPDATE sources SET epg_updated_at = NULL');
+    }
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -213,7 +218,7 @@ void _migrateV3(Database db) {
     ) WITHOUT ROWID''');
 }
 
-/// The first schema, as created by Lumen 1.0 (to test migrations).
+/// The first schema, as created by Bobine 1.0 (to test migrations).
 @visibleForTesting
 void createSchemaV1(Database db) => _createV1(db);
 

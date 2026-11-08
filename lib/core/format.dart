@@ -18,6 +18,15 @@ String formatRuntime(int? seconds) {
   return '${h}h${m.toString().padLeft(2, '0')}';
 }
 
+/// "2 h 30", "1 h 02", "45 min" (the design's way of writing a length).
+String formatSpan(Duration d) {
+  final total = d.inMinutes < 1 && d.inSeconds > 0 ? 1 : d.inMinutes;
+  final h = total ~/ 60;
+  final m = total % 60;
+  if (h == 0) return '$m min';
+  return '$h h ${m.toString().padLeft(2, '0')}';
+}
+
 const _days = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const _months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
@@ -30,6 +39,18 @@ String formatDay(DateTime t) {
   if (diff == 1) return 'Demain';
   if (diff == -1) return 'Hier';
   return '${_days[t.weekday - 1]} ${t.day} ${_months[t.month - 1]}';
+}
+
+/// "Sam. 7 nov." (capital initial, as in the design's kickers and guide).
+String formatShortDate(DateTime t) {
+  final d = _days[t.weekday - 1];
+  return '${d[0].toUpperCase()}${d.substring(1)} ${t.day} ${_months[t.month - 1]}';
+}
+
+/// "Ven. 6": a day button of the guide.
+String formatDayButton(DateTime t) {
+  final d = _days[t.weekday - 1];
+  return '${d[0].toUpperCase()}${d.substring(1)} ${t.day}';
 }
 
 String formatDate(DateTime t) => '${t.day} ${_months[t.month - 1]} ${t.year}';

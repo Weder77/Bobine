@@ -141,7 +141,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
           : '${target!.$1.code} · reste ${formatRuntime((lastProgress.duration - lastProgress.position).inSeconds)}',
       backdrop: backdrop,
       poster: _sr.poster ?? d?.poster ?? t?.poster,
-      title: _sr.name,
+      title: displayTitle(_sr.name),
       rating: d?.rating ?? _sr.rating ?? t?.rating,
       meta: meta,
       loading: _loading,

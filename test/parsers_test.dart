@@ -1,8 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/core/text.dart';
-import 'package:lumen/data/import/m3u_parser.dart';
-import 'package:lumen/data/import/xmltv_parser.dart';
-import 'package:lumen/data/import/xtream_api.dart';
+import 'package:bobine/core/text.dart';
+import 'package:bobine/data/import/m3u_parser.dart';
+import 'package:bobine/data/import/xmltv_parser.dart';
+import 'package:bobine/data/import/xtream_api.dart';
 
 void main() {
   group('M3U', () {
@@ -75,7 +75,7 @@ http://srv/plain/stream4.ts
       final progs = <List<Object?>>[];
       final chans = <String, List<String>>{};
       final p = XmltvParser(
-        onProgramme: (c, s, e, t, d) => progs.add([c, s, e, t, d]),
+        onProgramme: (c, s, e, t, d, g) => progs.add([c, s, e, t, d, g]),
         onChannel: (id, names) => chans[id] = names,
       );
       const xml = '''<?xml version="1.0" encoding="UTF-8"?>
@@ -84,6 +84,7 @@ http://srv/plain/stream4.ts
   <programme start="20240131200000 +0100" stop="20240131210000 +0100" channel="TF1.fr">
     <title lang="en">News</title><title lang="fr">Le JT &amp; la météo</title>
     <desc lang="fr"><![CDATA[Résumé <b>du</b> jour]]></desc>
+    <category lang="fr">Info</category><category lang="en">info</category><category lang="fr">Journal</category>
   </programme>
   <programme start="20240131210000" stop="20240131223000" channel="TF1.fr"><title>Film &#233;t&#xE9;</title></programme>
   <programme start="20240131223000 +0100" channel="TF1.fr"/>
@@ -99,6 +100,8 @@ http://srv/plain/stream4.ts
       expect(progs[0][1], DateTime.utc(2024, 1, 31, 19).millisecondsSinceEpoch ~/ 1000);
       expect(progs[0][3], 'Le JT & la météo');
       expect(progs[0][4], 'Résumé <b>du</b> jour');
+      expect(progs[0][5], 'Info · Journal'); // first two genres, no repeats
+      expect(progs[1][5], isNull);
       expect(progs[1][1], DateTime.utc(2024, 1, 31, 21).millisecondsSinceEpoch ~/ 1000);
       expect(progs[1][3], 'Film été');
     });

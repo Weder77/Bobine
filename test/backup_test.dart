@@ -1,11 +1,11 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lumen/data/db.dart';
-import 'package:lumen/data/models.dart';
-import 'package:lumen/data/repository.dart';
-import 'package:lumen/data/settings.dart';
-import 'package:lumen/features/backup.dart';
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/repository.dart';
+import 'package:bobine/data/settings.dart';
+import 'package:bobine/features/backup.dart';
 
 (Repository, AppSettings, BackupService) _install() {
   final repo = Repository(openMemoryDatabase());
@@ -110,5 +110,8 @@ void main() {
     aBackup.restore(json);
     expect(a.progress(src, ContentKind.movie, '1')!.position, const Duration(minutes: 50));
     expect(() => aBackup.restore({'format': 'other'}), throwsA(isA<BackupException>()));
+    // Saved by Lumen (the former name): still accepted.
+    final legacy = {...json, 'format': 'lumen-backup'};
+    expect(() => aBackup.restore(legacy), returnsNormally);
   });
 }

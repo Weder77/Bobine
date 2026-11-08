@@ -11,7 +11,7 @@ ffmpeg -loglevel error -y -f lavfi -i "testsrc2=size=1280x720:rate=25" \
   -f lavfi -i "sine=frequency=440:sample_rate=48000" -f lavfi -i "sine=frequency=660:sample_rate=48000" -t 300 \
   -map 0:v -map 1:a -map 2:a -c:v libx264 -preset ultrafast -g 50 -b:v 2500k -c:a aac -b:a 96k \
   -metadata:s:a:0 language=fre -metadata:s:a:0 title=VF -metadata:s:a:1 language=eng -metadata:s:a:1 title=VO tmp.mkv
-printf '1\n00:00:01,000 --> 00:00:30,000\nSous-titre de test Lumen\n\n2\n00:00:31,000 --> 00:04:59,000\nDeuxième sous-titre\n' > subs.srt
+printf '1\n00:00:01,000 --> 00:00:30,000\nSous-titre de test Bobine\n\n2\n00:00:31,000 --> 00:04:59,000\nDeuxième sous-titre\n' > subs.srt
 ffmpeg -loglevel error -y -i tmp.mkv -i subs.srt -map 0 -map 1 -c copy -c:s srt -metadata:s:s:0 language=fre movie.mkv
 rm tmp.mkv subs.srt
 
@@ -36,4 +36,4 @@ for i in $(seq 0 7); do
   convert -size 128x128 xc:none -fill "${colors[$i]}" -draw "roundrectangle 0,0 127,127 24,24" \
     -gravity center -fill white -pointsize 52 -annotate +0+0 "${names[$i]}" -depth 8 "PNG32:logo$i.png"
 done
-echo "OK. Lance : python3 tool/fake_xtream.py $OUT 8765  puis ajoute le serveur http://127.0.0.1:8765 (identifiant/mot de passe quelconques) dans Lumen."
+echo "OK. Lance : python3 tool/fake_xtream.py $OUT 8765  puis ajoute le serveur http://127.0.0.1:8765 (identifiant/mot de passe quelconques) dans Bobine."

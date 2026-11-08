@@ -1,19 +1,21 @@
-# Lumen — lecteur IPTV desktop
+# Bobine — lecteur IPTV desktop
 
-> *Lumen* est un nom provisoire.
+> Anciennement *Lumen*. La mise à jour vers Bobine reprend automatiquement les données (sources, profils, favoris, progression) et remplace l'ancienne application.
 
 Lecteur IPTV pour **Windows, macOS et Linux**, construit avec Flutter et le moteur vidéo **libmpv** (via [media_kit](https://github.com/media-kit/media-kit)).
 L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux et sur lequel les avances / retours rapides sont instantanés.
 
 ![Accueil](docs/screenshots/accueil.jpg)
 
-| TV en direct | Guide TV |
+| Direct | Guide TV |
 |---|---|
-| ![TV en direct](docs/screenshots/tv-direct.jpg) | ![Guide TV](docs/screenshots/guide-tv.jpg) |
-| **Lecteur** (cache visible sur la barre de progression) | **Fiche film** |
-| ![Lecteur](docs/screenshots/lecteur-film.jpg) | ![Fiche film](docs/screenshots/fiche-film.jpg) |
-| **Série** | **Réglages** |
-| ![Série](docs/screenshots/serie.jpg) | ![Réglages](docs/screenshots/reglages.jpg) |
+| ![Direct](docs/screenshots/tv-direct.jpg) | ![Guide TV](docs/screenshots/guide-tv.jpg) |
+| **Films · Parcourir** | **Tout le catalogue** |
+| ![Films](docs/screenshots/films.jpg) | ![Tout le catalogue](docs/screenshots/catalogue.jpg) |
+| **Lecteur en direct** | **Film en pause** (résumé et distribution) |
+| ![Lecteur en direct](docs/screenshots/lecteur-direct.jpg) | ![Film en pause](docs/screenshots/lecteur-film.jpg) |
+| **Séries** | **Paramètres** |
+| ![Séries](docs/screenshots/series.jpg) | ![Paramètres](docs/screenshots/reglages.jpg) |
 
 *(Captures réalisées avec le faux serveur de test fourni dans `tool/`, d'où les mires de couleur.)*
 
@@ -24,15 +26,14 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 **Sources**
 - Comptes **Xtream Codes** (serveur + identifiant + mot de passe). Coller un lien `get.php?username=…&password=…` remplit les champs automatiquement.
 - Playlists **M3U / M3U8** (URL ou fichier local), y compris compressées en gzip. Les films et séries d'une playlist M3U sont détectés automatiquement (`/movie/`, `/series/`, extensions vidéo, `S01E02`).
-- Plusieurs sources, avec bascule rapide depuis la barre latérale.
+- Plusieurs sources, avec bascule rapide depuis le menu du profil.
 - Bouton « Tester » (Xtream : statut du compte, date d'expiration, nombre de connexions).
 - User-Agent personnalisable avec des préréglages (VLC, Kodi, IPTV Smarters…) pour les fournisseurs qui l'exigent.
 
 **TV en direct**
-- Navigation par une barre en haut : Accueil, Live TV, Guide TV, Films, Séries, plus recherche, réglages, source active et heure. L'accueil propose des tuiles d'accès rapide avec le nombre de chaînes, films et séries.
-- Catégories, favoris, chaînes récemment regardées, recherche instantanée.
-- Programme en cours et progression directement dans la liste.
-- **Aperçu intégré** : un clic lance la chaîne dans le panneau de droite, *Entrée* ou double-clic passe en plein écran **sans recharger le flux**.
+- Navigation par une barre en haut : Accueil, Direct, Guide TV, Films, Séries, plus recherche (Ctrl + K ou /), paramètres, profil et heure.
+- **Direct** en mosaïque : une tuile par chaîne avec le programme en cours, sa progression et la suite ; groupes en pastilles, favoris, chaînes récentes, filtre sur les chaînes **et les programmes**.
+- **Noms nettoyés** (« |FR| TF1 FHD ★ » → « TF1 ») et **qualités regroupées** : une seule tuile pour les flux FHD, HD et SD d'une chaîne, la qualité préférée est lancée (réglable).
 - **Guide TV** en grille (XMLTV, `.xml` ou `.xml.gz`), virtualisé pour rester fluide avec des milliers de chaînes. L'EPG est associé par `tvg-id` puis par nom de chaîne normalisé (`FR: TF1 HD` ↔ `TF1`).
 - Avec Xtream sans EPG XMLTV : repli automatique sur `get_short_epg`.
 - **Décalage du guide** réglable par source (−12 h à +12 h), pour les fournisseurs qui publient un guide avec un mauvais fuseau horaire.
@@ -41,25 +42,33 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - **Reconnexion automatique** si le flux coupe, et relance d'une chaîne bloquée en chargement plus de 20 s.
 
 **Films et séries**
-- Catalogue en affiches, catégories, tri (ajout récent, titre, note, année), filtre.
+- « Parcourir » : grande image à la une qui défile, rangées (reprendre, ajouts, Top 10, favoris, catégories, mieux notés) ; un clic lance la lecture, l'affiche survolée propose lecture, favori et fiche.
+- « Tout le catalogue » : affiches, catégories (menu en colonnes ou pastilles), tri (ajouts récents, A–Z, note, année), filtre ; catégorie verrouillée déverrouillable sur place avec le code parental.
 - Fiches détaillées (synopsis, casting, durée, fond) récupérées depuis Xtream.
 - **Reprise de lecture** automatique, « Continuer à regarder » sur l'accueil.
 - Saisons et épisodes, épisodes vus, **épisode suivant automatique** avec compte à rebours.
 
 **Lecteur**
-- Pistes audio et sous-titres (choix de la langue préférée, `fr` par défaut), vitesse, format d'image (16:9, 4:3, 21:9, zoom, étirer).
+- En direct : programme en cours en grand, « Ensuite », panneau **Chaînes** pour zapper, **Mini-guide** des quatre prochains programmes, choix de la **qualité** de la chaîne, badge « Différé » et « Revenir au direct ».
+- Films et séries : barre de lecture, **écran de pause** avec résumé et distribution (TMDB), panneau **Épisodes**, carte « Épisode suivant ».
+- Panneau **Audio et sous-titres** : pistes (langue préférée, `fr` par défaut), taille des sous-titres, vitesse, format d'image (16:9, 4:3, 21:9, remplir, étirer).
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
+
+**Nouveautés 1.2 — Bobine**
+- Nouveau nom, nouveau logo et **nouvelle interface** : polices Big Shoulders et Geist, vermillon sur fond chaud, accueil façon salle de cinéma, Direct en mosaïque, guide redessiné, lecteur et paramètres refaits.
+- Recherche dans l'en-tête (chaînes, programmes, films, séries, recherches récentes et tendances).
+- Clic droit sur les vignettes : actions rapides (favori, lancer une saison, marquer comme vu, bande-annonce…).
 
 **Nouveautés 1.1**
 - **Mini-lecteur** (touche P) : la vidéo continue dans un coin pendant que tu navigues ; double-clic pour revenir en plein écran. Sous Windows, **fenêtre flottante** toujours au-dessus des autres applications (touche O).
 - **Replay** des chaînes qui le proposent (Xtream `tv_archive`, M3U `catchup`) : « Depuis le début » sur le direct, « Revoir » sur un programme passé du guide.
-- **Rappels** (« Me le rappeler ») et **enregistrements** (maintenant ou programmés depuis le guide) dans `Vidéos\Lumen`.
+- **Rappels** (« Me le rappeler ») et **enregistrements** (maintenant ou programmés depuis le guide) dans `Vidéos\Bobine`.
 - **Recherche dans le guide TV** : les programmes à venir et en cours apparaissent dans la recherche.
 - **Profils** (« Qui regarde ? ») avec favoris, reprises et rappels séparés, profil enfant.
 - **Contrôle parental** : code à 4 chiffres, catégories adultes verrouillées automatiquement.
 - **Ranger les catégories** (masquer, verrouiller, réordonner) et masquer des chaînes (clic droit).
-- **Fiches enrichies TMDB** (clé gratuite à saisir dans les réglages) : grandes images, résumé en français, distribution, bande-annonce.
+- **Fiches enrichies TMDB** (clé gratuite à saisir dans *Paramètres → Fiches TMDB*) : grandes images, résumé en français, distribution, bande-annonce.
 - **Sauvegarde / restauration** des données dans un fichier, avec ou sans identifiants.
 - **Diagnostic** : versions, stockage, test de connexion, journal, rapport à copier sans identifiants.
 - **Télécommande et manette** (Xbox / XInput sous Windows) : navigation aux flèches avec focus visible, A = ouvrir, B = retour.
@@ -109,10 +118,10 @@ Autres optimisations :
 Chaque envoi de code est compilé automatiquement sur un Windows de GitHub (tests compris) :
 
 1. Sur GitHub, ouvre l'onglet **Actions**, puis la dernière exécution **« Build »** réussie (coche verte).
-2. En bas de la page, télécharge l'artefact **`Lumen-Setup`** (installateur, sans droits administrateur) ou **`Lumen-windows-x64`** (version portable à dézipper). Il faut être connecté à GitHub.
-3. Lance **`Lumen-Setup-x.y.z.exe`**, ou dézippe l'archive et lance **`lumen.exe`**.
+2. En bas de la page, télécharge l'artefact **`Bobine-Setup`** (installateur, sans droits administrateur) ou **`Bobine-windows-x64`** (version portable à dézipper). Il faut être connecté à GitHub.
+3. Lance **`Bobine-Setup-x.y.z.exe`**, ou dézippe l'archive et lance **`bobine.exe`**.
 
-Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVersion` dans `lib/core/version.dart` (un test vérifie qu'ils sont identiques), puis fusionne dans `main` : si cette version n'existe pas encore, le CI crée le tag (`v1.1.0`) et publie l'installateur et l'archive dans les **Releases**. Pousser soi-même un tag `v*` fonctionne aussi. Les applications installées proposent ensuite la mise à jour (*Réglages → À propos et mises à jour*).
+Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVersion` dans `lib/core/version.dart` (un test vérifie qu'ils sont identiques), puis fusionne dans `main` : si cette version n'existe pas encore, le CI crée le tag (`v1.1.0`) et publie l'installateur et l'archive dans les **Releases**. Pousser soi-même un tag `v*` fonctionne aussi. Les applications installées proposent ensuite la mise à jour (*Paramètres → À propos*).
 
 > La vérification des mises à jour interroge l'API publique de GitHub : le dépôt (ou au moins ses Releases) doit être public.
 
@@ -151,7 +160,7 @@ flutter run -d windows          # lance l'app en mode développement
 flutter build windows --release
 ```
 
-L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout le dossier** (le `.exe` a besoin des DLL à côté de lui) où tu veux, puis lance `lumen.exe`.
+L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout le dossier** (le `.exe` a besoin des DLL à côté de lui) où tu veux, puis lance `bobine.exe`.
 
 ### macOS / Linux
 
@@ -175,7 +184,9 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 | ↑ / ↓ | Chaîne précédente / suivante (direct), volume (films) |
 | Pg↑ / Pg↓ | Chaîne précédente / suivante |
 | 0–9 | Aller au numéro de chaîne |
-| C | Liste des chaînes (direct) |
+| C | Panneau des chaînes (direct) |
+| G | Mini-guide (direct) |
+| E | Épisodes (série) |
 | F, F11, double-clic | Plein écran |
 | M, molette | Muet, volume |
 | A / S | Piste audio / sous-titres suivants |
@@ -190,23 +201,23 @@ Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), 
 
 ### En cas de problème
 
-- **Une chaîne ne se lance pas** : dans *Réglages → Sources → Modifier → Options avancées*, essaie le format **HLS** au lieu de MPEG-TS, ou un **User-Agent** (VLC).
-- **Image corrompue ou verte** : désactive le **décodage matériel** dans les réglages.
+- **Une chaîne ne se lance pas** : dans *Paramètres → Sources → Modifier → Options avancées*, essaie le format **HLS** au lieu de MPEG-TS, ou un **User-Agent** (VLC).
+- **Image corrompue ou verte** : passe le **décodage vidéo** sur « Logiciel » (*Paramètres → Lecture*).
 - **Effet de peigne** sur certaines chaînes : désentrelacement sur « Toujours ».
-- **Petit SSD ou peu de RAM** : réduis la taille du cache dans les réglages.
-- **Programmes du guide décalés d'une heure ou plus** : *Réglages → Sources → Modifier → Options avancées → Décalage du guide TV*.
-- **Autre souci** : *Réglages → Sauvegarde et diagnostic → Diagnostic* teste la connexion à chaque source et affiche le journal ; « Copier le rapport » donne un texte sans mot de passe à partager.
+- **Petit SSD ou peu de RAM** : choisis une **mémoire tampon** « Faible » (*Paramètres → Lecture*).
+- **Programmes du guide décalés d'une heure ou plus** : *Paramètres → Sources → Modifier → Options avancées → Décalage du guide TV*.
+- **Autre souci** : *Paramètres → Sauvegarde → Diagnostic* teste la connexion à chaque source et affiche le journal ; « Copier le rapport » donne un texte sans mot de passe à partager.
 
 ---
 
 ## Données et vie privée
 
-Tout est stocké **localement** dans une base SQLite (`lumen.db`) : sources, profils, favoris, progression, rappels et réglages. Un journal (`lumen.log`, identifiants masqués) se trouve à côté.
-Sous Windows elle se trouve dans `%APPDATA%\com.lumen\Lumen\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV, sauf ce que tu actives : les titres des films et séries ouverts vers TMDB si tu as saisi une clé, et la vérification des mises à jour vers GitHub (désactivable).
+Tout est stocké **localement** dans une base SQLite (`bobine.db`) : sources, profils, favoris, progression, rappels et réglages. Un journal (`bobine.log`, identifiants masqués) se trouve à côté.
+Sous Windows elle se trouve dans `%APPDATA%\com.bobine\Bobine\`. Aucune donnée n'est envoyée ailleurs que vers ton fournisseur IPTV, sauf ce que tu actives : les titres des films et séries ouverts vers TMDB si tu as saisi une clé, et la vérification des mises à jour vers GitHub (désactivable).
 
-Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `lumen.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Lumen`.
+Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `bobine.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Bobine`.
 
-Lumen est un lecteur : il ne fournit aucun contenu.
+Bobine est un lecteur : il ne fournit aucun contenu.
 
 ---
 
@@ -226,8 +237,9 @@ lib/
 ├── player/
 │   ├── player_service.dart  Instance libmpv unique + stratégie de cache
 │   ├── player_screen.dart   Lecteur plein écran (commandes, raccourcis, zapping)
-│   └── player_widgets.dart  Barre de progression avec zones en cache, menus
-└── ui/              Accueil, TV + guide, Films/Séries, fiches, recherche, réglages
+│   ├── player_chrome.dart   Barres, panneaux (chaînes, mini-guide, pistes, épisodes), écran de pause
+│   └── player_widgets.dart  Noms des pistes audio et sous-titres
+└── ui/              Accueil, Direct + guide, Films/Séries, fiches, recherche, paramètres
 test/                Tests (analyseurs, import complet avec faux serveur, lecteur, images)
 tool/                Faux serveur Xtream + générateur de vidéos de test
 ```
@@ -239,7 +251,7 @@ tool/generate_test_media.sh test_media      # nécessite ffmpeg + ImageMagick
 python3 tool/fake_xtream.py test_media 8765
 ```
 
-Puis dans Lumen, ajoute une source Xtream avec le serveur `http://127.0.0.1:8765` (identifiant et mot de passe quelconques).
+Puis dans Bobine, ajoute une source Xtream avec le serveur `http://127.0.0.1:8765` (identifiant et mot de passe quelconques).
 
 ### Tests
 
