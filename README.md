@@ -55,6 +55,14 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
 
+**Nouveautés 1.5 : multi-écran**
+- **2 à 4 chaînes en même temps**, pour suivre plusieurs matchs : bouton *Multi-écran* dans Direct, clic droit sur une chaîne → *Ajouter au multi-écran*, ou touche **V** dans le lecteur en direct.
+- Dispositions **côte à côte**, **1 + 2**, **2 × 2** et **1 + 3**, faites de cases 16:9 pour que l'image remplisse chaque case.
+- Une seule chaîne est entendue (cadre vermillon) : clic ou touches 1 à 4 pour passer le son à une autre. Double-clic ou Entrée pour agrandir une case, **P** pour la regarder seule dans le lecteur.
+- Choix des chaînes par favoris ou dans toute la liste, avec une recherche qui porte aussi sur les **programmes en cours** (« ligue 1 » trouve les chaînes qui diffusent un match).
+- Chaque case a son propre petit lecteur (cache réduit, reconnexion automatique) ; le lecteur principal s'arrête pendant ce temps. Le multi-écran revient tel qu'il était à la prochaine ouverture.
+- Si le compte Xtream annonce un nombre de connexions simultanées plus petit que le nombre de chaînes, Bobine prévient : le fournisseur peut refuser les flux en trop.
+
 **Nouveautés 1.4 : synchronisation entre appareils**
 - **Compte Bobine** (*Paramètres → Compte*) : sources (identifiants compris), profils, favoris, reprises et épisodes vus, chaînes récentes, catégories et chaînes masquées ou verrouillées, rappels, code parental, clé TMDB et réglages de lecture suivent sur tous tes ordinateurs. Le cache, le décodage, le volume et les enregistrements restent propres à chaque ordinateur.
 - **Chiffré de bout en bout** : tout est chiffré sur l'appareil (AES-256-GCM) avec une clé tirée de ton mot de passe. Le serveur ne reçoit ni ton mot de passe ni tes identifiants IPTV, ni même la liste de ce que tu regardes : seulement des éléments opaques.
@@ -202,7 +210,10 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 | I | Statistiques |
 | P | Mini-lecteur |
 | O | Fenêtre flottante (Windows) |
+| V | Multi-écran avec la chaîne en cours (direct) |
 | Échap | Quitter le plein écran / retour |
+
+Dans le **multi-écran** : **1 à 4** ou clic pour choisir la chaîne entendue, **← / →** chaîne suivante, **Entrée** ou double-clic pour agrandir, **A** ajouter, **C** changer de chaîne, **Suppr** retirer, **P** regarder seule dans le lecteur, **M** son, **F** plein écran, **Échap** quitter.
 
 Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), **Entrée** ouvre et **Échap** revient. Un **clic droit** (ou la touche Menu) sur une vignette ouvre ses actions rapides : lecture ou reprise, depuis le début, lancer une saison, favoris, marquer comme vu, bande-annonce, retirer de « Reprendre », enregistrer ou masquer une chaîne. Une manette Xbox fait de même : croix ou stick pour se déplacer, **A** valider, **B** retour, **X** pause, **Y** actions rapides (plein écran dans le lecteur), **LB / RB** page précédente / suivante.
 
@@ -252,7 +263,8 @@ lib/
 │   ├── player_service.dart  Instance libmpv unique + stratégie de cache
 │   ├── player_screen.dart   Lecteur plein écran (commandes, raccourcis, zapping)
 │   ├── player_chrome.dart   Barres, panneaux (chaînes, mini-guide, pistes, épisodes), écran de pause
-│   └── player_widgets.dart  Noms des pistes audio et sous-titres
+│   ├── player_widgets.dart  Noms des pistes audio et sous-titres
+│   └── multi_view.dart      Multi-écran : dispositions, petits lecteurs des cases, chaîne entendue
 └── ui/              Accueil, Direct + guide, Films/Séries, fiches, recherche, paramètres
 test/                Tests (analyseurs, import complet avec faux serveur, lecteur, images, synchro)
 tool/                Faux serveur Xtream + générateur de vidéos de test
@@ -285,7 +297,7 @@ flutter test
 
 - [x] **Synchronisation par compte** (sources, profils, favoris, progression, réglages) entre plusieurs appareils, chiffrée de bout en bout.
 - [x] Replay / catch-up, rappels, enregistrements, mini-lecteur, profils, contrôle parental, TMDB, sauvegarde, manette, installateur (1.1).
-- [ ] Multi-écran (2 à 4 chaînes).
+- [x] Multi-écran (2 à 4 chaînes) (1.5).
 - [ ] Portail Stalker (MAC).
 - [ ] Version Android TV / mobile (même code Flutter + media_kit).
 - [ ] Signature de l'installateur Windows (évite l'avertissement SmartScreen).

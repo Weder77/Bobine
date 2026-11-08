@@ -107,7 +107,8 @@ class PlayerService {
   final List<StreamSubscription> _subs = [];
   Timer? _volumeSave;
 
-  static const _protocols = [
+  /// Protocols libmpv may open (IPTV streams use most of them).
+  static const protocols = [
     'udp',
     'rtp',
     'rtsp',
@@ -142,7 +143,7 @@ class PlayerService {
         libass: true,
         logLevel: MPVLogLevel.warn,
         bufferSize: settings.cacheMb * 1024 * 1024,
-        protocolWhitelist: _protocols,
+        protocolWhitelist: protocols,
       ),
     );
     video = VideoController(
@@ -203,6 +204,22 @@ class PlayerService {
     settings.addListener(applyTuning);
   }
 
+  /// How streams are fetched, shared with the multi-view players.
+  static final networkProps = <String, String>{
+    'network-timeout': '20',
+    // FFmpeg HTTP: keep-alive connections (faster seeks out of cache) and
+    // automatic reconnection when the IPTV server drops the connection.
+    'stream-lavf-o':
+        'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
+        'reconnect_delay_max=5,multiple_requests=1',
+    'demuxer-lavf-o':
+        'seg_max_retry=5,strict=experimental,allowed_extensions=ALL,'
+        'protocol_whitelist=[${protocols.join(',')}]',
+    'hls-bitrate': 'max',
+    'tls-verify': 'no',
+    'load-unsafe-playlists': 'yes',
+  };
+
   static final RegExp _fatal = RegExp(
     r'failed to open|failed to recognize|tcp:|http error|server returned|connection (refused|reset|timed out)|'
     r'timed out|no route|not found|forbidden|unauthorized|input/output error|invalid data found|'
@@ -254,18 +271,7 @@ class PlayerService {
       'demuxer-seekable-cache': 'yes',
       'demuxer-donate-buffer': 'yes',
       'force-seekable': 'yes',
-      'network-timeout': '20',
-      // FFmpeg HTTP: keep-alive connections (faster seeks out of cache) and
-      // automatic reconnection when the IPTV server drops the connection.
-      'stream-lavf-o':
-          'reconnect=1,reconnect_streamed=1,reconnect_on_network_error=1,'
-          'reconnect_delay_max=5,multiple_requests=1',
-      'demuxer-lavf-o':
-          'seg_max_retry=5,strict=experimental,allowed_extensions=ALL,'
-          'protocol_whitelist=[${_protocols.join(',')}]',
-      'hls-bitrate': 'max',
-      'tls-verify': 'no',
-      'load-unsafe-playlists': 'yes',
+      ...networkProps,
       'hwdec': settings.hardwareDecoding ? 'auto-safe' : 'no',
       'vd-lavc-threads': '0',
       'alang': settings.audioLang,
