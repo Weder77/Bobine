@@ -33,11 +33,11 @@ class ReminderBanner extends StatelessWidget {
                 color: AppColors.surface3,
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(color: AppColors.borderStrong),
-                boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 30, offset: Offset(0, 12))],
+                boxShadow: [BoxShadow(color: AppColors.shadow(0x99), blurRadius: 30, offset: Offset(0, 12))],
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.notifications_active_rounded, color: AppColors.accent),
+                  Icon(Icons.notifications_active_rounded, color: AppColors.accent),
                   const SizedBox(width: 14),
                   Expanded(
                     child: Column(
@@ -52,7 +52,7 @@ class ReminderBanner extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
                         ),
-                        Text(r.channelName, style: const TextStyle(color: AppColors.textSoft)),
+                        Text(r.channelName, style: TextStyle(color: AppColors.textSoft)),
                         const SizedBox(height: 10),
                         Row(
                           children: [

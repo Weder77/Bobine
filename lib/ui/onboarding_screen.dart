@@ -11,11 +11,11 @@ class OnboardingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: RadialGradient(
             center: Alignment(-0.6, -0.8),
             radius: 1.4,
-            colors: [Color(0xFF2B1A13), AppColors.bg],
+            colors: [AppColors.accentSelected, AppColors.bg],
           ),
         ),
         child: Center(
@@ -30,7 +30,7 @@ class OnboardingScreen extends StatelessWidget {
                   const SizedBox(height: 36),
                   Text('BIENVENUE', style: posterStyle(76, height: 0.9)),
                   const SizedBox(height: 10),
-                  const Text(
+                  Text(
                     'Ajoute ton abonnement Xtream Codes ou une playlist M3U. '
                     'Les chaînes, films, séries et le guide TV seront importés automatiquement.',
                     style: TextStyle(color: AppColors.textSoft, fontSize: 16, height: 1.5),
@@ -46,7 +46,7 @@ class OnboardingScreen extends StatelessWidget {
                     child: SourceForm(onSaved: (_) {}),
                   ),
                   const SizedBox(height: 18),
-                  const Text(
+                  Text(
                     'Bobine est un lecteur : il ne fournit aucun contenu. Tes identifiants restent sur cet ordinateur.',
                     style: TextStyle(color: AppColors.faint, fontSize: 12),
                   ),

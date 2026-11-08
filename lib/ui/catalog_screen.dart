@@ -397,7 +397,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
             decoration: InputDecoration(
               hintText: _c.series ? 'Filtrer les séries' : 'Filtrer les films',
-              prefixIcon: const Icon(Icons.search_rounded, size: 19, color: AppColors.faint),
+              prefixIcon: Icon(Icons.search_rounded, size: 19, color: AppColors.faint),
               prefixIconConstraints: const BoxConstraints(minWidth: 42),
               contentPadding: const EdgeInsets.symmetric(vertical: 12),
             ),
@@ -455,7 +455,7 @@ class _Empty extends StatelessWidget {
         Text(
           text,
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint),
+          style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint),
         ),
       ],
     ),
@@ -499,7 +499,7 @@ class _LockedState extends State<_Locked> {
       padding: const EdgeInsets.symmetric(vertical: 80, horizontal: 48),
       child: Column(
         children: [
-          const Icon(Icons.lock_outline_rounded, size: 40, color: AppColors.accent),
+          Icon(Icons.lock_outline_rounded, size: 40, color: AppColors.accent),
           const SizedBox(height: 18),
           Text('CATÉGORIE VERROUILLÉE', style: posterStyle(36, height: 1).copyWith(letterSpacing: 36 * 0.04)),
           const SizedBox(height: 18),
@@ -553,7 +553,7 @@ class _LockedState extends State<_Locked> {
                               ? Container(
                                   width: 12,
                                   height: 12,
-                                  decoration: const BoxDecoration(color: AppColors.text, shape: BoxShape.circle),
+                                  decoration: BoxDecoration(color: AppColors.text, shape: BoxShape.circle),
                                 )
                               : null,
                         ),
@@ -585,9 +585,9 @@ class Segmented<T> extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(
-      color: pill ? const Color(0x990D0C0B) : AppColors.surface,
+      color: pill ? AppColors.bg.withAlpha(0x99) : AppColors.surface,
       borderRadius: BorderRadius.circular(pill ? 999 : 6),
-      border: Border.all(color: pill ? const Color(0x24FFFFFF) : AppColors.borderInput),
+      border: Border.all(color: pill ? AppColors.ink.withAlpha(0x24) : AppColors.borderInput),
     ),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -603,7 +603,7 @@ class Segmented<T> extends StatelessWidget {
                 duration: const Duration(milliseconds: 200),
                 padding: EdgeInsets.symmetric(horizontal: pill ? 16 : 12, vertical: pill ? 9 : 10),
                 decoration: BoxDecoration(
-                  color: v == value ? AppColors.action : (hover ? const Color(0x14FFFFFF) : Colors.transparent),
+                  color: v == value ? AppColors.action : (hover ? AppColors.ink.withAlpha(0x14) : Colors.transparent),
                   borderRadius: BorderRadius.circular(pill ? 999 : 4),
                 ),
                 child: Text(
@@ -692,9 +692,9 @@ class _CategoriesButton extends StatelessWidget {
         height: 38,
         padding: const EdgeInsets.fromLTRB(16, 0, 12, 0),
         decoration: BoxDecoration(
-          color: hover ? const Color(0x1AFFFFFF) : const Color(0x8C0D0C0B),
+          color: hover ? AppColors.ink.withAlpha(0x1A) : AppColors.bg.withAlpha(0x8C),
           borderRadius: BorderRadius.circular(4),
-          border: Border.all(color: const Color(0xB3FFFFFF)),
+          border: Border.all(color: AppColors.ink.withAlpha(0xB3)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -748,7 +748,7 @@ Future<void> _showCategories(BuildContext context, CatalogController c) {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: hover ? const Color(0x12FFFFFF) : Colors.transparent,
+                color: hover ? AppColors.ink.withAlpha(0x12) : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
@@ -762,7 +762,7 @@ Future<void> _showCategories(BuildContext context, CatalogController c) {
                         text: e.label,
                         children: [
                           if (e.locked)
-                            const WidgetSpan(
+                            WidgetSpan(
                               alignment: PlaceholderAlignment.middle,
                               child: Padding(
                                 padding: EdgeInsets.only(left: 8),
@@ -805,7 +805,7 @@ Future<void> _showCategories(BuildContext context, CatalogController c) {
               color: AppColors.surface2,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
-                side: const BorderSide(color: Color(0x1AFFFFFF)),
+                side: BorderSide(color: AppColors.ink.withAlpha(0x1A)),
               ),
               elevation: 0,
               shadowColor: Colors.transparent,
@@ -813,7 +813,7 @@ Future<void> _showCategories(BuildContext context, CatalogController c) {
                 constraints: BoxConstraints(maxHeight: size.height - kTopBarHeight - 96),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [BoxShadow(color: Color(0xA6000000), blurRadius: 80, offset: Offset(0, 30))],
+                  boxShadow: [BoxShadow(color: AppColors.shadow(0xA6), blurRadius: 80, offset: Offset(0, 30))],
                 ),
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(18, 18, 18, 14),
@@ -880,7 +880,7 @@ class _GridPosterState extends State<GridPoster> {
     final meta = [
       if (m.year != null) Text('${m.year}'),
       if (m.rating != null && m.rating! > 0)
-        Text('★ ${m.rating!.toStringAsFixed(1).replaceAll('.', ',')}', style: const TextStyle(color: AppColors.accent)),
+        Text('★ ${m.rating!.toStringAsFixed(1).replaceAll('.', ',')}', style: TextStyle(color: AppColors.accent)),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -961,7 +961,7 @@ class _GridPosterState extends State<GridPoster> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(8),
-        boxShadow: lifted ? const [BoxShadow(color: Color(0xB3000000), blurRadius: 50, offset: Offset(0, 24))] : null,
+        boxShadow: lifted ? [BoxShadow(color: AppColors.shadow(0xB3), blurRadius: 50, offset: Offset(0, 24))] : null,
       ),
       clipBehavior: Clip.antiAlias,
       child: Stack(
@@ -973,7 +973,7 @@ class _GridPosterState extends State<GridPoster> {
               left: 0,
               right: 0,
               bottom: 0,
-              child: ProgressLine(widget.progress!, height: 3, track: const Color(0x59FFFFFF)),
+              child: ProgressLine(widget.progress!, height: 3, track: AppColors.ink.withAlpha(0x59)),
             ),
           if (lifted)
             Positioned(
@@ -982,11 +982,11 @@ class _GridPosterState extends State<GridPoster> {
               bottom: 0,
               child: Container(
                 padding: const EdgeInsets.fromLTRB(12, 40, 12, 12),
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.bottomCenter,
                     end: Alignment.topCenter,
-                    colors: [Color(0xF70D0C0B), Color(0xF70D0C0B), Color(0x000D0C0B)],
+                    colors: [AppColors.bg.withAlpha(0xF7), AppColors.bg.withAlpha(0xF7), AppColors.bg.withAlpha(0x00)],
                     stops: [0, 0.3, 1],
                   ),
                 ),
@@ -1013,7 +1013,7 @@ class _GridPosterState extends State<GridPoster> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.right,
-                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSoft),
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: AppColors.textSoft),
                         ),
                       ),
                     ],

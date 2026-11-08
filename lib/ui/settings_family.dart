@@ -221,7 +221,7 @@ class CategoriesSection extends StatelessWidget {
           ),
         ),
         if (hidden.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 18),
             child: Text(
               'Aucune chaîne masquée. Clic droit sur une chaîne en Live TV → « Masquer ».',
@@ -234,7 +234,7 @@ class CategoriesSection extends StatelessWidget {
               contentPadding: const EdgeInsets.symmetric(vertical: 6),
               leading: ChannelLogo(name: c.name, url: c.logo, size: 36),
               title: Text(c.name),
-              subtitle: const Text('Masquée', style: TextStyle(color: AppColors.muted)),
+              subtitle: Text('Masquée', style: TextStyle(color: AppColors.muted)),
               trailing: TextButton(
                 onPressed: () {
                   s.repo.setChannelHidden(c.sourceId, c.extId, false);
@@ -309,7 +309,7 @@ class _CategoryManagerState extends State<_CategoryManager> {
         height: 520,
         child: Column(
           children: [
-            const Text(
+            Text(
               "Glisse pour changer l'ordre. L'œil masque une catégorie, le cadenas la cache derrière le code parental.",
               style: TextStyle(color: AppColors.muted),
             ),
@@ -333,7 +333,7 @@ class _CategoryManagerState extends State<_CategoryManager> {
                     contentPadding: const EdgeInsets.only(left: 4, right: 4),
                     leading: ReorderableDragStartListener(
                       index: i,
-                      child: const MouseRegion(
+                      child: MouseRegion(
                         cursor: SystemMouseCursors.grab,
                         child: Icon(Icons.drag_indicator_rounded, color: AppColors.muted),
                       ),
@@ -342,7 +342,7 @@ class _CategoryManagerState extends State<_CategoryManager> {
                       c.name,
                       style: TextStyle(color: c.hidden ? AppColors.faint : AppColors.text, fontWeight: FontWeight.w600),
                     ),
-                    subtitle: Text('${c.count}', style: const TextStyle(color: AppColors.faint, fontSize: 12)),
+                    subtitle: Text('${c.count}', style: TextStyle(color: AppColors.faint, fontSize: 12)),
                     trailing: Wrap(
                       children: [
                         IconButton(

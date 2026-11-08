@@ -123,7 +123,7 @@ class _GuideScreenState extends State<GuideScreen> {
                     children: [
                       Text('AUCUNE CHAÎNE', style: posterStyle(36, height: 1).copyWith(letterSpacing: 36 * 0.04)),
                       const SizedBox(height: 12),
-                      const Text('Rien dans ce groupe.', style: TextStyle(fontSize: 16, color: AppColors.faint)),
+                      Text('Rien dans ce groupe.', style: TextStyle(fontSize: 16, color: AppColors.faint)),
                     ],
                   ),
                 )
@@ -253,7 +253,7 @@ class _GuideScreenState extends State<GuideScreen> {
               desc,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 16, height: 1.5, color: AppColors.textSoft),
+              style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.textSoft),
             ),
           ),
         ],
@@ -301,7 +301,7 @@ class _GuideScreenState extends State<GuideScreen> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const PulseDot(size: 6, color: AppColors.onAccent),
+                                  PulseDot(size: 6, color: AppColors.onAccent),
                                   const SizedBox(width: 7),
                                   Text(
                                     'EN DIRECT',
@@ -429,7 +429,7 @@ class _DayButton extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
         decoration: BoxDecoration(
-          color: selected ? AppColors.action : (hover ? const Color(0x14FFFFFF) : Colors.transparent),
+          color: selected ? AppColors.action : (hover ? AppColors.ink.withAlpha(0x14) : Colors.transparent),
           borderRadius: BorderRadius.circular(4),
         ),
         child: Text(
@@ -472,20 +472,20 @@ class _GuideButton extends StatelessWidget {
           ),
           1 =>
             FilledButton.styleFrom(
-              backgroundColor: const Color(0x66787068),
+              backgroundColor: AppColors.frosted,
               foregroundColor: AppColors.text,
               padding: const EdgeInsets.symmetric(horizontal: 20),
               textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 16, fontWeight: FontWeight.w600),
             ).copyWith(
               backgroundColor: WidgetStateProperty.resolveWith(
-                (s) => s.contains(WidgetState.hovered) ? const Color(0x99787068) : const Color(0x66787068),
+                (s) => s.contains(WidgetState.hovered) ? AppColors.frostedHover : AppColors.frosted,
               ),
             ),
           _ => FilledButton.styleFrom(
             backgroundColor: AppColors.accent.withValues(alpha: 0.12),
             foregroundColor: AppColors.accent,
             padding: const EdgeInsets.fromLTRB(18, 0, 22, 0),
-            side: const BorderSide(color: AppColors.accent, width: 1.5),
+            side: BorderSide(color: AppColors.accent, width: 1.5),
           ),
         }.merge(
           FilledButton.styleFrom(

@@ -162,10 +162,10 @@ class _FocusRingState extends State<FocusRing> {
 
 /// Thin progress bar (accent on a translucent track).
 class ProgressLine extends StatelessWidget {
-  const ProgressLine(this.value, {super.key, this.height = 4, this.color = AppColors.accent, this.track});
+  const ProgressLine(this.value, {super.key, this.height = 4, this.color, this.track});
   final double value;
   final double height;
-  final Color color;
+  final Color? color;
   final Color? track;
 
   @override
@@ -176,11 +176,11 @@ class ProgressLine extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ColoredBox(color: track ?? Colors.white.withValues(alpha: 0.14)),
+          ColoredBox(color: track ?? AppColors.ink.withValues(alpha: 0.14)),
           FractionallySizedBox(
             alignment: Alignment.centerLeft,
             widthFactor: value.clamp(0.0, 1.0),
-            child: ColoredBox(color: color),
+            child: ColoredBox(color: color ?? AppColors.accent),
           ),
         ],
       ),
@@ -193,7 +193,7 @@ BoxDecoration focusRing({required bool on, double radius = 12, Color? halo}) => 
   borderRadius: BorderRadius.circular(radius),
   border: Border.all(color: on ? AppColors.text : Colors.transparent, width: 2),
   boxShadow: on
-      ? [BoxShadow(color: halo ?? const Color(0x99000000), blurRadius: 28, offset: const Offset(0, 12))]
+      ? [BoxShadow(color: halo ?? AppColors.shadow(0x99), blurRadius: 28, offset: const Offset(0, 12))]
       : null,
 );
 
@@ -235,7 +235,7 @@ class Glass extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: r,
-        boxShadow: shadow ? const [BoxShadow(color: Color(0x59000000), blurRadius: 32, offset: Offset(0, 12))] : null,
+        boxShadow: shadow ? [BoxShadow(color: AppColors.shadow(0x59), blurRadius: 32, offset: Offset(0, 12))] : null,
       ),
       child: ClipRRect(
         borderRadius: r,
@@ -255,8 +255,8 @@ class Glass extends StatelessWidget {
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: strong
-                      ? const [Color(0x61FFFFFF), Color(0x29FFFFFF)]
-                      : const [Color(0x38FFFFFF), Color(0x12FFFFFF)],
+                      ? [AppColors.ink.withAlpha(0x61), AppColors.ink.withAlpha(0x29)]
+                      : [AppColors.ink.withAlpha(0x38), AppColors.ink.withAlpha(0x12)],
                 ),
               ),
               child: child,
@@ -284,8 +284,8 @@ class _GlassRim extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: strong
-            ? const [Color(0xB3FFFFFF), Color(0x33FFFFFF), Color(0x1AFFFFFF)]
-            : const [Color(0x99FFFFFF), Color(0x26FFFFFF), Color(0x1FFFFFFF)],
+            ? [AppColors.ink.withAlpha(0xB3), AppColors.ink.withAlpha(0x33), AppColors.ink.withAlpha(0x1A)]
+            : [AppColors.ink.withAlpha(0x99), AppColors.ink.withAlpha(0x26), AppColors.ink.withAlpha(0x1F)],
         stops: const [0, 0.45, 1],
       ).createShader(rect);
     canvas.drawRRect(rr, paint);
@@ -311,13 +311,13 @@ class RoundAction extends StatelessWidget {
     style:
         IconButton.styleFrom(
           fixedSize: const Size(54, 54),
-          backgroundColor: const Color(0x66111114),
+          backgroundColor: AppColors.bg.withAlpha(0x66),
           shape: const CircleBorder(),
         ).copyWith(
           side: WidgetStateProperty.resolveWith(
             (s) => s.contains(WidgetState.focused)
-                ? const BorderSide(color: AppColors.accent, width: 2.5)
-                : const BorderSide(color: Color(0x8CFFFFFF), width: 2),
+                ? BorderSide(color: AppColors.accent, width: 2.5)
+                : BorderSide(color: AppColors.ink.withAlpha(0x8C), width: 2),
           ),
         ),
     icon: Icon(icon, color: color ?? AppColors.text),
@@ -395,7 +395,7 @@ class PosterCard extends StatelessWidget {
                                       color: AppColors.bg.withValues(alpha: 0.72),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: const Icon(Icons.favorite_rounded, color: AppColors.cueSeries, size: 15),
+                                    child: Icon(Icons.favorite_rounded, color: AppColors.cueSeries, size: 15),
                                   ),
                                 ),
                               if (progress != null && progress! > 0)
@@ -403,7 +403,7 @@ class PosterCard extends StatelessWidget {
                                   left: 0,
                                   right: 0,
                                   bottom: 0,
-                                  child: ProgressLine(progress!, track: const Color(0x40FFFFFF)),
+                                  child: ProgressLine(progress!, track: AppColors.ink.withAlpha(0x40)),
                                 ),
                             ],
                           ),
@@ -422,7 +422,7 @@ class PosterCard extends StatelessWidget {
                         subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 13, color: AppColors.muted),
+                        style: TextStyle(fontSize: 13, color: AppColors.muted),
                       ),
                   ],
                 ),
@@ -463,7 +463,7 @@ class RatingBadge extends StatelessWidget {
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.star_rounded, size: 14, color: AppColors.accent),
+        Icon(Icons.star_rounded, size: 14, color: AppColors.accent),
         const SizedBox(width: 3),
         Text(
           rating.toStringAsFixed(1).replaceAll('.', ','),
@@ -501,14 +501,23 @@ class ChannelLogo extends StatelessWidget {
     final placeholder = Center(
       child: FittedBox(
         fit: BoxFit.scaleDown,
-        child: Text(initials(name), maxLines: 1, style: posterStyle(size * 0.42, color: AppColors.onAction, height: 1)),
+        child: Text(
+          initials(name),
+          maxLines: 1,
+          style: posterStyle(size * 0.42, color: DarkColors.onAction, height: 1),
+        ),
       ),
     );
     return Container(
       width: size,
       height: size,
       padding: EdgeInsets.all(size * 0.12),
-      decoration: BoxDecoration(color: AppColors.cream, borderRadius: BorderRadius.circular(size * 0.24)),
+      decoration: BoxDecoration(
+        color: AppColors.cream,
+        borderRadius: BorderRadius.circular(size * 0.24),
+        // On the light theme the cream badge needs an edge.
+        border: AppColors.isLight ? Border.all(color: AppColors.borderInput) : null,
+      ),
       child: NetImage(url, fit: BoxFit.contain, decodeWidth: size, placeholder: placeholder),
     );
   }
@@ -543,7 +552,7 @@ class EmptyState extends StatelessWidget {
               child: Text(
                 message!,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: AppColors.muted, height: 1.45),
+                style: TextStyle(color: AppColors.muted, height: 1.45),
               ),
             ),
           ],
@@ -575,23 +584,23 @@ List<CategoryEntry> withFavoriteCount(List<CategoryEntry> entries, int count) =>
 
 /// Small pill label.
 class Pill extends StatelessWidget {
-  const Pill(this.text, {super.key, this.color = AppColors.surface3, this.textColor = AppColors.text, this.icon});
+  const Pill(this.text, {super.key, this.color, this.textColor, this.icon});
   final String text;
-  final Color color;
-  final Color textColor;
+  final Color? color;
+  final Color? textColor;
   final IconData? icon;
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-    decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+    decoration: BoxDecoration(color: color ?? AppColors.surface3, borderRadius: BorderRadius.circular(8)),
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (icon != null) ...[Icon(icon, size: 14, color: textColor), const SizedBox(width: 5)],
+        if (icon != null) ...[Icon(icon, size: 14, color: textColor ?? AppColors.text), const SizedBox(width: 5)],
         Text(
           text,
-          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor),
+          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: textColor ?? AppColors.text),
         ),
       ],
     ),
@@ -608,7 +617,7 @@ class QualityTag extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(4),
-      border: Border.all(color: const Color(0x73FFFFFF)),
+      border: Border.all(color: AppColors.ink.withAlpha(0x73)),
     ),
     child: Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, height: 1.1)),
   );

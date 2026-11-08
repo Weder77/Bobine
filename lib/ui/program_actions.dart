@@ -146,7 +146,7 @@ class _ProgramDialogState extends State<_ProgramDialog> {
                 if (time == ProgramTime.live) const LiveBadge(),
                 Text(
                   '${s.channelName(c)} · ${formatDay(p.start)} ${formatClock(p.start)} – ${formatClock(p.stop)}',
-                  style: const TextStyle(color: AppColors.textSoft),
+                  style: TextStyle(color: AppColors.textSoft),
                 ),
               ],
             ),
@@ -156,14 +156,14 @@ class _ProgramDialogState extends State<_ProgramDialog> {
                 p.description!,
                 maxLines: 8,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(height: 1.5, color: AppColors.textSoft),
+                style: TextStyle(height: 1.5, color: AppColors.textSoft),
               ),
             ],
             if (time == ProgramTime.past && !replay) ...[
               const SizedBox(height: 14),
               Text(
                 c.hasReplay ? 'Trop ancien pour le replay de cette chaîne.' : "Cette chaîne n'a pas de replay.",
-                style: const TextStyle(color: AppColors.muted),
+                style: TextStyle(color: AppColors.muted),
               ),
             ],
           ],

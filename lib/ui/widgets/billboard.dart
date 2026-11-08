@@ -158,7 +158,7 @@ class _BillboardState extends State<Billboard> with TickerProviderStateMixin {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const ColoredBox(color: AppColors.bg),
+          ColoredBox(color: AppColors.bg),
           for (var i = 0; i < entries.length; i++)
             AnimatedOpacity(
               opacity: i == _index ? 1 : 0,
@@ -172,23 +172,23 @@ class _BillboardState extends State<Billboard> with TickerProviderStateMixin {
               ),
             ),
           // Left and bottom fades, as in the design.
-          const IgnorePointer(
+          IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xF00D0C0B), Color(0x9E0D0C0B), Color(0x000D0C0B)],
+                  colors: [AppColors.bg.withAlpha(0xF0), AppColors.bg.withAlpha(0x9E), AppColors.bg.withAlpha(0x00)],
                   stops: [0, 0.34, 0.62],
                 ),
               ),
             ),
           ),
-          const IgnorePointer(
+          IgnorePointer(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [AppColors.bg, Color(0xE00D0C0B), Color(0x000D0C0B)],
+                  colors: [AppColors.bg, AppColors.bg.withAlpha(0xE0), AppColors.bg.withAlpha(0x00)],
                   stops: [0, 0.24, 0.52],
                 ),
               ),
@@ -254,21 +254,21 @@ class _Bar extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: 40,
     height: 3,
-    decoration: BoxDecoration(color: const Color(0x47FFFFFF), borderRadius: BorderRadius.circular(2)),
+    decoration: BoxDecoration(color: AppColors.ink.withAlpha(0x47), borderRadius: BorderRadius.circular(2)),
     clipBehavior: Clip.antiAlias,
     alignment: Alignment.centerLeft,
     child: state != null
         ? FractionallySizedBox(
             widthFactor: state,
             heightFactor: 1,
-            child: const ColoredBox(color: AppColors.text),
+            child: ColoredBox(color: AppColors.text),
           )
         : AnimatedBuilder(
             animation: animation,
             builder: (context, _) => FractionallySizedBox(
               widthFactor: animation.value,
               heightFactor: 1,
-              child: const ColoredBox(color: AppColors.text),
+              child: ColoredBox(color: AppColors.text),
             ),
           ),
   );
@@ -308,7 +308,7 @@ class _Art extends StatelessWidget {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(10),
-                  boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 50, offset: Offset(0, 24))],
+                  boxShadow: [BoxShadow(color: AppColors.shadow(0x99), blurRadius: 50, offset: Offset(0, 24))],
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: NetImage(entry.poster, decodeWidth: 400),
@@ -328,20 +328,17 @@ class _Content extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final e = entry;
-    const dot = Text('•', style: TextStyle(color: AppColors.placeholder, fontSize: 15));
+    final dot = Text('•', style: TextStyle(color: AppColors.placeholder, fontSize: 15));
     final meta = <Widget>[
       if (e.rating != null && e.rating! > 0) ...[
-        const Icon(Icons.star_rounded, size: 17, color: AppColors.accent),
+        Icon(Icons.star_rounded, size: 17, color: AppColors.accent),
         Text(
           e.rating!.toStringAsFixed(1).replaceAll('.', ','),
           style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
         ),
       ],
       for (final m in [e.year, e.genre, e.duration])
-        if (m != null && m.isNotEmpty) ...[
-          dot,
-          Text(m, style: const TextStyle(fontSize: 15, color: AppColors.textSoft)),
-        ],
+        if (m != null && m.isNotEmpty) ...[dot, Text(m, style: TextStyle(fontSize: 15, color: AppColors.textSoft))],
       if (e.quality != null) QualityBadge(e.quality!),
     ];
     // The first element must not start with a dot.
@@ -366,7 +363,7 @@ class _Content extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: posterStyle(
             titleSize,
-            shadows: const [Shadow(color: Color(0x80000000), blurRadius: 40, offset: Offset(0, 6))],
+            shadows: [Shadow(color: AppColors.shadow(0x80), blurRadius: 40, offset: Offset(0, 6))],
           ),
         ),
         if (meta.isNotEmpty) ...[
@@ -384,13 +381,13 @@ class _Content extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: e.progress,
                     minHeight: 4,
-                    backgroundColor: const Color(0x38FFFFFF),
+                    backgroundColor: AppColors.ink.withAlpha(0x38),
                     color: AppColors.accent,
                   ),
                 ),
               ),
               const SizedBox(width: 12),
-              Text(e.progressLabel ?? '', style: const TextStyle(fontSize: 14, color: AppColors.textSoft)),
+              Text(e.progressLabel ?? '', style: TextStyle(fontSize: 14, color: AppColors.textSoft)),
             ],
           ),
         ],
@@ -402,7 +399,7 @@ class _Content extends StatelessWidget {
               e.synopsis!,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 17, height: 1.5, color: AppColors.textSoft),
+              style: TextStyle(fontSize: 17, height: 1.5, color: AppColors.textSoft),
             ),
           ),
         ],
@@ -438,7 +435,7 @@ class QualityBadge extends StatelessWidget {
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
     decoration: BoxDecoration(
       borderRadius: BorderRadius.circular(4),
-      border: Border.all(color: strong ? AppColors.text : const Color(0x59FFFFFF)),
+      border: Border.all(color: strong ? AppColors.text : AppColors.ink.withAlpha(0x59)),
     ),
     child: Text(
       label,
@@ -502,7 +499,7 @@ class RoundOutlineButton extends StatelessWidget {
       style:
           IconButton.styleFrom(
             fixedSize: Size(size, size),
-            backgroundColor: const Color(0x4D0D0C0B),
+            backgroundColor: AppColors.bg.withAlpha(0x4D),
             foregroundColor: AppColors.text,
             shape: const CircleBorder(),
           ).copyWith(
@@ -510,7 +507,7 @@ class RoundOutlineButton extends StatelessWidget {
               (s) => BorderSide(
                 color: s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
                     ? AppColors.text
-                    : const Color(0x80FFFFFF),
+                    : AppColors.ink.withAlpha(0x80),
                 width: 1.5,
               ),
             ),

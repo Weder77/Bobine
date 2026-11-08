@@ -67,13 +67,30 @@ class UpdateService extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// At startup: at most once a day, quietly.
+  /// At startup: at most once a day, quietly. In between, the version found
+  /// by the last check is offered again (the header shows it).
   Future<void> checkInBackground() async {
     if (!_settings.checkUpdates) return;
     final last = int.tryParse(_repo.kvGet('update_checked_at') ?? '') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    if (now - last < 20 * 3600) return;
+    if (now - last < 20 * 3600) return restoreFound();
     await check(quiet: true);
+  }
+
+  /// Offers again the newer version found by the last check, if it is still
+  /// newer than this one and was not skipped.
+  @visibleForTesting
+  void restoreFound() {
+    final raw = _repo.kvGet('update_found');
+    if (raw == null || raw.isEmpty || available != null) return;
+    try {
+      final info = parseRelease((jsonDecode(raw) as Map).cast<String, Object?>());
+      if (info == null || _repo.kvGet('update_skip') == info.version) return;
+      available = info;
+      _set(UpdateStage.available);
+    } catch (_) {
+      // Unreadable: the next check replaces it.
+    }
   }
 
   /// Asks GitHub for the latest release. With [quiet], failures are not shown
@@ -99,6 +116,7 @@ class UpdateService extends ChangeNotifier {
       }
       if (res.statusCode >= 400) throw _UpdateError('GitHub a répondu ${res.statusCode}.');
       final info = parseRelease((jsonDecode(body) as Map).cast<String, Object?>());
+      _repo.kvSet('update_found', info == null ? '' : body);
       final skipped = _repo.kvGet('update_skip');
       if (info == null || (quiet && skipped == info.version)) {
         available = null;

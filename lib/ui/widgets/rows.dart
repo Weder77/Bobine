@@ -41,7 +41,7 @@ class RowTitle extends StatelessWidget {
                 const SizedBox(width: 14),
                 Padding(
                   padding: EdgeInsets.only(bottom: big ? 3 : 1),
-                  child: Text(sub!, style: const TextStyle(fontSize: 14, color: AppColors.faint, height: 1)),
+                  child: Text(sub!, style: TextStyle(fontSize: 14, color: AppColors.faint, height: 1)),
                 ),
               ],
             ],
@@ -201,8 +201,8 @@ class _RailArrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Center(
     child: Material(
-      color: const Color(0xCC0D0C0B),
-      shape: const CircleBorder(side: BorderSide(color: Color(0x40FFFFFF))),
+      color: AppColors.bg.withAlpha(0xCC),
+      shape: CircleBorder(side: BorderSide(color: AppColors.ink.withAlpha(0x40))),
       child: InkWell(
         canRequestFocus: false,
         customBorder: const CircleBorder(),
@@ -312,7 +312,7 @@ class _PosterCard extends StatelessWidget {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(8),
                   boxShadow: hover
-                      ? const [BoxShadow(color: Color(0xB3000000), blurRadius: 50, offset: Offset(0, 24))]
+                      ? [BoxShadow(color: AppColors.shadow(0xB3), blurRadius: 50, offset: Offset(0, 24))]
                       : const [],
                 ),
                 clipBehavior: Clip.antiAlias,
@@ -326,13 +326,13 @@ class _PosterCard extends StatelessWidget {
                         top: 12,
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                          decoration: const BoxDecoration(
+                          decoration: BoxDecoration(
                             color: AppColors.accent,
                             borderRadius: BorderRadius.horizontal(right: Radius.circular(4)),
                           ),
                           child: Text(
                             m.badge!.toUpperCase(),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 10,
                               fontWeight: FontWeight.w700,
                               letterSpacing: 0.8,
@@ -354,7 +354,7 @@ class _PosterCard extends StatelessWidget {
               m.title,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.2, color: AppColors.textSoft),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.2, color: AppColors.textSoft),
             ),
           ],
         ],
@@ -376,11 +376,11 @@ class _PosterHover extends StatelessWidget {
       bottom: 0,
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 44, 14, 14),
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.bottomCenter,
             end: Alignment.topCenter,
-            colors: [Color(0xF70D0C0B), Color(0xF70D0C0B), Color(0x000D0C0B)],
+            colors: [AppColors.bg.withAlpha(0xF7), AppColors.bg.withAlpha(0xF7), AppColors.bg.withAlpha(0x00)],
             stops: [0, 0.3, 1],
           ),
         ),
@@ -414,7 +414,7 @@ class _PosterHover extends StatelessWidget {
             ),
             const SizedBox(height: 9),
             DefaultTextStyle.merge(
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, height: 1, color: AppColors.textSoft),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, height: 1, color: AppColors.textSoft),
               child: Wrap(
                 spacing: 8,
                 runSpacing: 4,
@@ -422,7 +422,7 @@ class _PosterHover extends StatelessWidget {
                   if (m.rating != null && m.rating! > 0)
                     Text(
                       '★ ${m.rating!.toStringAsFixed(1).replaceAll('.', ',')}',
-                      style: const TextStyle(color: AppColors.accent),
+                      style: TextStyle(color: AppColors.accent),
                     ),
                   if (m.year != null) Text('${m.year}'),
                   if (m.genre != null && m.genre!.isNotEmpty)
@@ -464,7 +464,7 @@ class CircleAction extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: filled ? AppColors.action : null,
-          border: filled ? null : Border.all(color: const Color(0x8CFFFFFF), width: 1.5),
+          border: filled ? null : Border.all(color: AppColors.ink.withAlpha(0x8C), width: 1.5),
         ),
         child: Icon(icon, size: size * 0.5, color: filled ? AppColors.onAction : AppColors.text),
       ),
@@ -555,7 +555,7 @@ class _TopCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.surface,
                     borderRadius: BorderRadius.circular(8),
-                    boxShadow: const [BoxShadow(color: Color(0x80000000), blurRadius: 30, offset: Offset(-12, 0))],
+                    boxShadow: [BoxShadow(color: AppColors.shadow(0x80), blurRadius: 30, offset: Offset(-12, 0))],
                   ),
                   clipBehavior: Clip.antiAlias,
                   child: Artwork(url: item.poster, label: item.title, decodeWidth: 200),
@@ -636,7 +636,7 @@ class _ResumeCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: hover ? const Color(0xD9FFFFFF) : Colors.transparent, width: 1.5),
+                  border: Border.all(color: hover ? AppColors.ink.withAlpha(0xD9) : Colors.transparent, width: 1.5),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -668,7 +668,7 @@ class _ResumeCard extends StatelessWidget {
                             child: Container(
                               width: 28,
                               height: 28,
-                              decoration: const BoxDecoration(color: Color(0xB30D0C0B), shape: BoxShape.circle),
+                              decoration: BoxDecoration(color: AppColors.bg.withAlpha(0xB3), shape: BoxShape.circle),
                               child: const Icon(Icons.close_rounded, size: 16),
                             ),
                           ),
@@ -683,11 +683,11 @@ class _ResumeCard extends StatelessWidget {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            const ColoredBox(color: Color(0x2EFFFFFF)),
+                            ColoredBox(color: AppColors.ink.withAlpha(0x2E)),
                             FractionallySizedBox(
                               alignment: Alignment.centerLeft,
                               widthFactor: p.fraction,
-                              child: const ColoredBox(color: AppColors.accent),
+                              child: ColoredBox(color: AppColors.accent),
                             ),
                           ],
                         ),
@@ -711,12 +711,7 @@ class _ResumeCard extends StatelessWidget {
                 const SizedBox(width: 12),
                 Text(
                   'reste $left',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    height: 1.3,
-                    color: AppColors.faint,
-                  ),
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.3, color: AppColors.faint),
                 ),
               ],
             ),
@@ -725,7 +720,7 @@ class _ResumeCard extends StatelessWidget {
               sub,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 13, height: 1, color: AppColors.faint),
+              style: TextStyle(fontSize: 13, height: 1, color: AppColors.faint),
             ),
           ],
         ),
@@ -827,9 +822,9 @@ class _LiveNowCard extends StatelessWidget {
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.all(14),
               decoration: BoxDecoration(
-                color: hover ? const Color(0xD9342F2A) : const Color(0xA8201D1A),
+                color: hover ? AppColors.glassHover : AppColors.glass,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: const Color(0x14FFFFFF)),
+                border: Border.all(color: AppColors.ink.withAlpha(0x14)),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -881,11 +876,11 @@ class _LiveNowCard extends StatelessWidget {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          const ColoredBox(color: Color(0x24FFFFFF)),
+                          ColoredBox(color: AppColors.ink.withAlpha(0x24)),
                           FractionallySizedBox(
                             alignment: Alignment.centerLeft,
                             widthFactor: pct,
-                            child: const ColoredBox(color: AppColors.accent),
+                            child: ColoredBox(color: AppColors.accent),
                           ),
                         ],
                       ),
@@ -903,9 +898,9 @@ class _LiveNowCard extends StatelessWidget {
 
 /// 8 px accent dot that breathes (1.6 s), next to "En direct maintenant".
 class PulseDot extends StatefulWidget {
-  const PulseDot({super.key, this.size = 8, this.color = AppColors.accent});
+  const PulseDot({super.key, this.size = 8, this.color});
   final double size;
-  final Color color;
+  final Color? color;
 
   @override
   State<PulseDot> createState() => _PulseDotState();
@@ -927,7 +922,7 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
     child: Container(
       width: widget.size,
       height: widget.size,
-      decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle),
+      decoration: BoxDecoration(color: widget.color ?? AppColors.accent, shape: BoxShape.circle),
     ),
   );
 }

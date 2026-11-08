@@ -127,7 +127,7 @@ class _SearchScreenState extends State<SearchScreen> {
           style: posterStyle(40, height: 1),
         ),
         const SizedBox(height: 12),
-        const Text(
+        Text(
           'Essaie un titre, une chaîne ou un programme TV.',
           style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint),
         ),
@@ -336,17 +336,11 @@ class _TrendRow extends StatelessWidget {
 
 /// Number drawn as an outline (Top 10, trends): the fill is the background.
 class OutlinedDigits extends StatelessWidget {
-  const OutlinedDigits(
-    this.text, {
-    super.key,
-    required this.size,
-    this.stroke = 1.5,
-    this.color = AppColors.placeholder,
-  });
+  const OutlinedDigits(this.text, {super.key, required this.size, this.stroke = 1.5, this.color});
   final String text;
   final double size;
   final double stroke;
-  final Color color;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) => Stack(
@@ -357,7 +351,7 @@ class OutlinedDigits extends StatelessWidget {
           foreground: Paint()
             ..style = PaintingStyle.stroke
             ..strokeWidth = stroke * 2
-            ..color = color,
+            ..color = color ?? AppColors.placeholder,
         ),
       ),
       Text(text, style: posterStyle(size, height: 1, color: AppColors.bg)),
@@ -435,7 +429,7 @@ class _ChannelResult extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              ProgressLine(p?.progressAt(now) ?? 0, height: 3, track: const Color(0x24FFFFFF)),
+              ProgressLine(p?.progressAt(now) ?? 0, height: 3, track: AppColors.ink.withAlpha(0x24)),
             ],
           ),
         ),
@@ -475,7 +469,7 @@ class _LiveDotState extends State<LiveDot> with SingleTickerProviderStateMixin {
             child: Container(
               width: 6,
               height: 6,
-              decoration: const BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
+              decoration: BoxDecoration(color: AppColors.accent, shape: BoxShape.circle),
             ),
           );
         },
@@ -548,7 +542,7 @@ class _ProgramRow extends StatelessWidget {
                     Text(
                       [AppScope.of(context).channelName(c), if (p.category != null) p.category!].join(' · '),
                       maxLines: 1,
-                      style: const TextStyle(fontSize: 13, height: 1, color: AppColors.faint),
+                      style: TextStyle(fontSize: 13, height: 1, color: AppColors.faint),
                     ),
                   ],
                 ),
@@ -559,7 +553,7 @@ class _ProgramRow extends StatelessWidget {
                 style: monoStyle(12, weight: FontWeight.w600, color: ink).copyWith(letterSpacing: 0.5),
               ),
               const SizedBox(width: 16),
-              Text('$action →', style: const TextStyle(fontSize: 14, color: AppColors.textSoft)),
+              Text('$action →', style: TextStyle(fontSize: 14, color: AppColors.textSoft)),
             ],
           ),
         ),

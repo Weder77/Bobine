@@ -84,44 +84,47 @@ class _MiniPlayerState extends State<MiniPlayer> {
       bottom: bottom,
       width: _width,
       height: _height,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onPanUpdate: (d) => setState(() => _offset += d.delta),
-          onDoubleTap: () => expandPip(s),
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.black,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: const [
-                BoxShadow(color: Color(0xB3000000), blurRadius: 80, offset: Offset(0, 30)),
-                BoxShadow(color: Color(0x1FFFFFFF), spreadRadius: 1),
-              ],
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Video(
-                  controller: s.player.video,
-                  controls: NoVideoControls,
-                  fill: Colors.black,
-                  subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
-                ),
-                AnimatedOpacity(
-                  opacity: _hover ? 1 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: _PipControls(
-                    title: _title(s, item),
-                    onExpand: () => expandPip(s),
-                    onClose: s.pip.close,
-                    onFloat: AppWindow.canFloat ? () => s.pip.float(s.pip.session.value!) : null,
+      child: Theme(
+        data: darkTheme,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: GestureDetector(
+            onPanUpdate: (d) => setState(() => _offset += d.delta),
+            onDoubleTap: () => expandPip(s),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(color: Color(0xB3000000), blurRadius: 80, offset: Offset(0, 30)),
+                  BoxShadow(color: Color(0x1FFFFFFF), spreadRadius: 1),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Video(
+                    controller: s.player.video,
+                    controls: NoVideoControls,
+                    fill: Colors.black,
+                    subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
                   ),
-                ),
-                if (item != null && !item.isLive)
-                  Positioned(left: 0, right: 0, bottom: 0, child: _PipProgress(player: s.player)),
-              ],
+                  AnimatedOpacity(
+                    opacity: _hover ? 1 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: _PipControls(
+                      title: _title(s, item),
+                      onExpand: () => expandPip(s),
+                      onClose: s.pip.close,
+                      onFloat: AppWindow.canFloat ? () => s.pip.float(s.pip.session.value!) : null,
+                    ),
+                  ),
+                  if (item != null && !item.isLive)
+                    Positioned(left: 0, right: 0, bottom: 0, child: _PipProgress(player: s.player)),
+                ],
+              ),
             ),
           ),
         ),
@@ -158,36 +161,39 @@ class _FloatingPlayerViewState extends State<FloatingPlayerView> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final item = s.player.current.value;
-    return Material(
-      color: Colors.black,
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hover = true),
-        onExit: (_) => setState(() => _hover = false),
-        child: GestureDetector(
-          onPanStart: (_) => AppWindow.startDrag(),
-          onDoubleTap: () => expandPip(s),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              Video(
-                controller: s.player.video,
-                controls: NoVideoControls,
-                fill: Colors.black,
-                subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
-              ),
-              AnimatedOpacity(
-                opacity: _hover ? 1 : 0,
-                duration: const Duration(milliseconds: 150),
-                child: _PipControls(
-                  title: _title(s, item),
-                  onExpand: () => expandPip(s),
-                  onClose: s.pip.close,
-                  onDock: s.pip.unfloat,
+    return Theme(
+      data: darkTheme,
+      child: Material(
+        color: Colors.black,
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hover = true),
+          onExit: (_) => setState(() => _hover = false),
+          child: GestureDetector(
+            onPanStart: (_) => AppWindow.startDrag(),
+            onDoubleTap: () => expandPip(s),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Video(
+                  controller: s.player.video,
+                  controls: NoVideoControls,
+                  fill: Colors.black,
+                  subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
                 ),
-              ),
-              if (item != null && !item.isLive)
-                Positioned(left: 0, right: 0, bottom: 0, child: _PipProgress(player: s.player)),
-            ],
+                AnimatedOpacity(
+                  opacity: _hover ? 1 : 0,
+                  duration: const Duration(milliseconds: 150),
+                  child: _PipControls(
+                    title: _title(s, item),
+                    onExpand: () => expandPip(s),
+                    onClose: s.pip.close,
+                    onDock: s.pip.unfloat,
+                  ),
+                ),
+                if (item != null && !item.isLive)
+                  Positioned(left: 0, right: 0, bottom: 0, child: _PipProgress(player: s.player)),
+              ],
+            ),
           ),
         ),
       ),
@@ -221,7 +227,7 @@ class _PipControls extends StatelessWidget {
             iconSize: iconSize,
             style:
                 IconButton.styleFrom(
-                  foregroundColor: AppColors.text,
+                  foregroundColor: DarkColors.text,
                   fixedSize: Size(size, size),
                   minimumSize: Size(size, size),
                   shape: const CircleBorder(),

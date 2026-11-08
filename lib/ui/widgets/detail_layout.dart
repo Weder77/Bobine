@@ -76,20 +76,24 @@ class DetailLayout extends StatelessWidget {
                         fit: StackFit.expand,
                         children: [
                           _Backdrop(backdrop: backdrop, poster: poster),
-                          const DecoratedBox(
+                          DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Color(0xEB111114), Color(0x8C111114), Color(0x00111114)],
+                                colors: [
+                                  AppColors.bg.withAlpha(0xEB),
+                                  AppColors.bg.withAlpha(0x8C),
+                                  AppColors.bg.withAlpha(0x00),
+                                ],
                                 stops: [0, 0.4, 0.72],
                               ),
                             ),
                           ),
-                          const DecoratedBox(
+                          DecoratedBox(
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 begin: Alignment.bottomCenter,
                                 end: Alignment(0, -0.2),
-                                colors: [AppColors.bg, Color(0x00111114)],
+                                colors: [AppColors.bg, AppColors.bg.withAlpha(0x00)],
                               ),
                             ),
                           ),
@@ -119,8 +123,8 @@ class DetailLayout extends StatelessWidget {
                                       style: posterStyle(
                                         titleSize,
                                         height: 0.86,
-                                        shadows: const [
-                                          Shadow(color: Color(0x80000000), blurRadius: 30, offset: Offset(0, 4)),
+                                        shadows: [
+                                          Shadow(color: AppColors.shadow(0x80), blurRadius: 30, offset: Offset(0, 4)),
                                         ],
                                       ),
                                     ),
@@ -134,7 +138,7 @@ class DetailLayout extends StatelessWidget {
                                         for (final m in meta.where((m) => m.isNotEmpty))
                                           Text(
                                             m,
-                                            style: const TextStyle(
+                                            style: TextStyle(
                                               color: AppColors.textSoft,
                                               fontSize: 15,
                                               fontWeight: FontWeight.w600,
@@ -142,7 +146,7 @@ class DetailLayout extends StatelessWidget {
                                           ),
                                         for (final t in tags) QualityTag(t),
                                         if (loading)
-                                          const SizedBox(
+                                          SizedBox(
                                             width: 14,
                                             height: 14,
                                             child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.text),
@@ -162,13 +166,13 @@ class DetailLayout extends StatelessWidget {
                                         children: [
                                           SizedBox(
                                             width: 260,
-                                            child: ProgressLine(progress!, track: const Color(0x40FFFFFF)),
+                                            child: ProgressLine(progress!, track: AppColors.ink.withAlpha(0x40)),
                                           ),
                                           const SizedBox(width: 12),
                                           if (progressLabel != null)
                                             Text(
                                               progressLabel!,
-                                              style: const TextStyle(fontSize: 14, color: AppColors.textSoft),
+                                              style: TextStyle(fontSize: 14, color: AppColors.textSoft),
                                             ),
                                         ],
                                       ),
@@ -248,7 +252,7 @@ class _Backdrop extends StatelessWidget {
         backdrop,
         decodeWidth: 1800,
         alignment: const Alignment(0, -0.35),
-        placeholder: const ColoredBox(color: AppColors.surface),
+        placeholder: ColoredBox(color: AppColors.surface),
       );
     }
     // No wide image: blurred poster behind, the poster itself on the right.
@@ -259,7 +263,7 @@ class _Backdrop extends StatelessWidget {
           imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
           child: Opacity(
             opacity: 0.55,
-            child: NetImage(poster, decodeWidth: 300, placeholder: const ColoredBox(color: AppColors.surface)),
+            child: NetImage(poster, decodeWidth: 300, placeholder: ColoredBox(color: AppColors.surface)),
           ),
         ),
         Align(
@@ -269,7 +273,7 @@ class _Backdrop extends StatelessWidget {
             height: 450,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(14),
-              boxShadow: const [BoxShadow(color: Color(0x99000000), blurRadius: 50, offset: Offset(0, 24))],
+              boxShadow: [BoxShadow(color: AppColors.shadow(0x99), blurRadius: 50, offset: Offset(0, 24))],
             ),
             clipBehavior: Clip.antiAlias,
             child: NetImage(poster, decodeWidth: 300),
@@ -288,7 +292,7 @@ class _Rating extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      const Icon(Icons.star_rounded, size: 18, color: AppColors.accent),
+      Icon(Icons.star_rounded, size: 18, color: AppColors.accent),
       const SizedBox(width: 4),
       Text(
         rating.toStringAsFixed(1).replaceAll('.', ','),
@@ -305,7 +309,7 @@ class DetailParagraph extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(bottom: 16),
-    child: Text(text, style: const TextStyle(fontSize: 18, height: 1.6, color: AppColors.textSoft)),
+    child: Text(text, style: TextStyle(fontSize: 18, height: 1.6, color: AppColors.textSoft)),
   );
 }
 
@@ -322,14 +326,14 @@ class DetailField extends StatelessWidget {
       children: [
         SizedBox(
           width: 110,
-          child: Text(label, style: const TextStyle(color: AppColors.muted, fontSize: 14)),
+          child: Text(label, style: TextStyle(color: AppColors.muted, fontSize: 14)),
         ),
         Expanded(
           child: Text(
             value,
             maxLines: 3,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 14, color: AppColors.textSoft),
+            style: TextStyle(fontSize: 14, color: AppColors.textSoft),
           ),
         ),
       ],

@@ -39,7 +39,7 @@ class PlayerIconButton extends StatelessWidget {
       onPressed: onTap,
       iconSize: size,
       style: IconButton.styleFrom(
-        foregroundColor: AppColors.text,
+        foregroundColor: DarkColors.text,
         fixedSize: const Size(44, 44),
         minimumSize: const Size(44, 44),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -71,7 +71,7 @@ class PlayerTextButton extends StatelessWidget {
     final b = TextButton.icon(
       onPressed: onTap,
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.text,
+        foregroundColor: DarkColors.text,
         backgroundColor: active ? const Color(0x33FFFFFF) : Colors.transparent,
         minimumSize: const Size(0, 44),
         padding: const EdgeInsets.symmetric(horizontal: 14),
@@ -104,14 +104,14 @@ class PlayPauseButton extends StatelessWidget {
           iconSize: 28,
           style:
               IconButton.styleFrom(
-                backgroundColor: AppColors.action,
-                foregroundColor: AppColors.onAction,
+                backgroundColor: DarkColors.action,
+                foregroundColor: DarkColors.onAction,
                 fixedSize: const Size(52, 52),
                 minimumSize: const Size(52, 52),
                 shape: const CircleBorder(),
               ).copyWith(
                 backgroundColor: WidgetStateProperty.resolveWith(
-                  (s) => s.contains(WidgetState.hovered) ? const Color(0xFFE9E4DE) : AppColors.action,
+                  (s) => s.contains(WidgetState.hovered) ? const Color(0xFFE9E4DE) : DarkColors.action,
                 ),
               ),
           icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
@@ -137,7 +137,7 @@ class RoundGlassButton extends StatelessWidget {
       iconSize: size * 0.45,
       style:
           IconButton.styleFrom(
-            foregroundColor: AppColors.text,
+            foregroundColor: DarkColors.text,
             fixedSize: Size(size, size),
             minimumSize: Size(size, size),
             shape: const CircleBorder(),
@@ -163,11 +163,11 @@ class LiveTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final delayed = delay != null;
-    final ink = delayed ? AppColors.onAction : AppColors.onAccent;
+    final ink = delayed ? DarkColors.onAction : DarkColors.onAccent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: delayed ? AppColors.cream : AppColors.accent,
+        color: delayed ? DarkColors.cream : DarkColors.accent,
         borderRadius: BorderRadius.circular(5),
       ),
       child: Row(
@@ -181,7 +181,7 @@ class LiveTag extends StatelessWidget {
           const SizedBox(width: 7),
           Text(
             delayed ? 'DIFFÉRÉ −${playerTime(delay!)}' : 'EN DIRECT',
-            style: monoStyle(12, weight: FontWeight.w700, color: ink, height: 1).copyWith(letterSpacing: 12 * 0.06),
+            style: darkMono(12, weight: FontWeight.w700, color: ink, height: 1).copyWith(letterSpacing: 12 * 0.06),
           ),
         ],
       ),
@@ -210,20 +210,20 @@ class LiveProgramInfo extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (p?.category != null) ...[
-            Text(p!.category!.toUpperCase(), style: labelStyle(color: AppColors.accent, size: 12)),
+            Text(p!.category!.toUpperCase(), style: darkLabel(color: DarkColors.accent, size: 12)),
             const SizedBox(height: 12),
           ],
           Text(
             (p?.title ?? fallbackTitle).toUpperCase(),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
-            style: posterStyle(size, height: 0.9),
+            style: darkPoster(size, height: 0.9),
           ),
           if (p != null) ...[
             const SizedBox(height: 12),
             Row(
               children: [
-                Text(formatClock(p.start), style: monoStyle(13, color: AppColors.textSoft, height: 1)),
+                Text(formatClock(p.start), style: darkMono(13, color: DarkColors.textSoft, height: 1)),
                 const SizedBox(width: 14),
                 Flexible(
                   child: ConstrainedBox(
@@ -232,9 +232,9 @@ class LiveProgramInfo extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 14),
-                Text(formatClock(p.stop), style: monoStyle(13, color: AppColors.textSoft, height: 1)),
+                Text(formatClock(p.stop), style: darkMono(13, color: DarkColors.textSoft, height: 1)),
                 const SizedBox(width: 14),
-                Text('reste ${formatSpan(p.stop.difference(t))}', style: monoStyle(13, height: 1)),
+                Text('reste ${formatSpan(p.stop.difference(t))}', style: darkMono(13, height: 1)),
               ],
             ),
           ],
@@ -246,13 +246,13 @@ class LiveProgramInfo extends StatelessWidget {
                 children: [
                   TextSpan(
                     text: next!.title,
-                    style: const TextStyle(color: AppColors.text),
+                    style: const TextStyle(color: DarkColors.text),
                   ),
                 ],
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1, color: AppColors.muted),
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1, color: DarkColors.muted),
             ),
           ],
         ],
@@ -295,7 +295,7 @@ class _VodSeekRowState extends State<VodSeekRow> {
   Widget build(BuildContext context) {
     final shown = _drag ?? (_total <= 0 ? 0.0 : widget.position.inMilliseconds / _total);
     final pos = _drag != null ? _at(_drag!) : widget.position;
-    final style = monoStyle(14, color: AppColors.text, height: 1);
+    final style = darkMono(14, color: DarkColors.text, height: 1);
     return Row(
       children: [
         SizedBox(width: 64, child: Text(playerTime(pos), style: style)),
@@ -344,10 +344,10 @@ class _VodSeekRowState extends State<VodSeekRow> {
                               alignment: Alignment.center,
                               padding: const EdgeInsets.symmetric(vertical: 5),
                               decoration: BoxDecoration(
-                                color: AppColors.surface3,
+                                color: DarkColors.surface3,
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: Text(playerTime(_at(tip)), style: monoStyle(12, color: AppColors.text, height: 1)),
+                              child: Text(playerTime(_at(tip)), style: darkMono(12, color: DarkColors.text, height: 1)),
                             ),
                           ),
                       ],
@@ -364,7 +364,7 @@ class _VodSeekRowState extends State<VodSeekRow> {
           child: Text(
             '−${playerTime(widget.duration - pos)}',
             textAlign: TextAlign.right,
-            style: monoStyle(14, color: AppColors.textSoft, height: 1),
+            style: darkMono(14, color: DarkColors.textSoft, height: 1),
           ),
         ),
       ],
@@ -396,8 +396,8 @@ class _SeekPainter extends CustomPainter {
     }
     if (hover != null) canvas.drawRRect(bar(0, hover!), Paint()..color = const Color(0x26FFFFFF));
     final p = played.clamp(0.0, 1.0);
-    canvas.drawRRect(bar(0, p), Paint()..color = AppColors.accent);
-    canvas.drawCircle(Offset(p * size.width, y), 7, Paint()..color = AppColors.accent);
+    canvas.drawRRect(bar(0, p), Paint()..color = DarkColors.accent);
+    canvas.drawCircle(Offset(p * size.width, y), 7, Paint()..color = DarkColors.accent);
   }
 
   @override
@@ -457,15 +457,10 @@ class PlayerSidePanel extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           if (kicker != null) ...[
-                            Text(
-                              kicker!,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: monoStyle(13, height: 1),
-                            ),
+                            Text(kicker!, maxLines: 1, overflow: TextOverflow.ellipsis, style: darkMono(13, height: 1)),
                             const SizedBox(height: 8),
                           ],
-                          Text(title.toUpperCase(), style: posterStyle(34, height: 1)),
+                          Text(title.toUpperCase(), style: darkPoster(34, height: 1)),
                         ],
                       ),
                     ),
@@ -516,7 +511,7 @@ class ChannelListPanel extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0x14FFFFFF))),
       ),
-      child: Text('↑ ↓ pour zapper · Échap pour fermer', style: monoStyle(12, height: 1)),
+      child: Text('↑ ↓ pour zapper · Échap pour fermer', style: darkMono(12, height: 1)),
     ),
     child: ListView.builder(
       controller: scroll,
@@ -548,10 +543,10 @@ class ChannelListPanel extends StatelessWidget {
                       textAlign: TextAlign.right,
                       maxLines: 1,
                       overflow: TextOverflow.clip,
-                      style: monoStyle(
+                      style: darkMono(
                         13,
                         weight: FontWeight.w600,
-                        color: on ? AppColors.accent : AppColors.faint,
+                        color: on ? DarkColors.accent : DarkColors.faint,
                         height: 1,
                       ),
                     ),
@@ -576,7 +571,7 @@ class ChannelListPanel extends StatelessWidget {
                             ),
                             if (now != null) ...[
                               const SizedBox(width: 8),
-                              Text(formatClock(now.stop), style: monoStyle(12, height: 1)),
+                              Text(formatClock(now.stop), style: darkMono(12, height: 1)),
                             ],
                           ],
                         ),
@@ -585,7 +580,7 @@ class ChannelListPanel extends StatelessWidget {
                           names(c),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12, height: 1, color: AppColors.faint),
+                          style: const TextStyle(fontSize: 12, height: 1, color: DarkColors.faint),
                         ),
                         if (now != null) ...[
                           const SizedBox(height: 6),
@@ -620,7 +615,7 @@ class MiniGuide extends StatelessWidget {
           ? Align(
               alignment: Alignment.centerLeft,
               child: _glass(
-                const Text('Pas de programme pour cette chaîne.', style: TextStyle(color: AppColors.textSoft)),
+                const Text('Pas de programme pour cette chaîne.', style: TextStyle(color: DarkColors.textSoft)),
               ),
             )
           : LayoutBuilder(
@@ -647,17 +642,17 @@ class MiniGuide extends StatelessWidget {
                                       1 => 'ENSUITE',
                                       _ => 'PLUS TARD',
                                     },
-                                    style: monoStyle(
+                                    style: darkMono(
                                       12,
                                       weight: FontWeight.w600,
-                                      color: i == 0 && programs[0].isLiveAt(t) ? AppColors.accent : AppColors.faint,
+                                      color: i == 0 && programs[0].isLiveAt(t) ? DarkColors.accent : DarkColors.faint,
                                       height: 1,
                                     ).copyWith(letterSpacing: 12 * 0.04),
                                   ),
                                   const Spacer(),
                                   Text(
                                     '${formatClock(programs[i].start)} – ${formatClock(programs[i].stop)}',
-                                    style: monoStyle(12, weight: FontWeight.w600, height: 1),
+                                    style: darkMono(12, weight: FontWeight.w600, height: 1),
                                   ),
                                 ],
                               ),
@@ -676,7 +671,7 @@ class MiniGuide extends StatelessWidget {
                                 programs[i].category ?? ' ',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(fontSize: 13, height: 1, color: AppColors.faint),
+                                style: const TextStyle(fontSize: 13, height: 1, color: DarkColors.faint),
                               ),
                               const SizedBox(height: 9),
                               ProgressLine(
@@ -737,7 +732,7 @@ class _Choice extends StatelessWidget {
           children: [
             SizedBox(
               width: 18,
-              child: selected ? const Icon(Icons.check_rounded, size: 18, color: AppColors.accent) : null,
+              child: selected ? const Icon(Icons.check_rounded, size: 18, color: DarkColors.accent) : null,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -749,13 +744,13 @@ class _Choice extends StatelessWidget {
                   fontSize: 15,
                   fontWeight: FontWeight.w500,
                   height: 1.2,
-                  color: selected ? AppColors.text : AppColors.muted,
+                  color: selected ? DarkColors.text : DarkColors.muted,
                 ),
               ),
             ),
             if (detail != null && detail!.isNotEmpty) ...[
               const SizedBox(width: 8),
-              Text(detail!, style: monoStyle(12, height: 1)),
+              Text(detail!, style: darkMono(12, height: 1)),
             ],
           ],
         ),
@@ -769,7 +764,7 @@ Widget _section(String title, List<Widget> children) => Column(
   children: [
     Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(title.toUpperCase(), style: labelStyle(color: AppColors.faint, size: 12)),
+      child: Text(title.toUpperCase(), style: darkLabel(color: DarkColors.faint, size: 12)),
     ),
     ...children,
   ],
@@ -786,9 +781,9 @@ class PanelSegments<T> extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.all(4),
     decoration: BoxDecoration(
-      color: AppColors.surface,
+      color: DarkColors.surface,
       borderRadius: BorderRadius.circular(6),
-      border: Border.all(color: AppColors.borderInput),
+      border: Border.all(color: DarkColors.borderInput),
     ),
     child: Wrap(
       spacing: 2,
@@ -803,7 +798,7 @@ class PanelSegments<T> extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
                 decoration: BoxDecoration(
-                  color: v == value ? AppColors.action : (hover ? const Color(0x14FFFFFF) : Colors.transparent),
+                  color: v == value ? DarkColors.action : (hover ? const Color(0x14FFFFFF) : Colors.transparent),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
@@ -812,7 +807,7 @@ class PanelSegments<T> extends StatelessWidget {
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
                     height: 1,
-                    color: v == value ? AppColors.onAction : AppColors.textSoft,
+                    color: v == value ? DarkColors.onAction : DarkColors.textSoft,
                   ),
                 ),
               ),
@@ -1015,7 +1010,7 @@ class EpisodesPanel extends StatelessWidget {
                                     e.code,
                                     if (e.durationSec != null) formatSpan(Duration(seconds: e.durationSec!)),
                                   ].join(' · '),
-                                  style: monoStyle(12, height: 1),
+                                  style: darkMono(12, height: 1),
                                 ),
                                 const SizedBox(height: 7),
                                 Text(
@@ -1026,7 +1021,7 @@ class EpisodesPanel extends StatelessWidget {
                                 ),
                                 if (on) ...[
                                   const SizedBox(height: 7),
-                                  Text('EN COURS', style: labelStyle(color: AppColors.accent, size: 12)),
+                                  Text('EN COURS', style: darkLabel(color: DarkColors.accent, size: 12)),
                                 ],
                               ],
                             ),
@@ -1095,15 +1090,10 @@ class PauseInfo extends StatelessWidget {
                 children: [
                   Text(
                     'EN PAUSE · ${kicker.toUpperCase()}',
-                    style: labelStyle(color: AppColors.accent, size: 13).copyWith(letterSpacing: 13 * 0.18),
+                    style: darkLabel(color: DarkColors.accent, size: 13).copyWith(letterSpacing: 13 * 0.18),
                   ),
                   SizedBox(height: gap),
-                  Text(
-                    title.toUpperCase(),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: posterStyle(titleSize),
-                  ),
+                  Text(title.toUpperCase(), maxLines: 3, overflow: TextOverflow.ellipsis, style: darkPoster(titleSize)),
                   if (meta.isNotEmpty) ...[
                     SizedBox(height: gap),
                     Text(
@@ -1112,7 +1102,7 @@ class PauseInfo extends StatelessWidget {
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
                         height: 1,
-                        color: AppColors.textSoft,
+                        color: DarkColors.textSoft,
                       ),
                     ),
                   ],
@@ -1124,13 +1114,13 @@ class PauseInfo extends StatelessWidget {
                         synopsis!,
                         maxLines: 5,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 17, height: 1.5, color: AppColors.textSoft),
+                        style: const TextStyle(fontSize: 17, height: 1.5, color: DarkColors.textSoft),
                       ),
                     ),
                   ],
                   if (showCast) ...[
                     SizedBox(height: gap + 10),
-                    Text('DISTRIBUTION', style: labelStyle(color: AppColors.faint, size: 12)),
+                    Text('DISTRIBUTION', style: darkLabel(color: DarkColors.faint, size: 12)),
                     const SizedBox(height: 12),
                     LayoutBuilder(
                       builder: (context, box) {
@@ -1173,13 +1163,13 @@ class CastChip extends StatelessWidget {
         Container(
           width: size,
           height: size,
-          decoration: const BoxDecoration(color: AppColors.borderInput, shape: BoxShape.circle),
+          decoration: const BoxDecoration(color: DarkColors.borderInput, shape: BoxShape.circle),
           clipBehavior: Clip.antiAlias,
           alignment: Alignment.center,
           child: member.photo == null
               ? Text(
                   initials,
-                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.muted),
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: DarkColors.muted),
                 )
               : Image.network(
                   member.photo!,
@@ -1189,7 +1179,7 @@ class CastChip extends StatelessWidget {
                   cacheWidth: (size * 2).round(),
                   errorBuilder: (_, _, _) => Text(
                     initials,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.muted),
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: DarkColors.muted),
                   ),
                 ),
         ),
@@ -1210,7 +1200,7 @@ class CastChip extends StatelessWidget {
                   member.role!,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, height: 1.1, color: AppColors.muted),
+                  style: const TextStyle(fontSize: 13, height: 1.1, color: DarkColors.muted),
                 ),
               ],
             ],
@@ -1246,7 +1236,7 @@ class LivePausedBadge extends StatelessWidget {
           const SizedBox(height: 14),
           const Text(
             'Le direct continue · tu reprendras en différé',
-            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.textSoft),
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: DarkColors.textSoft),
           ),
         ],
       ),
@@ -1307,7 +1297,7 @@ class NextEpisodePrompt extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('ÉPISODE SUIVANT', style: labelStyle(color: AppColors.accent, size: 12)),
+                          Text('ÉPISODE SUIVANT', style: darkLabel(color: DarkColors.accent, size: 12)),
                           const SizedBox(height: 7),
                           Text(
                             '${episode.code} · ${episode.displayTitle}',
@@ -1318,7 +1308,7 @@ class NextEpisodePrompt extends StatelessWidget {
                           const SizedBox(height: 7),
                           Text(
                             auto ? 'Lecture dans ${math.max(0, secondsLeft)} s' : 'Prêt à démarrer',
-                            style: monoStyle(13, height: 1),
+                            style: darkMono(13, height: 1),
                           ),
                         ],
                       ),
@@ -1334,8 +1324,8 @@ class NextEpisodePrompt extends StatelessWidget {
                       child: FilledButton.icon(
                         onPressed: onPlay,
                         style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.action,
-                          foregroundColor: AppColors.onAction,
+                          backgroundColor: DarkColors.action,
+                          foregroundColor: DarkColors.onAction,
                           minimumSize: const Size(0, 42),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                           textStyle: const TextStyle(
@@ -1353,7 +1343,7 @@ class NextEpisodePrompt extends StatelessWidget {
                       onPressed: onCancel,
                       style: FilledButton.styleFrom(
                         backgroundColor: const Color(0x1FFFFFFF),
-                        foregroundColor: AppColors.text,
+                        foregroundColor: DarkColors.text,
                         minimumSize: const Size(0, 42),
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
@@ -1414,10 +1404,10 @@ class StatsCard extends StatelessWidget {
                 children: [
                   Text(
                     'STATISTIQUES',
-                    style: monoStyle(
+                    style: darkMono(
                       12,
                       weight: FontWeight.w600,
-                      color: AppColors.accent,
+                      color: DarkColors.accent,
                       height: 1,
                     ).copyWith(letterSpacing: 12 * 0.08),
                   ),
@@ -1426,7 +1416,7 @@ class StatsCard extends StatelessWidget {
                     onTap: onClose,
                     child: MouseRegion(
                       cursor: SystemMouseCursors.click,
-                      child: Text('✕', style: monoStyle(12, color: AppColors.textSoft, height: 1)),
+                      child: Text('✕', style: darkMono(12, color: DarkColors.textSoft, height: 1)),
                     ),
                   ),
                 ],
@@ -1438,13 +1428,13 @@ class StatsCard extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(k, style: monoStyle(12, height: 1.2)),
+                      Text(k, style: darkMono(12, height: 1.2)),
                       const SizedBox(width: 16),
                       Expanded(
                         child: Text(
                           v.isEmpty ? 'inconnu' : v,
                           textAlign: TextAlign.right,
-                          style: monoStyle(12, color: AppColors.text, height: 1.2),
+                          style: darkMono(12, color: DarkColors.text, height: 1.2),
                         ),
                       ),
                     ],
@@ -1481,11 +1471,11 @@ class QualityButton extends StatelessWidget {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(5),
-            border: Border.all(color: hover && onTap != null ? AppColors.text : const Color(0x66FFFFFF)),
+            border: Border.all(color: hover && onTap != null ? DarkColors.text : const Color(0x66FFFFFF)),
           ),
           child: Text(
             label,
-            style: monoStyle(12, weight: FontWeight.w600, color: AppColors.text, height: 1),
+            style: darkMono(12, weight: FontWeight.w600, color: DarkColors.text, height: 1),
           ),
         ),
       ),
@@ -1547,9 +1537,9 @@ class _VolumeControlState extends State<VolumeControl> {
                   child: SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 4,
-                      activeTrackColor: AppColors.text,
+                      activeTrackColor: DarkColors.text,
                       inactiveTrackColor: const Color(0x38FFFFFF),
-                      thumbColor: AppColors.text,
+                      thumbColor: DarkColors.text,
                       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                       overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                     ),
