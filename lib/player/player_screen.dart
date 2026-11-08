@@ -116,7 +116,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _volumeBeforeMute = _ps.player.state.volume > 0 ? _ps.player.state.volume : 100;
 
     // This screen now shows the video: no mini-player at the same time.
-    _s.pip.release();
+    // Deferred: the mini-player listens to this and is being built too.
+    if (_s.pip.active) scheduleMicrotask(_s.pip.release);
     unawaited(_ps.play(_item, start: widget.session.start));
     if (_isLive) _s.repo.touchChannel(_item.sourceId, _item.extId);
 

@@ -95,8 +95,12 @@ class _EpgGridState extends State<EpgGrid> {
     final now = DateTime.now();
     _origin = DateTime(now.year, now.month, now.day - 1);
     widget.controller?._state = this;
-    _offset.addListener(_updateDay);
     _offset.value = _nowOffset();
+    _offset.addListener(_updateDay);
+    // The toolbar above is already built: tell it the day after this frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _updateDay();
+    });
     _clock = Timer.periodic(const Duration(minutes: 1), (_) {
       if (mounted) setState(() {});
     });

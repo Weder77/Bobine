@@ -210,9 +210,12 @@ class _PipControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
+    // Semantics, not Tooltip: the mini-player is drawn above the navigator,
+    // outside any Overlay.
     Widget button(IconData icon, String label, VoidCallback? onTap, {double size = 34, double iconSize = 16}) =>
-        Tooltip(
-          message: label,
+        Semantics(
+          button: true,
+          label: label,
           child: IconButton(
             onPressed: onTap,
             iconSize: iconSize,
