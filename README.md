@@ -55,7 +55,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
 
-**Nouveautés 1.2 : Bobine**
+**Nouveautés 1.2 et 1.3 : Bobine**
 - Nouveau nom, nouveau logo et **nouvelle interface** : polices Big Shoulders et Geist, vermillon sur fond chaud, accueil façon salle de cinéma, Direct en mosaïque, guide redessiné, lecteur et paramètres refaits.
 - Recherche dans l'en-tête (chaînes, programmes, films, séries, recherches récentes et tendances).
 - Clic droit sur les vignettes : actions rapides (favori, lancer une saison, marquer comme vu, bande-annonce…).
