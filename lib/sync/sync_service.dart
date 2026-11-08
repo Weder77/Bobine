@@ -214,13 +214,6 @@ class SyncService extends ChangeNotifier {
     _begin(await _api.verify(email, code), keys);
   }
 
-  /// The address was confirmed with the link of the e-mail: signs in.
-  Future<void> confirmedByLink() async {
-    final email = pendingEmail, keys = _pendingKeys;
-    if (email == null || keys == null) return;
-    _begin(await _api.signIn(email, keys.authSecret), keys);
-  }
-
   Future<void> resendCode() async {
     if (pendingEmail != null) await _api.resendSignup(pendingEmail!);
   }
