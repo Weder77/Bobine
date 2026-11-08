@@ -1,4 +1,4 @@
-; Bobine — installateur Windows (Inno Setup 6).
+; Bobine : installateur Windows (Inno Setup 6).
 ; Compilé par le CI :  iscc /DAppVersion=1.1.0 /DSourceDir=<build\windows\x64\runner\Release> bobine.iss
 ;
 ; Installation par utilisateur (pas de droits administrateur), ce qui permet

@@ -1,9 +1,9 @@
-# Bobine — lecteur IPTV desktop
-
-> Anciennement *Lumen*. La mise à jour vers Bobine reprend automatiquement les données (sources, profils, favoris, progression) et remplace l'ancienne application.
+# Bobine, lecteur IPTV desktop
 
 Lecteur IPTV pour **Windows, macOS et Linux**, construit avec Flutter et le moteur vidéo **libmpv** (via [media_kit](https://github.com/media-kit/media-kit)).
 L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux et sur lequel les avances / retours rapides sont instantanés.
+
+> **Bobine est uniquement un lecteur.** Il ne fournit aucune chaîne, aucun film, aucune série ni aucune playlist : tu y ajoutes ta propre source. Voir l'[avertissement](#avertissement).
 
 ![Accueil](docs/screenshots/accueil.jpg)
 
@@ -55,7 +55,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
 
-**Nouveautés 1.2 — Bobine**
+**Nouveautés 1.2 : Bobine**
 - Nouveau nom, nouveau logo et **nouvelle interface** : polices Big Shoulders et Geist, vermillon sur fond chaud, accueil façon salle de cinéma, Direct en mosaïque, guide redessiné, lecteur et paramètres refaits.
 - Recherche dans l'en-tête (chaînes, programmes, films, séries, recherches récentes et tendances).
 - Clic droit sur les vignettes : actions rapides (favori, lancer une saison, marquer comme vu, bande-annonce…).
@@ -145,9 +145,8 @@ Pour publier une version, mets à jour `version:` dans `pubspec.yaml` et `kAppVe
 #### 2. Récupérer et lancer le projet
 
 ```powershell
-git clone https://github.com/Weder77/IpiTivi.git
-cd IpiTivi
-git checkout claude/iptv-app-optimized-x5x5g8
+git clone https://github.com/Weder77/Bobine.git
+cd Bobine
 flutter pub get
 flutter run -d windows          # lance l'app en mode développement
 ```
@@ -204,7 +203,7 @@ Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), 
 - **Une chaîne ne se lance pas** : dans *Paramètres → Sources → Modifier → Options avancées*, essaie le format **HLS** au lieu de MPEG-TS, ou un **User-Agent** (VLC).
 - **Image corrompue ou verte** : passe le **décodage vidéo** sur « Logiciel » (*Paramètres → Lecture*).
 - **Effet de peigne** sur certaines chaînes : désentrelacement sur « Toujours ».
-- **Petit SSD ou peu de RAM** : choisis une **mémoire tampon** « Faible » (*Paramètres → Lecture*).
+- **Petit SSD ou peu de RAM** : réduis la taille du cache (*Paramètres → Cache*).
 - **Programmes du guide décalés d'une heure ou plus** : *Paramètres → Sources → Modifier → Options avancées → Décalage du guide TV*.
 - **Autre souci** : *Paramètres → Sauvegarde → Diagnostic* teste la connexion à chaque source et affiche le journal ; « Copier le rapport » donne un texte sans mot de passe à partager.
 
@@ -270,3 +269,17 @@ flutter test
 - [ ] Portail Stalker (MAC).
 - [ ] Version Android TV / mobile (même code Flutter + media_kit).
 - [ ] Signature de l'installateur Windows (évite l'avertissement SmartScreen).
+
+---
+
+## Avertissement
+
+**Bobine est uniquement un lecteur multimédia.** Il ne fournit, n'héberge, ne vend et ne recommande aucun contenu : aucune chaîne, aucun film, aucune série, aucune playlist ni aucun abonnement n'est inclus ou proposé. L'application se contente de lire les sources que tu ajoutes toi-même (lien ou fichier M3U, compte Xtream Codes).
+
+- Tu es **seul responsable** des sources que tu ajoutes et de ce que tu regardes avec Bobine. Assure-toi d'avoir le droit d'accéder à ces contenus, dans le respect des lois de ton pays et des conditions de ton fournisseur.
+- L'auteur de Bobine n'est lié à **aucun fournisseur IPTV**, ne contrôle pas ce qui est lu et ne peut être tenu responsable de l'usage qui est fait de l'application ni des contenus qu'elle affiche ou lit.
+- Bobine n'encourage pas le piratage : utilise-le avec des sources légales.
+- Les noms, logos, affiches et résumés affichés (chaînes, films, séries) appartiennent à leurs propriétaires respectifs.
+- Les fiches enrichies utilisent l'API de [The Movie Database (TMDB)](https://www.themoviedb.org/) ; Bobine n'est ni approuvé ni certifié par TMDB.
+
+Le logiciel est fourni « tel quel », sans garantie d'aucune sorte.

@@ -56,7 +56,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       ('Sortie audio', 'current-ao'),
     ]) {
       final v = await _s.player.prop(prop);
-      _player[key] = v.isEmpty ? (key == 'mpv' || key == 'FFmpeg' ? '—' : 'aucune lecture en cours') : v;
+      _player[key] = v.isEmpty ? (key == 'mpv' || key == 'FFmpeg' ? 'inconnue' : 'aucune lecture en cours') : v;
     }
     final db = File(_s.dbPath);
     _dbBytes = [db, File('${_s.dbPath}-wal')].fold<int>(0, (a, f) => a + (f.existsSync() ? f.lengthSync() : 0));
@@ -118,7 +118,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   /// Plain text summary without any password or address with credentials.
   String _report() {
     final b = StringBuffer()
-      ..writeln('Rapport Bobine $kAppVersion — ${DateTime.now().toIso8601String().substring(0, 19)}')
+      ..writeln('Rapport Bobine $kAppVersion (${DateTime.now().toIso8601String().substring(0, 19)})')
       ..writeln('Système : ${Platform.operatingSystem} ${Platform.operatingSystemVersion}')
       ..writeln('Dart : ${Platform.version.split(' ').first}');
     for (final e in _player.entries) {
@@ -284,7 +284,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : OutlinedButton(onPressed: () => _test(src), child: const Text('Tester la connexion')),
                 ),
-              if (sources.isEmpty) row('—', 'Aucune source'),
+              if (sources.isEmpty) row('Sources', 'Aucune source'),
             ],
           ),
           SettingsSection(

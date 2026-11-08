@@ -413,19 +413,19 @@ class PlayerService {
       ),
       ('Audio', await _audioLine(p)),
       ('Conteneur', (await p('file-format')).toUpperCase()),
-      ('Débit vidéo', vbr > 0 ? '${(vbr / 1e6).toStringAsFixed(2).replaceAll('.', ',')} Mb/s' : '—'),
+      ('Débit vidéo', vbr > 0 ? '${(vbr / 1e6).toStringAsFixed(2).replaceAll('.', ',')} Mb/s' : 'inconnu'),
       (
         'Cache',
         '${formatDuration(Duration(milliseconds: (cacheDur * 1000).round()))} devant · ${formatBytes(cache.forwardBytes)}',
       ),
-      ('Réseau', cache.inputRate > 0 ? '${formatBytes(cache.inputRate)}/s' : '—'),
+      ('Réseau', cache.inputRate > 0 ? '${formatBytes(cache.inputRate)}/s' : 'inconnu'),
       ('Images perdues', '${await p('frame-drop-count')} (décodeur : ${await p('decoder-frame-drop-count')})'),
     ];
   }
 
   static Future<String> _audioLine(Future<String> Function(String) p) async {
     final codec = await p('audio-codec-name');
-    if (codec.isEmpty) return '—';
+    if (codec.isEmpty) return 'inconnu';
     final ch = int.tryParse(await p('audio-params/channel-count'));
     final rate = int.tryParse(await p('audio-params/samplerate'));
     return [

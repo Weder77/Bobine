@@ -728,8 +728,8 @@ Future<void> _showCategories(BuildContext context, CatalogController c) {
     transitionBuilder: (context, a, _, child) => FadeTransition(opacity: a, child: child),
     pageBuilder: (context, _, _) {
       final size = MediaQuery.sizeOf(context);
-      final width = math.min(900.0, size.width - 96);
-      final cols = math.max(1, math.min(3, ((width - 36 + 20) / (220 + 20)).floor()));
+      final width = math.min(1180.0, size.width - 96);
+      final cols = math.max(1, math.min(3, ((width - 36 + 20) / (260 + 20)).floor()));
       final perCol = (c.entries.length / cols).ceil();
       final grid = c.mode == CatalogMode.grid;
       Widget item(CategoryEntry e) {
@@ -752,26 +752,42 @@ Future<void> _showCategories(BuildContext context, CatalogController c) {
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Flexible(
-                    child: Text(
-                      e.label,
-                      maxLines: 1,
+                  // The whole name (on two lines if needed), the padlock
+                  // right after it, the count on the right.
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        text: e.label,
+                        children: [
+                          if (e.locked)
+                            const WidgetSpan(
+                              alignment: PlaceholderAlignment.middle,
+                              child: Padding(
+                                padding: EdgeInsets.only(left: 8),
+                                child: Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.accent),
+                              ),
+                            ),
+                        ],
+                      ),
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w500,
-                        height: 1.2,
+                        height: 1.25,
                         color: on ? AppColors.accent : AppColors.text,
                       ),
                     ),
                   ),
-                  if (e.locked) ...[
-                    const SizedBox(width: 8),
-                    const Icon(Icons.lock_outline_rounded, size: 14, color: AppColors.accent),
+                  if (e.count != null) ...[
+                    const SizedBox(width: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Text(formatCount(e.count!), style: monoStyle(12, height: 1.2)),
+                    ),
                   ],
-                  const Spacer(),
-                  if (e.count != null) Text(formatCount(e.count!), style: monoStyle(12, height: 1.2)),
                 ],
               ),
             ),

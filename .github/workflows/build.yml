@@ -63,7 +63,7 @@ jobs:
             $release = ($LASTEXITCODE -ne 0)
           }
           "release=$($release.ToString().ToLower())" >> $env:GITHUB_OUTPUT
-          Write-Host "Bobine $v — publication : $release"
+          Write-Host "Bobine $v, publication : $release"
           exit 0
 
       - name: Archive
