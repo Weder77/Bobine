@@ -930,6 +930,16 @@ class Repository {
   void kvSet(String key, String? value) =>
       write(() => db.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', [key, value]));
 
+  /// Notes a change to send to the account (the tables are noted by
+  /// triggers; this is for what lives elsewhere, like the preferences).
+  void noteSyncChange(String table, String key) => write(
+    () => db.execute('INSERT OR REPLACE INTO sync_log (tbl, key, changed_at) VALUES (?, ?, ?)', [
+      table,
+      key,
+      DateTime.now().millisecondsSinceEpoch,
+    ]),
+  );
+
   Map<String, Object?>? kvGetJson(String key) {
     final v = kvGet(key);
     if (v == null) return null;
