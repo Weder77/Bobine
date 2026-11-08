@@ -1138,13 +1138,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
               onPlay: _playNextEpisode,
               onCancel: () => setState(() => _nextDismissed = _item.extId),
             );
-          } else if (dur.inSeconds > 255 && pos.inSeconds < 85) {
-            child = SkipIntroButton(
-              onTap: () {
-                _ps.player.seek(const Duration(seconds: 85));
-                _position.value = const Duration(seconds: 85);
-              },
-            );
           }
           return AnimatedPositioned(
             duration: const Duration(milliseconds: 300),

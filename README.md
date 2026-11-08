@@ -50,7 +50,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 
 **Lecteur**
 - En direct : programme en cours en grand, « Ensuite », panneau **Chaînes** pour zapper, **Mini-guide** des quatre prochains programmes, choix de la **qualité** de la chaîne, badge « Différé » et « Revenir au direct ».
-- Films et séries : barre de lecture, **écran de pause** avec résumé et distribution (TMDB), panneau **Épisodes**, « Passer l'intro », carte « Épisode suivant ».
+- Films et séries : barre de lecture, **écran de pause** avec résumé et distribution (TMDB), panneau **Épisodes**, carte « Épisode suivant ».
 - Panneau **Audio et sous-titres** : pistes (langue préférée, `fr` par défaut), taille des sous-titres, vitesse, format d'image (16:9, 4:3, 21:9, remplir, étirer).
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.

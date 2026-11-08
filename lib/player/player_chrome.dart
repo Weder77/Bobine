@@ -1256,52 +1256,6 @@ class LivePausedBadge extends StatelessWidget {
 
 // ------------------------------------------------------------- floating
 
-/// "Passer l'intro" (first 85 s of an episode).
-class SkipIntroButton extends StatelessWidget {
-  const SkipIntroButton({super.key, required this.onTap});
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => HoverBuilder(
-    onActivate: onTap,
-    focusRingRadius: 8,
-    builder: (context, hover) => GestureDetector(
-      onTap: onTap,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            height: 50,
-            padding: const EdgeInsets.fromLTRB(24, 0, 22, 0),
-            decoration: BoxDecoration(
-              color: hover ? AppColors.action : const Color(0x8C0D0C0B),
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xD9FFFFFF), width: 1.5),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Passer l'intro",
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: hover ? AppColors.onAction : AppColors.text,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Icon(Icons.skip_next_rounded, size: 20, color: hover ? AppColors.onAction : AppColors.text),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
 /// "Épisode suivant" card in the last seconds of an episode.
 class NextEpisodePrompt extends StatelessWidget {
   const NextEpisodePrompt({
