@@ -219,7 +219,7 @@ class _LiveScreenState extends State<LiveScreen> {
             style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
             decoration: InputDecoration(
               hintText: 'Filtrer chaînes et programmes',
-              prefixIcon: const Icon(Icons.search_rounded, size: 19, color: AppColors.faint),
+              prefixIcon: Icon(Icons.search_rounded, size: 19, color: AppColors.faint),
               prefixIconConstraints: const BoxConstraints(minWidth: 42),
               suffixIcon: _filter.text.isEmpty
                   ? null
@@ -283,7 +283,7 @@ class _LiveScreenState extends State<LiveScreen> {
               ? "Ajoute une chaîne aux favoris (clic droit) pour la retrouver ici."
               : 'Rien ne correspond à ce filtre dans ce groupe.',
           textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint),
+          style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint),
         ),
       ],
     ),
@@ -348,12 +348,17 @@ class LiveTile extends StatelessWidget {
               fit: StackFit.expand,
               children: [
                 DecoratedBox(decoration: BoxDecoration(gradient: AppColors.placeholderGradient(hueOf(tile.name)))),
-                const DecoratedBox(
+                DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.bottomCenter,
                       end: Alignment.topCenter,
-                      colors: [Color(0xF50D0C0B), Color(0x8C0D0C0B), Color(0x1A0D0C0B), Color(0x800D0C0B)],
+                      colors: [
+                        AppColors.bg.withAlpha(0xF5),
+                        AppColors.bg.withAlpha(0x8C),
+                        AppColors.bg.withAlpha(0x1A),
+                        AppColors.bg.withAlpha(0x80),
+                      ],
                       stops: [0, 0.45, 0.72, 1],
                     ),
                   ),
@@ -382,7 +387,7 @@ class LiveTile extends StatelessWidget {
                         ),
                       ),
                       if (favorite) ...[
-                        const Icon(Icons.star_rounded, size: 17, color: AppColors.accent),
+                        Icon(Icons.star_rounded, size: 17, color: AppColors.accent),
                         const SizedBox(width: 8),
                       ],
                       if (tile.quality != null) QualityBadge(tile.quality!),
@@ -440,11 +445,11 @@ class LiveTile extends StatelessWidget {
                                   child: Stack(
                                     fit: StackFit.expand,
                                     children: [
-                                      const ColoredBox(color: Color(0x33FFFFFF)),
+                                      ColoredBox(color: AppColors.ink.withAlpha(0x33)),
                                       FractionallySizedBox(
                                         alignment: Alignment.centerLeft,
                                         widthFactor: pct,
-                                        child: const ColoredBox(color: AppColors.accent),
+                                        child: ColoredBox(color: AppColors.accent),
                                       ),
                                     ],
                                   ),
@@ -467,13 +472,13 @@ class LiveTile extends StatelessWidget {
                                 children: [
                                   TextSpan(
                                     text: next!.title,
-                                    style: const TextStyle(color: AppColors.text),
+                                    style: TextStyle(color: AppColors.text),
                                   ),
                                 ],
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
                                 height: 1.2,

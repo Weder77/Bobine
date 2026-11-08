@@ -190,7 +190,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
         children: [
           SizedBox(
             width: 200,
-            child: Text(k, style: const TextStyle(color: AppColors.muted)),
+            child: Text(k, style: TextStyle(color: AppColors.muted)),
           ),
           Expanded(
             child: SelectableText(v, style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -227,7 +227,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       body: ListView(
         padding: settingsPadding(context, top: 12, bottom: 48),
         children: [
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(bottom: 20),
             child: Text(
               'Le rapport ne contient ni mot de passe ni adresse avec identifiants : '
@@ -296,12 +296,12 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
                 width: double.infinity,
                 margin: const EdgeInsets.fromLTRB(18, 0, 18, 18),
                 padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: const Color(0xFF0B0B0D), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: AppColors.surface2, borderRadius: BorderRadius.circular(10)),
                 child: SingleChildScrollView(
                   reverse: true,
                   child: SelectableText(
                     AppLog.lines.isEmpty ? 'Rien pour l’instant.' : AppLog.lines.join('\n'),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'monospace',
                       fontFamilyFallback: ['Consolas', 'Menlo', 'DejaVu Sans Mono'],
                       fontSize: 12.5,

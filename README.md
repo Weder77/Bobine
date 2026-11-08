@@ -59,6 +59,8 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Nouveau nom, nouveau logo et **nouvelle interface** : polices Big Shoulders et Geist, vermillon sur fond chaud, accueil façon salle de cinéma, Direct en mosaïque, guide redessiné, lecteur et paramètres refaits.
 - Recherche dans l'en-tête (chaînes, programmes, films, séries, recherches récentes et tendances).
 - Clic droit sur les vignettes : actions rapides (favori, lancer une saison, marquer comme vu, bande-annonce…).
+- **Thème clair ou sombre**, ou celui du système (*Paramètres → Apparence*), changé sans redémarrer ; le lecteur vidéo reste sombre.
+- Une icône dans l'en-tête, entre les paramètres et le profil, signale une **mise à jour disponible**.
 
 **Nouveautés 1.1**
 - **Mini-lecteur** (touche P) : la vidéo continue dans un coin pendant que tu navigues ; double-clic pour revenir en plein écran. Sous Windows, **fenêtre flottante** toujours au-dessus des autres applications (touche O).

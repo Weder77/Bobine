@@ -158,7 +158,7 @@ class NetImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ph = placeholder ?? const ColoredBox(color: AppColors.surface2);
+    final ph = placeholder ?? ColoredBox(color: AppColors.surface2);
     if (!_isHttp(url)) return SizedBox(width: width, height: height, child: ph);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final dw = decodeWidth ?? width;

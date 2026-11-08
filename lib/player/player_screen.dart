@@ -553,8 +553,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   bool get _visible => _controls || !_playing || _panel != _Panel.none;
 
+  // The player is always dark, whatever the app's theme.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => Theme(
+    data: darkTheme,
+    child: Builder(builder: _buildPlayer),
+  );
+
+  Widget _buildPlayer(BuildContext context) {
     final (fit, ratio) = switch (_aspect) {
       _Aspect.auto => (BoxFit.contain, null),
       _Aspect.r169 => (BoxFit.contain, 16 / 9),
@@ -654,14 +660,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 const SizedBox(
                   width: 54,
                   height: 54,
-                  child: CircularProgressIndicator(strokeWidth: 3, color: AppColors.accent),
+                  child: CircularProgressIndicator(strokeWidth: 3, color: DarkColors.accent),
                 ),
                 const SizedBox(height: 14),
                 StreamBuilder<double>(
                   stream: _ps.player.stream.bufferingPercentage,
                   builder: (context, p) => Text(
                     p.hasData && p.data! > 0 ? 'Mise en mémoire… ${p.data!.round()} %' : 'Chargement…',
-                    style: monoStyle(13, color: AppColors.textSoft),
+                    style: darkMono(13, color: DarkColors.textSoft),
                   ),
                 ),
               ],
@@ -695,11 +701,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
       decoration: BoxDecoration(
         color: const Color(0xD60D0C0B),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.accent, width: 1.5),
+        border: Border.all(color: DarkColors.accent, width: 1.5),
       ),
       child: Text(
         _digits,
-        style: monoStyle(44, weight: FontWeight.w600, color: AppColors.accent, height: 1.1),
+        style: darkMono(44, weight: FontWeight.w600, color: DarkColors.accent, height: 1.1),
       ),
     ),
   );
@@ -726,14 +732,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
               children: [
                 Icon(
                   reconnecting ? Icons.wifi_tethering_rounded : Icons.error_outline_rounded,
-                  color: AppColors.accent,
+                  color: DarkColors.accent,
                   size: 32,
                 ),
                 const SizedBox(height: 12),
                 Text(
                   (reconnecting ? message : 'Lecture impossible').toUpperCase(),
                   textAlign: TextAlign.center,
-                  style: posterStyle(30, height: 1),
+                  style: darkPoster(30, height: 1),
                 ),
                 if (!reconnecting) ...[
                   const SizedBox(height: 8),
@@ -742,7 +748,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     textAlign: TextAlign.center,
                     maxLines: 4,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: AppColors.muted, fontSize: 14),
+                    style: const TextStyle(color: DarkColors.muted, fontSize: 14),
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
@@ -827,7 +833,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 const SizedBox(height: 6),
                 Text(
                   'Chaîne ${ch?.number ?? _chIndex + 1}',
-                  style: monoStyle(13, color: AppColors.textSoft, height: 1),
+                  style: darkMono(13, color: DarkColors.textSoft, height: 1),
                 ),
               ],
             ),
@@ -863,7 +869,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
               sub,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: monoStyle(13, color: AppColors.textSoft, height: 1),
+              style: darkMono(13, color: DarkColors.textSoft, height: 1),
             ),
           ],
         ],
@@ -1031,8 +1037,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
                                     child: FilledButton.icon(
                                       onPressed: _backToLive,
                                       style: FilledButton.styleFrom(
-                                        backgroundColor: AppColors.accent,
-                                        foregroundColor: AppColors.onAccent,
+                                        backgroundColor: DarkColors.accent,
+                                        foregroundColor: DarkColors.onAccent,
                                         minimumSize: const Size(0, 40),
                                         padding: const EdgeInsets.symmetric(horizontal: 14),
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),

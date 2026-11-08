@@ -60,7 +60,7 @@ class _PinDialogState extends State<_PinDialog> {
     return AlertDialog(
       title: Row(
         children: [
-          const Icon(Icons.lock_outline_rounded, color: AppColors.accent),
+          Icon(Icons.lock_outline_rounded, color: AppColors.accent),
           const SizedBox(width: 12),
           Expanded(child: Text(widget.title, style: displayStyle(22))),
         ],
@@ -71,7 +71,7 @@ class _PinDialogState extends State<_PinDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (step != null) Text(step, style: const TextStyle(color: AppColors.textSoft)),
+            if (step != null) Text(step, style: TextStyle(color: AppColors.textSoft)),
             const SizedBox(height: 16),
             TextField(
               key: ValueKey(_first),
@@ -88,10 +88,7 @@ class _PinDialogState extends State<_PinDialog> {
               onChanged: _submit,
               onSubmitted: _submit,
             ),
-            if (_error != null) ...[
-              const SizedBox(height: 10),
-              Text(_error!, style: const TextStyle(color: AppColors.live)),
-            ],
+            if (_error != null) ...[const SizedBox(height: 10), Text(_error!, style: TextStyle(color: AppColors.live))],
           ],
         ),
       ),

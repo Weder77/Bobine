@@ -220,14 +220,19 @@ class _MovieDetailScreenState extends State<MovieDetailScreen> {
             padding: const EdgeInsets.only(bottom: 10),
             child: Text(
               t!.tagline!,
-              style: const TextStyle(color: AppColors.textSoft, fontStyle: FontStyle.italic, fontSize: 16),
+              style: TextStyle(color: AppColors.textSoft, fontStyle: FontStyle.italic, fontSize: 16),
             ),
           ),
         if (plot != null) DetailParagraph(plot),
         if (p != null && p.finished)
-          const Padding(
+          Padding(
             padding: EdgeInsets.only(top: 8),
-            child: Pill('Déjà vu', icon: Icons.check_rounded, color: Color(0x223DDC97), textColor: AppColors.success),
+            child: Pill(
+              'Déjà vu',
+              icon: Icons.check_rounded,
+              color: AppColors.successTint,
+              textColor: AppColors.success,
+            ),
           ),
       ],
     );

@@ -244,7 +244,7 @@ class _MarkdownTextState extends State<MarkdownText> {
   Widget build(BuildContext context) {
     _clearTaps();
     final base = DefaultTextStyle.of(context).style
-        .merge(widget.style ?? const TextStyle(fontSize: 14, height: 1.5, color: AppColors.textSoft));
+        .merge(widget.style ?? TextStyle(fontSize: 14, height: 1.5, color: AppColors.textSoft));
     final blocks = parseMarkdown(widget.data);
     final children = <Widget>[];
     MdBlockType? previous;
@@ -291,7 +291,7 @@ class _MarkdownTextState extends State<MarkdownText> {
         ),
         MdBlockType.quote => Container(
           padding: const EdgeInsets.fromLTRB(12, 2, 0, 2),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             border: Border(left: BorderSide(color: AppColors.accent, width: 2)),
           ),
           child: Text.rich(_spans(b.text, base.copyWith(color: AppColors.faint))),
@@ -305,7 +305,7 @@ class _MarkdownTextState extends State<MarkdownText> {
             style: base.copyWith(fontFamily: AppFonts.mono, fontSize: (base.fontSize ?? 14) * 0.9),
           ),
         ),
-        MdBlockType.rule => const Divider(height: 1, color: AppColors.borderSoft),
+        MdBlockType.rule => Divider(height: 1, color: AppColors.borderSoft),
       });
       previous = b.type;
     }

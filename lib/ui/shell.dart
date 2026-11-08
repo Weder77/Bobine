@@ -320,19 +320,19 @@ class _TopBar extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const DecoratedBox(
+                DecoratedBox(
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       begin: Alignment.topCenter,
                       end: Alignment.bottomCenter,
-                      colors: [Color(0xCC0D0C0B), Color(0x000D0C0B)],
+                      colors: [AppColors.bg.withAlpha(0xCC), AppColors.bg.withAlpha(0x00)],
                     ),
                   ),
                 ),
                 AnimatedOpacity(
                   opacity: opaque ? 1 : 0,
                   duration: const Duration(milliseconds: 300),
-                  child: const ColoredBox(color: Color(0xF70D0C0B)),
+                  child: ColoredBox(color: AppColors.bg.withAlpha(0xF7)),
                 ),
               ],
             ),
@@ -390,6 +390,12 @@ class _TopBar extends StatelessWidget {
                           selected: index == ShellTab.settings && !searchOpen,
                           onTap: () => onSelect(ShellTab.settings),
                         ),
+                        _UpdateButton(
+                          onOpen: () {
+                            settingsPageRequest.value = 'apropos';
+                            onSelect(ShellTab.settings);
+                          },
+                        ),
                         const SizedBox(width: 14),
                         ListenableBuilder(
                           listenable: Listenable.merge([s.settings, s.library]),
@@ -436,7 +442,7 @@ class _SearchField extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const Icon(Icons.search_rounded, size: 18, color: AppColors.textSoft),
+          Icon(Icons.search_rounded, size: 18, color: AppColors.textSoft),
           const SizedBox(width: 10),
           Expanded(
             child: TextField(
@@ -551,7 +557,9 @@ class _IconAction extends StatelessWidget {
             height: 40,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(8),
-              color: selected ? AppColors.accentSelected : (hover ? const Color(0x1AFFFFFF) : const Color(0x00FFFFFF)),
+              color: selected
+                  ? AppColors.accentSelected
+                  : (hover ? AppColors.ink.withAlpha(0x1A) : AppColors.ink.withAlpha(0x00)),
             ),
             child: Icon(icon, size: 22, color: selected ? AppColors.accent : AppColors.text),
           ),
@@ -559,6 +567,59 @@ class _IconAction extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Between the settings and the profile while a newer Bobine is available:
+/// opens Paramètres → À propos.
+class _UpdateButton extends StatelessWidget {
+  const _UpdateButton({required this.onOpen});
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final u = AppScope.of(context).updates;
+    return ListenableBuilder(
+      listenable: u,
+      builder: (context, _) {
+        final info = u.available;
+        final shown =
+            info != null &&
+            (u.stage == UpdateStage.available || u.stage == UpdateStage.downloading || u.stage == UpdateStage.ready);
+        if (!shown) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(left: 14),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              _IconAction(
+                icon: Icons.system_update_alt_rounded,
+                tooltip: u.stage == UpdateStage.ready
+                    ? 'Bobine ${info.version} est prête à installer'
+                    : 'Mise à jour disponible : Bobine ${info.version}',
+                selected: false,
+                onTap: onOpen,
+              ),
+              Positioned(
+                right: 7,
+                top: 7,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: AppColors.accent,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.bg, width: 1.5),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
 /// "REC" while recordings are in progress.
@@ -578,7 +639,7 @@ class _RecordingDot extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 16),
                 child: Row(
                   children: [
-                    const Icon(Icons.fiber_manual_record_rounded, size: 12, color: AppColors.live),
+                    Icon(Icons.fiber_manual_record_rounded, size: 12, color: AppColors.live),
                     const SizedBox(width: 4),
                     Text(n == 1 ? 'REC' : 'REC $n', style: labelStyle(color: AppColors.text, size: 12)),
                   ],
@@ -633,22 +694,19 @@ class _ImportBanner extends StatelessWidget {
         return Container(
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             color: AppColors.surface,
             border: Border(top: BorderSide(color: AppColors.border)),
           ),
           child: Row(
             children: [
-              const SizedBox(
+              SizedBox(
                 width: 14,
                 height: 14,
                 child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.accent),
               ),
               const SizedBox(width: 12),
-              Text(
-                'Mise à jour de « $name » : ${st.label}',
-                style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
-              ),
+              Text('Mise à jour de « $name » : ${st.label}', style: TextStyle(fontSize: 12.5, color: AppColors.muted)),
             ],
           ),
         );
