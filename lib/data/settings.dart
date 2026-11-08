@@ -3,12 +3,14 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import '../core/secrets.dart';
+import '../sync/sync_engine.dart' show SyncedSettings;
 import 'repository.dart';
 
 /// User preferences, persisted as JSON in the `kv` table.
-class AppSettings extends ChangeNotifier {
+class AppSettings extends ChangeNotifier implements SyncedSettings {
   AppSettings(this._repo) {
     _read(_repo.kvGetJson(_key) ?? const {});
+    _synced = syncedValues();
   }
 
   void _read(Map<String, Object?> json) {
@@ -118,7 +120,74 @@ class AppSettings extends ChangeNotifier {
   /// Persists without notifying (for high frequency values like volume).
   void saveQuietly() => _save();
 
-  void _save() => _repo.kvSet(_key, jsonEncode(_json()));
+  void _save() {
+    _repo.kvSet(_key, jsonEncode(_json()));
+    // Preferences that follow the account: note the ones that changed.
+    final now = syncedValues();
+    for (final e in now.entries) {
+      if (_synced[e.key] != e.value) _repo.noteSyncChange('settings', e.key);
+    }
+    _synced = now;
+  }
+
+  /// Preferences that follow the account to the user's other devices. The
+  /// others (cache, decoding, volume, folders…) depend on the computer.
+  static const syncedKeys = {
+    'seekStep',
+    'audioLang',
+    'subtitleLang',
+    'autoFullscreen',
+    'autoNextEpisode',
+    'epgRefreshHours',
+    'contentRefreshHours',
+    'epgDays',
+    'parentalPin',
+    'tmdbKey',
+    'reminderLeadMinutes',
+    'askProfileAtStart',
+    'heroAutoplay',
+    'cleanNames',
+    'groupQualities',
+    'subtitleScale',
+    'preferredQuality',
+  };
+
+  /// Last synchronised values seen (to tell which ones the user changed).
+  Map<String, Object?> _synced = const {};
+
+  @override
+  Map<String, Object?> syncedValues() {
+    final j = _json()
+      ..['parentalPin'] = parentalPin
+      ..['tmdbKey'] = tmdbKey;
+    return {for (final k in syncedKeys) k: j[k]};
+  }
+
+  @override
+  void applySynced(Map<String, Object?> values) {
+    _merge(values, syncedKeys);
+    _synced = syncedValues();
+    _repo.kvSet(_key, jsonEncode(_json()));
+    notifyListeners();
+  }
+
+  /// Reads [values] (secrets in clear) over the current preferences, for
+  /// the [allowed] keys; a malformed value leaves everything as it was.
+  void _merge(Map<String, Object?> values, Set<String> allowed) {
+    final current = _json()
+      ..['parentalPin'] = parentalPin
+      ..['tmdbKey'] = tmdbKey;
+    final merged = {
+      ...current,
+      for (final e in values.entries)
+        if (allowed.contains(e.key) && current.containsKey(e.key)) e.key: e.value,
+    };
+    try {
+      _read(merged);
+    } catch (_) {
+      _read(current);
+    }
+  }
 
   Map<String, Object?> _json() => {
     'activeSourceId': activeSourceId,
@@ -167,19 +236,8 @@ class AppSettings extends ChangeNotifier {
 
   /// Applies the preferences of a backup file over the current ones.
   void restoreBackup(Map<String, Object?> backup) {
-    final current = _json()
-      ..['parentalPin'] = parentalPin
-      ..['tmdbKey'] = tmdbKey;
-    final merged = {
-      ...current,
-      for (final e in backup.entries)
-        if (!_localOnly.contains(e.key) && current.containsKey(e.key)) e.key: e.value,
-    };
-    try {
-      _read(merged);
-    } catch (_) {
-      _read(current); // a malformed file must not break the settings
-    }
+    // A malformed file must not break the settings.
+    _merge(backup, _json().keys.toSet().difference(_localOnly));
     _save();
     notifyListeners();
   }

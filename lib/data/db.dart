@@ -4,7 +4,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../core/secrets.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 4;
+const int kSchemaVersion = 5;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -60,6 +60,7 @@ void _migrate(Database db) {
       db.execute('ALTER TABLE epg_programs ADD COLUMN category TEXT');
       db.execute('UPDATE sources SET epg_updated_at = NULL');
     }
+    if (version < 5) _migrateV5(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -216,6 +217,104 @@ void _migrateV3(Database db) {
       fetched_at INTEGER NOT NULL,
       PRIMARY KEY (source_id, kind, ext_id)
     ) WITHOUT ROWID''');
+}
+
+/// Uid of the profile every installation starts with ("Moi"), the same on
+/// every device so that it is one profile once the devices are synchronised.
+const String kDefaultProfileUid = 'default';
+
+/// Tables whose rows are synchronised with the account, and how a row is
+/// identified in `sync_log` (local ids: they are turned into uids when sent).
+const Map<String, List<String>> kSyncKeys = {
+  'favorites': ['profile_id', 'source_id', 'kind', 'ext_id'],
+  'progress': ['profile_id', 'source_id', 'kind', 'ext_id'],
+  'recent_channels': ['profile_id', 'source_id', 'ext_id'],
+  'category_prefs': ['source_id', 'kind', 'ext_id'],
+  'channel_prefs': ['source_id', 'ext_id'],
+  'reminders': ['profile_id', 'source_id', 'channel_ext', 'start'],
+};
+
+/// Current time in ms, in SQL.
+const String _sqlNowMs = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
+
+/// v5: synchronisation between devices.
+///
+/// Sources and profiles get a `uid` shared by all devices. Every change to
+/// the user's data is noted in `sync_log` by triggers, so nothing else has to
+/// think about it; changes coming from the account are applied while a row
+/// sits in `sync_mute`, so they are not sent back.
+void _migrateV5(Database db) {
+  db.execute('ALTER TABLE sources ADD COLUMN uid TEXT');
+  db.execute('ALTER TABLE profiles ADD COLUMN uid TEXT');
+  db.execute('UPDATE sources SET uid = lower(hex(randomblob(16)))');
+  db.execute(
+    "UPDATE profiles SET uid = CASE WHEN id = 1 THEN '$kDefaultProfileUid' ELSE lower(hex(randomblob(16))) END",
+  );
+  db.execute('CREATE UNIQUE INDEX idx_sources_uid ON sources(uid)');
+  db.execute('CREATE UNIQUE INDEX idx_profiles_uid ON profiles(uid)');
+
+  db.execute('''
+    CREATE TABLE sync_log (
+      tbl TEXT NOT NULL,
+      key TEXT NOT NULL,
+      changed_at INTEGER NOT NULL,
+      PRIMARY KEY (tbl, key)
+    ) WITHOUT ROWID''');
+  db.execute('CREATE TABLE sync_mute (muted INTEGER)');
+
+  const live = 'NOT EXISTS (SELECT 1 FROM sync_mute)';
+  // An upsert, not INSERT OR REPLACE: inside a trigger, SQLite applies the
+  // conflict policy of the statement that fired it (ABORT for an upsert,
+  // IGNORE for INSERT OR IGNORE) to "OR" clauses, not to upserts.
+  String log(String table, String key) =>
+      "INSERT INTO sync_log (tbl, key, changed_at) VALUES ('$table', $key, $_sqlNowMs) "
+      'ON CONFLICT (tbl, key) DO UPDATE SET changed_at = excluded.changed_at;';
+
+  // Sources and profiles: a uid is given to new rows, and logged under it.
+  const syncedColumns = {
+    'sources': 'name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, uid',
+    'profiles': 'name, color, kids, uid',
+  };
+  // Where the source / profile id sits in the log keys of the other tables.
+  final parentIndex = {
+    'sources': {for (final e in kSyncKeys.entries) e.key: e.value.indexOf('source_id')},
+    'profiles': {
+      for (final e in kSyncKeys.entries)
+        if (e.value.contains('profile_id')) e.key: e.value.indexOf('profile_id'),
+    },
+  };
+  for (final t in ['sources', 'profiles']) {
+    db.execute(
+      'CREATE TRIGGER ${t}_uid AFTER INSERT ON $t WHEN NEW.uid IS NULL BEGIN '
+      'UPDATE $t SET uid = lower(hex(randomblob(16))) WHERE id = NEW.id; END',
+    );
+    // A new row may reuse the id of a deleted one: forget what was noted for
+    // the rows that belonged to it.
+    final purge = [
+      for (final e in parentIndex[t]!.entries)
+        "DELETE FROM sync_log WHERE tbl = '${e.key}' AND json_extract(key, '\$[${e.value}]') = NEW.id;",
+    ].join(' ');
+    db.execute('CREATE TRIGGER ${t}_reused AFTER INSERT ON $t BEGIN $purge END');
+    db.execute(
+      'CREATE TRIGGER sync_${t}_ins AFTER INSERT ON $t WHEN NEW.uid IS NOT NULL AND $live '
+      'BEGIN ${log(t, 'NEW.uid')} END',
+    );
+    db.execute(
+      'CREATE TRIGGER sync_${t}_upd AFTER UPDATE OF ${syncedColumns[t]} ON $t WHEN NEW.uid IS NOT NULL AND $live '
+      'BEGIN ${log(t, 'NEW.uid')} END',
+    );
+    db.execute('CREATE TRIGGER sync_${t}_del AFTER DELETE ON $t WHEN $live BEGIN ${log(t, 'OLD.uid')} END');
+  }
+
+  for (final e in kSyncKeys.entries) {
+    final t = e.key;
+    String key(String row) => 'json_array(${e.value.map((c) => '$row.$c').join(', ')})';
+    db.execute('CREATE TRIGGER sync_${t}_ins AFTER INSERT ON $t WHEN $live BEGIN ${log(t, key('NEW'))} END');
+    db.execute(
+      'CREATE TRIGGER sync_${t}_upd AFTER UPDATE ON $t WHEN $live BEGIN ${log(t, key('OLD'))} ${log(t, key('NEW'))} END',
+    );
+    db.execute('CREATE TRIGGER sync_${t}_del AFTER DELETE ON $t WHEN $live BEGIN ${log(t, key('OLD'))} END');
+  }
 }
 
 /// The first schema, as created by Bobine 1.0 (to test migrations).

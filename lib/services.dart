@@ -22,6 +22,8 @@ import 'features/updater.dart';
 import 'player/pip.dart';
 import 'player/playback_tracker.dart';
 import 'player/player_service.dart';
+import 'sync/sync_engine.dart';
+import 'sync/sync_service.dart';
 import 'ui/widgets/net_image.dart';
 
 /// Bumped whenever library content, EPG or user data change so screens reload.
@@ -63,6 +65,7 @@ class AppServices {
     required this.tmdb,
     required this.backup,
     required this.updates,
+    required this.sync,
     required this.mpvCacheDir,
   });
 
@@ -94,6 +97,9 @@ class AppServices {
 
   /// New versions on GitHub (installer on Windows).
   final UpdateService updates;
+
+  /// Account and synchronisation with the user's other devices.
+  final SyncService sync;
 
   /// libmpv disk cache folder (diagnostic page).
   final String mpvCacheDir;
@@ -140,8 +146,10 @@ class AppServices {
     final pip = PipController(player);
     final reminders = ReminderService(repo, settings);
     final recordings = RecordingService(repo, settings, onChanged: library.userChanged);
+    late final AppServices services;
+    final sync = SyncService(repo, settings, onChanges: (c) => services._afterSync(c));
 
-    final services = AppServices._(
+    services = AppServices._(
       dbPath: dbPath,
       repo: repo,
       settings: settings,
@@ -156,8 +164,16 @@ class AppServices {
       tmdb: TmdbService(repo, settings),
       backup: BackupService(repo, settings),
       updates: UpdateService(repo, settings),
+      sync: sync,
       mpvCacheDir: mpvCache.path,
     );
+    // A change the user makes is sent a few seconds later.
+    void changed() {
+      if (repo.db.select('SELECT 1 FROM sync_log LIMIT 1').isNotEmpty) sync.syncSoon();
+    }
+
+    library.addListener(changed);
+    settings.addListener(changed);
     services._ensureActiveSource();
     services._applyProfile();
     // "Qui regarde ?" is asked once, at start.
@@ -289,6 +305,19 @@ class AppServices {
         unawaited(refresh(src).catchError((Object _) {}));
       }
     }
+  }
+
+  /// Shows what came from the account: other sources, profiles, favourites,
+  /// preferences. New sources are imported.
+  void _afterSync(SyncChanges c) {
+    if (c.sources || c.profiles || c.settings) {
+      _ensureActiveSource();
+      _applyProfile();
+    }
+    epg.clear();
+    library.contentChanged();
+    library.userChanged();
+    if (c.sources) refreshStaleSources();
   }
 
   /// Name of [c] as shown in the app (cleaned unless turned off).

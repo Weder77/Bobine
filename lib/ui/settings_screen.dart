@@ -6,6 +6,7 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../services.dart';
+import 'settings_account.dart';
 import 'settings_family.dart';
 import 'settings_maintenance.dart';
 import 'settings_recordings.dart';
@@ -67,6 +68,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<_Page> _pages(AppServices s) {
     final st = s.settings;
     return [
+      _Page(
+        'compte',
+        'Compte',
+        'Tes sources, profils, favoris et reprises sur tous tes ordinateurs.',
+        (context) => [const AccountSection()],
+      ),
       _Page(
         'profils',
         'Profils',
@@ -359,7 +366,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       listenable: Listenable.merge([s.settings, s.library, s.imports]),
       builder: (context, _) {
         final pages = _pages(s);
-        final page = pages.where((p) => p.id == _page).firstOrNull ?? pages[1];
+        final page = pages.where((p) => p.id == _page).firstOrNull ?? pages.firstWhere((p) => p.id == 'sources');
         final width = MediaQuery.sizeOf(context).width;
         // Design: 48 px margins at 1440; on wide screens the block moves
         // towards the centre.
