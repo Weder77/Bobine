@@ -3,7 +3,7 @@
 const String kAppVersion = '1.2.1';
 
 /// Repository the updates are published to.
-const String kReleaseRepo = 'Weder77/IpiTivi';
+const String kReleaseRepo = 'Weder77/Bobine';
 
 /// Compares two "1.2.3" versions (a leading "v" and a "+build" are ignored).
 int compareVersions(String a, String b) {
