@@ -45,7 +45,7 @@ class RecordingsSection extends StatelessWidget {
           ),
         ),
         if (list.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 22),
             child: Text(
               'Aucun enregistrement. Dans le guide ou en Live TV, choisis une émission puis « Enregistrer ».',
@@ -176,7 +176,7 @@ class RemindersSection extends StatelessWidget {
           ),
         ),
         if (list.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 22),
             child: Text(
               'Aucun rappel. Dans le guide, choisis une émission à venir puis « Me le rappeler ».',
@@ -186,11 +186,11 @@ class RemindersSection extends StatelessWidget {
         for (final r in list)
           ListTile(
             contentPadding: const EdgeInsets.symmetric(vertical: 6),
-            leading: const Icon(Icons.notifications_active_outlined, color: AppColors.accent),
+            leading: Icon(Icons.notifications_active_outlined, color: AppColors.accent),
             title: Text(r.title, maxLines: 1, overflow: TextOverflow.ellipsis),
             subtitle: Text(
               '${r.channelName} · ${formatDay(r.start)} ${formatClock(r.start)}',
-              style: const TextStyle(color: AppColors.muted),
+              style: TextStyle(color: AppColors.muted),
             ),
             trailing: IconButton(
               tooltip: 'Retirer',

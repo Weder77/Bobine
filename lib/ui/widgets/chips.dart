@@ -156,13 +156,13 @@ class _StripArrow extends StatelessWidget {
       gradient: LinearGradient(
         begin: left ? Alignment.centerLeft : Alignment.centerRight,
         end: left ? Alignment.centerRight : Alignment.centerLeft,
-        colors: const [AppColors.bg, AppColors.bg, Color(0x000D0C0B)],
+        colors: [AppColors.bg, AppColors.bg, AppColors.bg.withAlpha(0x00)],
         stops: const [0, 0.55, 1],
       ),
     ),
     child: Material(
       color: AppColors.surface,
-      shape: const CircleBorder(side: BorderSide(color: AppColors.borderStrong)),
+      shape: CircleBorder(side: BorderSide(color: AppColors.borderStrong)),
       child: InkWell(
         canRequestFocus: false,
         customBorder: const CircleBorder(),

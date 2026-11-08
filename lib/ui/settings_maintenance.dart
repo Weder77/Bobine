@@ -9,6 +9,7 @@ import '../features/updater.dart';
 import '../services.dart';
 import 'diagnostic_screen.dart';
 import 'settings_screen.dart';
+import 'widgets/markdown.dart';
 
 /// Réglages → Sauvegarde et diagnostic.
 class BackupSection extends StatelessWidget {
@@ -89,7 +90,7 @@ class BackupSection extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Restaurer la sauvegarde ?', style: displayStyle(22)),
-        content: const SizedBox(
+        content: SizedBox(
           width: 460,
           child: Text(
             'Les données du fichier sont ajoutées à celles de cet ordinateur (rien n’est effacé). '
@@ -136,7 +137,7 @@ class _ExportDialogState extends State<_ExportDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Sans les identifiants, le fichier retrouve tes sources si elles existent déjà sur l’autre PC '
             '(même serveur, même compte).',
             style: TextStyle(height: 1.5, color: AppColors.textSoft),
@@ -147,7 +148,7 @@ class _ExportDialogState extends State<_ExportDialog> {
             value: _credentials,
             onChanged: (v) => setState(() => _credentials = v ?? false),
             title: const Text('Inclure les sources avec leurs identifiants'),
-            subtitle: const Text(
+            subtitle: Text(
               'Ainsi que le code parental et la clé TMDB. Ils seront écrits en clair dans le fichier : '
               'garde-le en lieu sûr.',
               style: TextStyle(color: AppColors.muted),
@@ -223,9 +224,12 @@ class AboutSection extends StatelessWidget {
                     if (info != null && info.notes != null && info.notes!.isNotEmpty) ...[
                       const SizedBox(height: 10),
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 200),
+                        constraints: const BoxConstraints(maxWidth: 720, maxHeight: 280),
                         child: SingleChildScrollView(
-                          child: Text(info.notes!, style: const TextStyle(color: AppColors.muted, height: 1.5)),
+                          child: MarkdownText(
+                            info.notes!,
+                            style: TextStyle(fontSize: 14, color: AppColors.muted, height: 1.5),
+                          ),
                         ),
                       ),
                     ],

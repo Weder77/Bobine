@@ -196,7 +196,7 @@ class _EpgGridState extends State<EpgGrid> {
         builder: (context, box) {
           _gridW = box.maxWidth - EpgGrid.nameW;
           return Container(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.borderSoft)),
             ),
             child: Stack(
@@ -247,7 +247,7 @@ class _EpgGridState extends State<EpgGrid> {
   Widget _header() {
     return Container(
       height: EpgGrid.headerH,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.bg,
         border: Border(bottom: BorderSide(color: AppColors.borderSoft)),
       ),
@@ -282,7 +282,7 @@ class _EpgGridState extends State<EpgGrid> {
                           bottom: 0,
                           child: Container(
                             padding: const EdgeInsets.only(left: 8),
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               border: Border(left: BorderSide(color: AppColors.borderInput)),
                             ),
                             alignment: Alignment.centerLeft,
@@ -329,7 +329,7 @@ class _EpgGridState extends State<EpgGrid> {
     final t = widget.channels[index];
     final c = t.channel;
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.borderFaint)),
       ),
       child: Row(
@@ -500,7 +500,7 @@ class _BlockState extends State<_Block> {
         : live
         ? AppColors.surface3
         : past
-        ? const Color(0xFF121110)
+        ? AppColors.borderFaint
         : AppColors.surface;
     final border = on
         ? AppColors.accent
@@ -551,11 +551,11 @@ class _BlockState extends State<_Block> {
                       Row(
                         children: [
                           if (past && widget.replay) ...[
-                            const Icon(Icons.replay_rounded, size: 13, color: AppColors.textSoft),
+                            Icon(Icons.replay_rounded, size: 13, color: AppColors.textSoft),
                             const SizedBox(width: 5),
                           ],
                           if (widget.recording) ...[
-                            const Icon(Icons.fiber_manual_record_rounded, size: 10, color: AppColors.accent),
+                            Icon(Icons.fiber_manual_record_rounded, size: 10, color: AppColors.accent),
                             const SizedBox(width: 5),
                           ],
                           Expanded(
@@ -585,7 +585,7 @@ class _BlockState extends State<_Block> {
                   ),
                 ),
               if (widget.reminder)
-                const Positioned(
+                Positioned(
                   right: 8,
                   top: 8,
                   child: Icon(Icons.notifications_rounded, size: 13, color: AppColors.accent),
@@ -596,7 +596,7 @@ class _BlockState extends State<_Block> {
                   bottom: 0,
                   height: 3,
                   width: widget.width * p.progressAt(widget.now),
-                  child: const ColoredBox(color: AppColors.accent),
+                  child: ColoredBox(color: AppColors.accent),
                 ),
             ],
           ),

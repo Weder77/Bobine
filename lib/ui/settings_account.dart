@@ -54,9 +54,9 @@ class _Busy extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.text)),
+      SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.text)),
       const SizedBox(width: 10),
-      Text(label, style: const TextStyle(color: AppColors.faint, fontSize: 14)),
+      Text(label, style: TextStyle(color: AppColors.faint, fontSize: 14)),
     ],
   );
 }
@@ -194,7 +194,7 @@ class _SignInFormState extends State<_SignInForm> {
                     style: TextStyle(fontSize: 15, height: 1.5),
                   ),
                   const SizedBox(height: 10),
-                  Text(_what, style: const TextStyle(color: AppColors.faint, fontSize: 14, height: 1.45)),
+                  Text(_what, style: TextStyle(color: AppColors.faint, fontSize: 14, height: 1.45)),
                   if (_sync.message != null) _Message(_sync.message!),
                 ],
               ),
@@ -220,7 +220,7 @@ class _SignInFormState extends State<_SignInForm> {
                         ),
                       ),
                     if (_mode == _Mode.forgot || _mode == _Mode.reset)
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.only(top: 22),
                         child: Text(
                           'Un code est envoyé par e-mail pour choisir un nouveau mot de passe. Ce qui est '
@@ -248,7 +248,7 @@ class _SignInFormState extends State<_SignInForm> {
                     if (creating || _mode == _Mode.reset)
                       _field(_confirm, label: 'Confirme le mot de passe', obscure: true, onSubmitted: (_) => _submit()),
                     if (creating)
-                      const Padding(
+                      Padding(
                         padding: EdgeInsets.only(top: 14),
                         child: SizedBox(
                           width: 460,
@@ -446,7 +446,7 @@ class _AccountStatus extends StatelessWidget {
               title: 'Synchronisation',
               subtitle: '$state Automatique au démarrage, après chaque changement et toutes les quelques minutes.',
               child: syncing
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.text),

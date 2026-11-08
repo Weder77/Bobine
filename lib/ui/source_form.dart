@@ -326,7 +326,7 @@ class _SourceFormState extends State<SourceForm> {
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             tilePadding: EdgeInsets.zero,
-            title: const Text('Options avancées', style: TextStyle(fontSize: 14, color: AppColors.muted)),
+            title: Text('Options avancées', style: TextStyle(fontSize: 14, color: AppColors.muted)),
             childrenPadding: const EdgeInsets.only(bottom: 8),
             children: [
               TextField(
@@ -362,7 +362,7 @@ class _SourceFormState extends State<SourceForm> {
               const SizedBox(height: 14),
               Row(
                 children: [
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Décalage du guide TV\n'
                       'À ajuster si les programmes affichés sont en avance ou en retard.',
@@ -393,7 +393,7 @@ class _SourceFormState extends State<SourceForm> {
                 const SizedBox(height: 14),
                 Row(
                   children: [
-                    const Expanded(
+                    Expanded(
                       child: Text(
                         'Format des chaînes en direct',
                         style: TextStyle(color: AppColors.muted, fontSize: 13),

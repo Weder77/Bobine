@@ -139,6 +139,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
       _Page(
+        'apparence',
+        'Apparence',
+        "Le thème de l'application. Le lecteur vidéo reste toujours sombre.",
+        (context) => [
+          SettingsSection(
+            title: 'Apparence',
+            children: [
+              SettingsOption(
+                title: 'Thème',
+                subtitle: '« Système » suit le mode clair ou sombre choisi dans Windows, macOS ou Linux.',
+                child: SettingsSegments<String>(
+                  value: st.themeMode,
+                  options: const {'dark': 'Sombre', 'light': 'Clair', 'system': 'Système'},
+                  onChanged: (v) => st.update((x) => x.themeMode = v),
+                ),
+              ),
+              SettingsSwitch(
+                title: "Défilement de l'en-tête",
+                subtitle: "Les visuels en haut de l'accueil, des films et des séries changent tout seuls.",
+                value: st.heroAutoplay,
+                onChanged: (v) => st.update((x) => x.heroAutoplay = v),
+              ),
+            ],
+          ),
+        ],
+      ),
+      _Page(
         'lecture',
         'Lecture',
         'Ces réglages valent pour tous les profils.',
@@ -160,12 +187,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: "Lance l'épisode suivant à la fin du précédent.",
                 value: st.autoNextEpisode,
                 onChanged: (v) => st.update((x) => x.autoNextEpisode = v),
-              ),
-              SettingsSwitch(
-                title: "Défilement de l'en-tête",
-                subtitle: "Les visuels en haut de l'accueil, des films et des séries changent tout seuls.",
-                value: st.heroAutoplay,
-                onChanged: (v) => st.update((x) => x.heroAutoplay = v),
               ),
               SettingsSwitch(
                 title: 'Plein écran automatique',
@@ -377,7 +398,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     children: [
                       Text(page.title.toUpperCase(), style: posterStyle(56, height: 0.9)),
                       const SizedBox(height: 10),
-                      Text(page.lead, style: const TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
+                      Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
                       const SizedBox(height: 30),
                       ...page.build(context),
                     ],
@@ -501,7 +522,7 @@ class SettingsSection extends StatelessWidget {
               ),
             ),
           DecoratedBox(
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(top: BorderSide(color: AppColors.borderSoft)),
             ),
             child: Column(
@@ -509,7 +530,7 @@ class SettingsSection extends StatelessWidget {
               children: [
                 for (final c in children)
                   DecoratedBox(
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       border: Border(bottom: BorderSide(color: AppColors.borderSoft)),
                     ),
                     child: c,
@@ -554,7 +575,7 @@ class SettingsOption extends StatelessWidget {
                 const SizedBox(height: 7),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 440),
-                  child: Text(subtitle!, style: const TextStyle(color: AppColors.faint, fontSize: 14, height: 1.45)),
+                  child: Text(subtitle!, style: TextStyle(color: AppColors.faint, fontSize: 14, height: 1.45)),
                 ),
               ],
             ],
@@ -601,7 +622,9 @@ class SettingsSegments<T> extends StatelessWidget {
                   duration: const Duration(milliseconds: 150),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
                   decoration: BoxDecoration(
-                    color: e.key == value ? AppColors.action : (hover ? const Color(0x14FFFFFF) : Colors.transparent),
+                    color: e.key == value
+                        ? AppColors.action
+                        : (hover ? AppColors.ink.withAlpha(0x14) : Colors.transparent),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -649,7 +672,7 @@ class BobineSwitch extends StatelessWidget {
           child: Container(
             width: 20,
             height: 20,
-            decoration: const BoxDecoration(color: AppColors.text, shape: BoxShape.circle),
+            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
           ),
         ),
       ),
@@ -914,7 +937,7 @@ class _SourceTile extends StatelessWidget {
                 width: 44,
                 height: 44,
                 alignment: Alignment.center,
-                decoration: BoxDecoration(color: const Color(0xFF1F1C19), borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(color: AppColors.surface, borderRadius: BorderRadius.circular(10)),
                 child: const BobineReel(height: 24),
               ),
               const SizedBox(width: 14),
@@ -976,7 +999,7 @@ class _SourceTile extends StatelessWidget {
           const SizedBox(height: 20),
           Container(
             padding: const EdgeInsets.symmetric(vertical: 16),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               border: Border(
                 top: BorderSide(color: AppColors.border),
                 bottom: BorderSide(color: AppColors.border),
@@ -1047,7 +1070,7 @@ class _SourceTile extends StatelessWidget {
               IconButton(
                 tooltip: 'Supprimer la source',
                 onPressed: () => _delete(context, s),
-                icon: const Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.faint),
+                icon: Icon(Icons.delete_outline_rounded, size: 20, color: AppColors.faint),
               ),
               Expanded(
                 child: Text(
@@ -1109,7 +1132,7 @@ class _Shortcuts extends StatelessWidget {
                   child: Text(k, style: monoStyle(13, color: AppColors.accent, height: 1.4)),
                 ),
                 Expanded(
-                  child: Text(v, style: const TextStyle(fontSize: 14, height: 1.4, color: AppColors.textSoft)),
+                  child: Text(v, style: TextStyle(fontSize: 14, height: 1.4, color: AppColors.textSoft)),
                 ),
               ],
             ),

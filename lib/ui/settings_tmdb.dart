@@ -106,7 +106,7 @@ class _TmdbSectionState extends State<TmdbSection> {
                 child: const Text('Vider le cache'),
               ),
               if (_testing)
-                const SizedBox(
+                SizedBox(
                   width: 16,
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.text),

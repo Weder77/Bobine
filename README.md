@@ -55,16 +55,18 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
 
-**Synchronisation entre appareils**
+**Nouveautés 1.4 : synchronisation entre appareils**
 - **Compte Bobine** (*Paramètres → Compte*) : sources (identifiants compris), profils, favoris, reprises et épisodes vus, chaînes récentes, catégories et chaînes masquées ou verrouillées, rappels, code parental, clé TMDB et réglages de lecture suivent sur tous tes ordinateurs. Le cache, le décodage, le volume et les enregistrements restent propres à chaque ordinateur.
 - **Chiffré de bout en bout** : tout est chiffré sur l'appareil (AES-256-GCM) avec une clé tirée de ton mot de passe. Le serveur ne reçoit ni ton mot de passe ni tes identifiants IPTV, ni même la liste de ce que tu regardes : seulement des éléments opaques.
 - Synchro automatique au démarrage, quelques secondes après un changement et toutes les quelques minutes. En cas de conflit, la modification la plus récente gagne ; une suppression se propage aussi.
 - Au premier branchement d'un ordinateur qui a déjà des données, ses sources et profils sont **retrouvés** sur le compte (même serveur et identifiant, même nom de profil) au lieu d'être dupliqués.
 
-**Nouveautés 1.2 : Bobine**
+**Nouveautés 1.2 et 1.3 : Bobine**
 - Nouveau nom, nouveau logo et **nouvelle interface** : polices Big Shoulders et Geist, vermillon sur fond chaud, accueil façon salle de cinéma, Direct en mosaïque, guide redessiné, lecteur et paramètres refaits.
 - Recherche dans l'en-tête (chaînes, programmes, films, séries, recherches récentes et tendances).
 - Clic droit sur les vignettes : actions rapides (favori, lancer une saison, marquer comme vu, bande-annonce…).
+- **Thème clair ou sombre**, ou celui du système (*Paramètres → Apparence*), changé sans redémarrer ; le lecteur vidéo reste sombre.
+- Une icône dans l'en-tête, entre les paramètres et le profil, signale une **mise à jour disponible**.
 
 **Nouveautés 1.1**
 - **Mini-lecteur** (touche P) : la vidéo continue dans un coin pendant que tu navigues ; double-clic pour revenir en plein écran. Sous Windows, **fenêtre flottante** toujours au-dessus des autres applications (touche O).

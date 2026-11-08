@@ -12,7 +12,7 @@ class BobineLogo extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: height * 168 / 60,
     height: height,
-    child: CustomPaint(painter: _LogoPainter()),
+    child: CustomPaint(painter: _LogoPainter(AppColors.reelFlange, AppColors.accent)),
   );
 }
 
@@ -25,13 +25,15 @@ class BobineReel extends StatelessWidget {
   Widget build(BuildContext context) => SizedBox(
     width: height * 12 / 16,
     height: height,
-    child: CustomPaint(painter: _ReelPainter(stripes: height >= 28)),
+    child: CustomPaint(
+      painter: _ReelPainter(stripes: height >= 28, flange: AppColors.reelFlange),
+    ),
   );
 }
 
-void _paintReel(Canvas canvas, {required bool stripes}) {
-  final cream = Paint()..color = AppColors.cream;
-  final core = Paint()..color = AppColors.accent;
+void _paintReel(Canvas canvas, {required bool stripes, required Color flange}) {
+  final cream = Paint()..color = flange;
+  final core = Paint()..color = DarkColors.accent;
   canvas.drawRRect(RRect.fromLTRBR(1, 9, 25, 14, const Radius.circular(1.6)), cream);
   canvas.drawRRect(RRect.fromLTRBR(1, 43, 25, 48, const Radius.circular(1.6)), cream);
   canvas.drawRect(const Rect.fromLTWH(4.5, 14, 17, 29), core);
@@ -46,11 +48,15 @@ void _paintReel(Canvas canvas, {required bool stripes}) {
 }
 
 class _LogoPainter extends CustomPainter {
+  _LogoPainter(this.flange, this.accent);
+  final Color flange;
+  final Color accent;
+
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
     canvas.scale(size.height / 60);
-    _paintReel(canvas, stripes: true);
+    _paintReel(canvas, stripes: true, flange: flange);
     // The thread leaving the reel…
     final thread = Path()
       ..moveTo(21.5, 39.5)
@@ -66,7 +72,7 @@ class _LogoPainter extends CustomPainter {
     );
     // …becomes the word, filled and lightly stroked so it reads as one line.
     for (final style in [
-      const TextStyle(fontFamily: AppFonts.script, fontSize: 50, color: AppColors.accent),
+      TextStyle(fontFamily: AppFonts.script, fontSize: 50, color: AppColors.accent),
       TextStyle(
         fontFamily: AppFonts.script,
         fontSize: 50,
@@ -87,12 +93,13 @@ class _LogoPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_LogoPainter oldDelegate) => false;
+  bool shouldRepaint(_LogoPainter oldDelegate) => oldDelegate.flange != flange || oldDelegate.accent != accent;
 }
 
 class _ReelPainter extends CustomPainter {
-  _ReelPainter({required this.stripes});
+  _ReelPainter({required this.stripes, required this.flange});
   final bool stripes;
+  final Color flange;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -102,10 +109,10 @@ class _ReelPainter extends CustomPainter {
     canvas.translate((size.width - 24 * scale) / 2, (size.height - 39 * scale) / 2);
     canvas.scale(scale);
     canvas.translate(-1, -9);
-    _paintReel(canvas, stripes: stripes);
+    _paintReel(canvas, stripes: stripes, flange: flange);
     canvas.restore();
   }
 
   @override
-  bool shouldRepaint(_ReelPainter oldDelegate) => oldDelegate.stripes != stripes;
+  bool shouldRepaint(_ReelPainter oldDelegate) => oldDelegate.stripes != stripes || oldDelegate.flange != flange;
 }

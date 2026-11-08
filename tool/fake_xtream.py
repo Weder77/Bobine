@@ -210,9 +210,11 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/gh/releases/latest":
             # Fake GitHub release (BOBINE_UPDATE_URL=http://127.0.0.1:8765/gh/releases/latest).
             return self.send_bytes(json.dumps({
-                "tag_name": "v1.2.0", "html_url": "https://github.com/weder77/iptv/releases/tag/v1.2.0",
-                "body": "- Multi-écran\n- Corrections diverses",
-                "assets": [{"name": "Bobine-Setup-1.2.0.exe", "size": 4, "digest": "sha256:00",
+                "tag_name": "v9.9.0", "html_url": "https://github.com/Weder77/Bobine/releases/tag/v9.9.0",
+                "body": "## What's Changed\n* Multi-écran et **corrections** by @Weder77 in "
+                        "https://github.com/Weder77/Bobine/pull/6\n\n\n"
+                        "**Full Changelog**: https://github.com/Weder77/Bobine/compare/v1.2.1...v9.9.0",
+                "assets": [{"name": "Bobine-Setup-9.9.0.exe", "size": 4, "digest": "sha256:00",
                             "browser_download_url": f"{BASE}/gh/setup.exe"}]}).encode(), "application/json")
         if p.startswith("/tmdb/3/"):
             code, body = tmdb(p[len("/tmdb/3"):], q, self.headers)

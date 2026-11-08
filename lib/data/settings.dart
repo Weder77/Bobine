@@ -41,6 +41,7 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
     groupQualities = (json['groupQualities'] as bool?) ?? true;
     subtitleScale = (json['subtitleScale'] as num?)?.toDouble() ?? 1.0;
     preferredQuality = (json['preferredQuality'] as String?) ?? 'Auto';
+    themeMode = (json['themeMode'] as String?) ?? 'dark';
   }
 
   static const _key = 'settings';
@@ -106,6 +107,9 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
   /// Stream played for a channel with several qualities: 'Auto' (the best),
   /// 'FHD', 'HD' or 'SD'.
   late String preferredQuality;
+
+  /// 'dark', 'light' or 'system' (follows the operating system).
+  late String themeMode;
 
   void update(void Function(AppSettings s) change) {
     change(this);
@@ -213,6 +217,7 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
     'groupQualities': groupQualities,
     'subtitleScale': subtitleScale,
     'preferredQuality': preferredQuality,
+    'themeMode': themeMode,
   };
 
   /// Keys left out of backups: they only make sense on this computer.

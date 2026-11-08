@@ -180,7 +180,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       ],
       bottom: _episodes.isEmpty
           ? (_loading
-                ? const Padding(
+                ? Padding(
                     padding: EdgeInsets.all(40),
                     child: Center(child: CircularProgressIndicator(color: AppColors.text)),
                   )
@@ -211,7 +211,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
       children: [
         if (plot != null) DetailParagraph(plot),
         if (_error != null)
-          Text('Impossible de charger les épisodes : $_error', style: const TextStyle(color: AppColors.live)),
+          Text('Impossible de charger les épisodes : $_error', style: TextStyle(color: AppColors.live)),
       ],
     );
   }
@@ -237,7 +237,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         decoration: BoxDecoration(
           color: AppColors.surface,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: const Color(0x4DFFFFFF)),
+          border: Border.all(color: AppColors.ink.withAlpha(0x4D)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -286,7 +286,7 @@ class _EpisodeTile extends StatelessWidget {
               decoration: BoxDecoration(
                 color: lit ? AppColors.surface : Colors.transparent,
                 borderRadius: BorderRadius.circular(12),
-                border: lit ? null : const Border(top: BorderSide(color: AppColors.border)),
+                border: lit ? null : Border(top: BorderSide(color: AppColors.border)),
               ),
               child: Row(
                 children: [
@@ -295,7 +295,7 @@ class _EpisodeTile extends StatelessWidget {
                     child: Text(
                       '${e.episode}',
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w700,
                         color: AppColors.muted,
@@ -315,19 +315,19 @@ class _EpisodeTile extends StatelessWidget {
                           NetImage(
                             e.image ?? fallbackImage,
                             decodeWidth: 200,
-                            placeholder: const ColoredBox(color: AppColors.surface3),
+                            placeholder: ColoredBox(color: AppColors.surface3),
                           ),
                           if (lit)
                             Container(
-                              color: const Color(0x590A0A0C),
+                              color: AppColors.bg.withAlpha(0x59),
                               alignment: Alignment.center,
                               child: Container(
                                 width: 44,
                                 height: 44,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: const Color(0x800A0A0C),
-                                  border: Border.all(color: Colors.white, width: 2),
+                                  color: AppColors.bg.withAlpha(0x80),
+                                  border: Border.all(color: AppColors.ink, width: 2),
                                 ),
                                 child: const Icon(Icons.play_arrow_rounded, size: 26),
                               ),
@@ -337,7 +337,7 @@ class _EpisodeTile extends StatelessWidget {
                               left: 0,
                               right: 0,
                               bottom: 0,
-                              child: ProgressLine(p.finished ? 1 : p.fraction, track: const Color(0x33FFFFFF)),
+                              child: ProgressLine(p.finished ? 1 : p.fraction, track: AppColors.ink.withAlpha(0x33)),
                             ),
                         ],
                       ),
@@ -359,13 +359,13 @@ class _EpisodeTile extends StatelessWidget {
                               ),
                             ),
                             if (p != null && p.finished) ...[
-                              const Icon(Icons.check_circle_rounded, size: 18, color: AppColors.success),
+                              Icon(Icons.check_circle_rounded, size: 18, color: AppColors.success),
                               const SizedBox(width: 10),
                             ],
                             if (e.durationSec != null)
                               Text(
                                 formatRuntime(e.durationSec),
-                                style: const TextStyle(color: AppColors.muted, fontSize: 15),
+                                style: TextStyle(color: AppColors.muted, fontSize: 15),
                               ),
                           ],
                         ),
@@ -375,7 +375,7 @@ class _EpisodeTile extends StatelessWidget {
                             e.plot!,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(color: AppColors.textSoft, height: 1.5, fontSize: 14),
+                            style: TextStyle(color: AppColors.textSoft, height: 1.5, fontSize: 14),
                           ),
                         ],
                         if (p != null && !p.finished && p.position.inSeconds > 30)
@@ -383,7 +383,7 @@ class _EpisodeTile extends StatelessWidget {
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
                               'Arrêté à ${formatDuration(p.position)}',
-                              style: const TextStyle(color: AppColors.accent, fontSize: 13),
+                              style: TextStyle(color: AppColors.accent, fontSize: 13),
                             ),
                           ),
                       ],

@@ -251,7 +251,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
               value: _kids,
               onChanged: (v) => setState(() => _kids = v),
               title: const Text('Profil enfant'),
-              subtitle: const Text(
+              subtitle: Text(
                 'Les catégories protégées ne sont jamais affichées, et il faut le code parental pour quitter ce profil.',
                 style: TextStyle(color: AppColors.muted),
               ),
@@ -280,7 +280,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
               s.library.userChanged();
               if (context.mounted) Navigator.of(context).pop();
             },
-            child: const Text('Supprimer', style: TextStyle(color: AppColors.live)),
+            child: Text('Supprimer', style: TextStyle(color: AppColors.live)),
           ),
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
         FilledButton(onPressed: _save, child: const Text('Enregistrer')),
@@ -308,7 +308,7 @@ class ProfileMenuButton extends StatelessWidget {
       height: 40,
       child: Text(
         label,
-        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.textSoft),
+        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.textSoft),
       ),
     );
     Future<void> open(BuildContext anchor) async {
@@ -334,7 +334,7 @@ class ProfileMenuButton extends StatelessWidget {
                   Expanded(
                     child: Text(p.name, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
                   ),
-                  if (p.id == current.id) const Icon(Icons.check_rounded, size: 20, color: AppColors.accent),
+                  if (p.id == current.id) Icon(Icons.check_rounded, size: 20, color: AppColors.accent),
                 ],
               ),
             ),
@@ -358,7 +358,7 @@ class ProfileMenuButton extends StatelessWidget {
                         ),
                       ),
                     ),
-                    if (src.id == active?.id) const Icon(Icons.check_rounded, size: 18, color: AppColors.accent),
+                    if (src.id == active?.id) Icon(Icons.check_rounded, size: 18, color: AppColors.accent),
                   ],
                 ),
               ),

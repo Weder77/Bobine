@@ -8,18 +8,65 @@ import 'ui/onboarding_screen.dart';
 import 'ui/profiles.dart';
 import 'ui/shell.dart';
 
-class BobineApp extends StatelessWidget {
+class BobineApp extends StatefulWidget {
   const BobineApp({super.key, required this.services});
   final AppServices services;
 
   @override
+  State<BobineApp> createState() => _BobineAppState();
+}
+
+class _BobineAppState extends State<BobineApp> with WidgetsBindingObserver {
+  late ThemeData _theme;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.services.settings.addListener(_applyTheme);
+    _applyTheme(initial: true);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    widget.services.settings.removeListener(_applyTheme);
+    super.dispose();
+  }
+
+  @override
+  void didChangePlatformBrightness() => _applyTheme();
+
+  /// Light, dark or the system's choice ("Paramètres → Apparence").
+  void _applyTheme({bool initial = false}) {
+    final mode = widget.services.settings.themeMode;
+    final light =
+        mode == 'light' ||
+        (mode == 'system' && WidgetsBinding.instance.platformDispatcher.platformBrightness == Brightness.light);
+    final palette = light ? AppPalette.light : AppPalette.dark;
+    if (!initial && identical(palette, AppColors.current)) return;
+    AppColors.current = palette;
+    _theme = buildTheme(palette);
+    if (initial) return;
+    setState(() {});
+    // Colours are read while building: rebuild every widget (state kept).
+    void rebuild(Element e) {
+      e.markNeedsBuild();
+      e.visitChildren(rebuild);
+    }
+
+    WidgetsBinding.instance.rootElement?.visitChildren(rebuild);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AppScope(
-      services: services,
+      services: widget.services,
       child: MaterialApp(
         title: 'Bobine',
         debugShowCheckedModeBanner: false,
-        theme: buildTheme(),
+        theme: _theme,
+        themeAnimationDuration: Duration.zero,
         locale: const Locale('fr', 'FR'),
         supportedLocales: const [Locale('fr', 'FR'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
@@ -71,11 +118,11 @@ class StartupErrorApp extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 48, color: AppColors.live),
+              Icon(Icons.error_outline, size: 48, color: AppColors.live),
               const SizedBox(height: 16),
               const Text('Bobine n\'a pas pu démarrer', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              SelectableText(error, style: const TextStyle(color: AppColors.muted)),
+              SelectableText(error, style: TextStyle(color: AppColors.muted)),
             ],
           ),
         ),
