@@ -878,41 +878,29 @@ class _ConfirmState extends State<_Confirm> {
                       text: _sync.pendingEmail ?? '',
                       style: TextStyle(color: AppColors.text, fontWeight: FontWeight.w600),
                     ),
-                    const TextSpan(text: ". Saisis-le ci-dessous, ou clique sur le lien de l'e-mail puis reviens ici."),
+                    const TextSpan(text: '. Saisis-le ci-dessous.'),
                   ],
                 ),
               ),
               const SizedBox(height: 26),
               _CodeInput(controller: _code, onCompleted: _validate),
               const SizedBox(height: 26),
-              Wrap(
-                spacing: 12,
-                runSpacing: 10,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  FilledButton(
-                    onPressed: complete && !_busy ? _validate : null,
-                    style: FilledButton.styleFrom(
-                      minimumSize: const Size(104, 48),
-                      shape: buttonShape,
-                      // Faded until the code is complete.
-                      disabledBackgroundColor: AppColors.action.withValues(alpha: 0.45),
-                      disabledForegroundColor: AppColors.onAction,
-                    ),
-                    child: _busy
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onAction),
-                          )
-                        : const Text('Valider'),
-                  ),
-                  OutlinedButton(
-                    onPressed: _busy ? null : () => _do(_sync.confirmedByLink),
-                    style: _outlined(height: 48).copyWith(shape: WidgetStatePropertyAll(buttonShape)),
-                    child: const Text("J'ai cliqué sur le lien"),
-                  ),
-                ],
+              FilledButton(
+                onPressed: complete && !_busy ? _validate : null,
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(104, 48),
+                  shape: buttonShape,
+                  // Faded until the code is complete.
+                  disabledBackgroundColor: AppColors.action.withValues(alpha: 0.45),
+                  disabledForegroundColor: AppColors.onAction,
+                ),
+                child: _busy
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.onAction),
+                      )
+                    : const Text('Valider'),
               ),
               if (_error != null) ...[const SizedBox(height: 16), _Feedback(_error!)],
               if (_info != null) ...[const SizedBox(height: 16), _Feedback(_info!, ok: true)],
