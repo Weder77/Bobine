@@ -190,7 +190,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           ),
           SettingsSection(
-            title: 'Vidéo et mémoire tampon',
+            title: 'Vidéo',
             children: [
               SettingsOption(
                 title: 'Décodage vidéo',
@@ -210,30 +210,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onChanged: (v) => st.update((x) => x.deinterlace = v),
                 ),
               ),
+            ],
+          ),
+        ],
+      ),
+      _Page(
+        'cache',
+        'Cache',
+        'La vidéo gardée en réserve pour que les avances et les retours soient instantanés.',
+        (context) => [
+          SettingsSection(
+            title: 'Cache',
+            children: [
               SettingsOption(
-                title: 'Mémoire tampon',
+                title: "Cache de lecture (vers l'avant)",
                 subtitle:
-                    'Vidéo téléchargée à l\'avance. Plus elle est grande, moins il y a de coupures et plus les sauts '
-                    'en avant sont instantanés (1 Go ≈ 15 min de 1080p).',
+                    "Quantité de vidéo téléchargée à l'avance. Plus il est grand, moins il y a de coupures et plus "
+                    'les sauts en avant sont instantanés (1 Go ≈ 15 min de 1080p).',
                 child: SettingsSegments<int>(
                   value: st.cacheMb,
-                  options: const {256: 'Faible', 1024: 'Normale', 2048: 'Élevée'},
+                  options: const {256: '256 Mo', 512: '512 Mo', 1024: '1 Go', 2048: '2 Go'},
                   onChanged: (v) => st.update((x) => x.cacheMb = v),
                 ),
               ),
               SettingsOption(
-                title: 'Mémoire arrière',
-                subtitle: 'Garde ce qui a déjà été vu : reculer est instantané, même sur le direct.',
+                title: 'Cache arrière',
+                subtitle:
+                    'Garde ce qui a déjà été vu : reculer est instantané, et on peut revenir en arrière sur le direct.',
                 child: SettingsSegments<int>(
                   value: st.backCacheMb,
-                  options: const {128: 'Faible', 384: 'Normale', 768: 'Élevée'},
+                  options: const {128: '128 Mo', 384: '384 Mo', 768: '768 Mo'},
                   onChanged: (v) => st.update((x) => x.backCacheMb = v),
                 ),
               ),
               SettingsSwitch(
-                title: 'Mémoire sur disque',
-                subtitle:
-                    'Stocke la mémoire tampon sur le disque plutôt qu\'en RAM. Recommandé avec une grande mémoire.',
+                title: 'Cache sur disque',
+                subtitle: 'Stocke le cache sur le disque au lieu de la RAM. Recommandé, surtout avec un gros cache.',
                 value: st.diskCache,
                 onChanged: (v) => st.update((x) => x.diskCache = v),
               ),

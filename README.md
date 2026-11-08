@@ -204,7 +204,7 @@ Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), 
 - **Une chaîne ne se lance pas** : dans *Paramètres → Sources → Modifier → Options avancées*, essaie le format **HLS** au lieu de MPEG-TS, ou un **User-Agent** (VLC).
 - **Image corrompue ou verte** : passe le **décodage vidéo** sur « Logiciel » (*Paramètres → Lecture*).
 - **Effet de peigne** sur certaines chaînes : désentrelacement sur « Toujours ».
-- **Petit SSD ou peu de RAM** : choisis une **mémoire tampon** « Faible » (*Paramètres → Lecture*).
+- **Petit SSD ou peu de RAM** : réduis la taille du cache (*Paramètres → Cache*).
 - **Programmes du guide décalés d'une heure ou plus** : *Paramètres → Sources → Modifier → Options avancées → Décalage du guide TV*.
 - **Autre souci** : *Paramètres → Sauvegarde → Diagnostic* teste la connexion à chaque source et affiche le journal ; « Copier le rapport » donne un texte sans mot de passe à partager.
 
