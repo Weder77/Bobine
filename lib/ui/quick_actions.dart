@@ -7,6 +7,7 @@ import '../data/import/xtream_api.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'launch.dart';
+import 'multi_view_screen.dart';
 
 /// One line of a quick actions menu; null draws a separator.
 class QuickAction {
@@ -300,6 +301,7 @@ Future<void> showChannelActions(
       Icons.play_arrow_rounded,
       onPlay ?? () => Launch.channel(context, c, channels),
     ),
+    QuickAction('Ajouter au multi-écran', Icons.grid_view_rounded, () => MultiViewScreen.open(context, add: c)),
     _favorite(s, ContentKind.live, c.sourceId, c.extId),
     null,
     QuickAction(

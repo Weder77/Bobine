@@ -12,6 +12,7 @@ import '../core/window.dart';
 import '../data/models.dart';
 import '../features/tmdb.dart';
 import '../services.dart';
+import '../ui/multi_view_screen.dart';
 import '../ui/widgets/common.dart';
 import 'play_items.dart';
 import 'player_chrome.dart';
@@ -493,6 +494,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!repeat) _minimize();
     } else if (k == LogicalKeyboardKey.keyO && AppWindow.canFloat) {
       if (!repeat) _minimize(floating: true);
+    } else if (k == LogicalKeyboardKey.keyV && _isLive) {
+      if (!repeat) _openMultiView();
     } else if (k == LogicalKeyboardKey.keyI) {
       if (!repeat) setState(() => _showStats = !_showStats);
     } else if (k == LogicalKeyboardKey.keyA) {
@@ -899,6 +902,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 Expanded(
                   child: Align(alignment: Alignment.centerLeft, child: title),
                 ),
+                if (_isLive && ch != null) ...[
+                  PlayerIconButton(
+                    icon: Icons.grid_view_rounded,
+                    tooltip: 'Multi-écran : cette chaîne et d’autres en même temps (V)',
+                    onTap: _openMultiView,
+                  ),
+                  const SizedBox(width: 6),
+                ],
                 PlayerIconButton(
                   icon: Icons.monitor_heart_outlined,
                   tooltip: 'Statistiques du flux (I)',
@@ -924,6 +935,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       ),
     );
+  }
+
+  /// Replaces the player by the multi-view, with this channel in it.
+  void _openMultiView() {
+    final ch = _currentChannel;
+    if (ch == null || _s.activeSource?.id != ch.sourceId) return;
+    Navigator.of(context).pushReplacement(MultiViewScreen.route(add: ch));
   }
 
   /// How far behind the live edge playback is, or null when at the edge.

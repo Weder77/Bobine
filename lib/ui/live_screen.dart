@@ -8,6 +8,7 @@ import '../data/models.dart';
 import '../services.dart';
 import 'launch.dart';
 import 'live_catalog.dart';
+import 'multi_view_screen.dart';
 import 'quick_actions.dart';
 import 'shell.dart';
 import 'widgets/billboard.dart' show QualityBadge;
@@ -232,27 +233,8 @@ class _LiveScreenState extends State<LiveScreen> {
             ),
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: () => ShellNavigation.of(context)?.goTo(ShellTab.guide),
-          style:
-              OutlinedButton.styleFrom(
-                minimumSize: const Size(0, 44),
-                padding: const EdgeInsets.fromLTRB(14, 0, 18, 0),
-                backgroundColor: Colors.transparent,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 14, fontWeight: FontWeight.w600),
-              ).copyWith(
-                side: WidgetStateProperty.resolveWith(
-                  (s) => BorderSide(
-                    color: s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
-                        ? AppColors.text
-                        : AppColors.borderStrong,
-                  ),
-                ),
-              ),
-          icon: const Icon(Icons.table_chart_outlined, size: 18),
-          label: const Text('Guide TV'),
-        ),
+        _toolButton(Icons.grid_view_rounded, 'Multi-écran', () => MultiViewScreen.open(context)),
+        _toolButton(Icons.table_chart_outlined, 'Guide TV', () => ShellNavigation.of(context)?.goTo(ShellTab.guide)),
       ],
     );
     return LayoutBuilder(
@@ -267,6 +249,28 @@ class _LiveScreenState extends State<LiveScreen> {
             ),
     );
   }
+
+  Widget _toolButton(IconData icon, String label, VoidCallback onTap) => OutlinedButton.icon(
+    onPressed: onTap,
+    style:
+        OutlinedButton.styleFrom(
+          minimumSize: const Size(0, 44),
+          padding: const EdgeInsets.fromLTRB(14, 0, 18, 0),
+          backgroundColor: Colors.transparent,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+          textStyle: const TextStyle(fontFamily: AppFonts.body, fontSize: 14, fontWeight: FontWeight.w600),
+        ).copyWith(
+          side: WidgetStateProperty.resolveWith(
+            (s) => BorderSide(
+              color: s.contains(WidgetState.hovered) || s.contains(WidgetState.focused)
+                  ? AppColors.text
+                  : AppColors.borderStrong,
+            ),
+          ),
+        ),
+    icon: Icon(icon, size: 18),
+    label: Text(label),
+  );
 
   Widget _empty(LiveCatalog cat) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 72, horizontal: 48),
