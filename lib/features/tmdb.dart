@@ -4,6 +4,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 
+import '../core/open_url.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
@@ -306,11 +307,22 @@ class TmdbException implements Exception {
   String toString() => message;
 }
 
-/// Web address of a trailer given as a full address or a bare YouTube id
-/// (Xtream panels send the id only).
+/// Web address of a trailer given as a bare YouTube id (what Xtream panels
+/// send) or as a full YouTube address. Anything else is refused: the value
+/// comes from the provider and ends up opened in the browser.
 String? trailerUrl(String? raw) {
   final t = raw?.trim() ?? '';
   if (t.isEmpty) return null;
-  if (t.startsWith('http://') || t.startsWith('https://')) return t;
-  return RegExp(r'^[A-Za-z0-9_-]{6,20}$').hasMatch(t) ? 'https://www.youtube.com/watch?v=$t' : null;
+  if (RegExp(r'^[A-Za-z0-9_-]{6,20}$').hasMatch(t)) return 'https://www.youtube.com/watch?v=$t';
+  final u = webUri(t);
+  if (u == null) return null;
+  const hosts = {
+    'youtube.com',
+    'www.youtube.com',
+    'm.youtube.com',
+    'music.youtube.com',
+    'youtu.be',
+    'www.youtube-nocookie.com',
+  };
+  return hosts.contains(u.host) ? u.toString() : null;
 }
