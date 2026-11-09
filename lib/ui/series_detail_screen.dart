@@ -231,21 +231,25 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
             child: Text(label(s), style: TextStyle(fontWeight: s == _season ? FontWeight.w700 : FontWeight.w500)),
           ),
       ],
-      child: Container(
-        height: 46,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.ink.withAlpha(0x4D)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_season == null ? 'Saison' : label(_season!), style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(width: 8),
-            const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
-          ],
+      // The menu button gives no way to set its cursor: the hand comes from here.
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: Container(
+          height: 46,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.ink.withAlpha(0x4D)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_season == null ? 'Saison' : label(_season!), style: const TextStyle(fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              const Icon(Icons.keyboard_arrow_down_rounded, size: 20),
+            ],
+          ),
         ),
       ),
     );

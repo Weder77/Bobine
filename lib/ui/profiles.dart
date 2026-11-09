@@ -132,6 +132,7 @@ class _ProfileChoiceState extends State<_ProfileChoice> {
   @override
   Widget build(BuildContext context) {
     return InkWell(
+      mouseCursor: SystemMouseCursors.click,
       borderRadius: BorderRadius.circular(28),
       onTap: widget.onTap,
       onHover: (v) => setState(() => _focus = v),
@@ -231,6 +232,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
               children: [
                 for (final c in profileColors)
                   InkWell(
+                    mouseCursor: SystemMouseCursors.click,
                     borderRadius: BorderRadius.circular(999),
                     onTap: () => setState(() => _color = c),
                     child: Container(

@@ -557,6 +557,8 @@ class _SlotViewState extends State<_SlotView> {
     final now = widget.s.epg.now(slot.channel);
     final name = widget.s.channelName(slot.channel);
     return MouseRegion(
+      // The hand while the cursor shows (it hides with the controls).
+      cursor: widget.chrome ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(

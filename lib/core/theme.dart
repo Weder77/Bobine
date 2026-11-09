@@ -372,6 +372,9 @@ ThemeData buildTheme([AppPalette p = AppPalette.dark]) {
     focusColor: p.ink.withValues(alpha: 0.16),
   );
   final buttonShape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(8));
+  // The hand over everything that can be clicked: on desktop Flutter keeps
+  // the arrow on buttons by default (the hand is for the web only).
+  const hand = WidgetStateMouseCursor.clickable;
   // Keyboard / remote / gamepad focus: an amber ring, visible on white and
   // dark buttons alike (mouse clicks never show it).
   WidgetStateProperty<BorderSide?> focusSide([BorderSide? rest]) => WidgetStateProperty.resolveWith(
@@ -416,7 +419,7 @@ ThemeData buildTheme([AppPalette p = AppPalette.dark]) {
         padding: const EdgeInsets.symmetric(horizontal: 24),
         shape: buttonShape,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 15),
-      ).copyWith(side: focusSide()),
+      ).copyWith(side: focusSide(), mouseCursor: hand),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style:
@@ -428,6 +431,7 @@ ThemeData buildTheme([AppPalette p = AppPalette.dark]) {
             shape: buttonShape,
             textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 15),
           ).copyWith(
+            mouseCursor: hand,
             side: focusSide(BorderSide.none),
             backgroundColor: WidgetStateProperty.resolveWith(
               (s) => s.contains(WidgetState.hovered) ? p.frostedHover : p.frosted,
@@ -438,17 +442,19 @@ ThemeData buildTheme([AppPalette p = AppPalette.dark]) {
       style: TextButton.styleFrom(
         foregroundColor: p.text,
         textStyle: const TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 15),
-      ).copyWith(side: focusSide()),
+      ).copyWith(side: focusSide(), mouseCursor: hand),
     ),
     iconButtonTheme: IconButtonThemeData(
       style: IconButton.styleFrom(
         foregroundColor: p.textSoft,
         minimumSize: const Size(44, 44),
         shape: const CircleBorder(),
-      ).copyWith(side: focusSide()),
+      ).copyWith(side: focusSide(), mouseCursor: hand),
     ),
+    checkboxTheme: const CheckboxThemeData(mouseCursor: hand),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
+        mouseCursor: hand,
         backgroundColor: WidgetStateProperty.resolveWith(
           (s) => s.contains(WidgetState.selected) ? p.action : Colors.transparent,
         ),
@@ -485,6 +491,7 @@ ThemeData buildTheme([AppPalette p = AppPalette.dark]) {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
     ),
     popupMenuTheme: PopupMenuThemeData(
+      mouseCursor: hand,
       color: p.surface2,
       surfaceTintColor: Colors.transparent,
       elevation: 24,
