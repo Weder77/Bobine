@@ -198,6 +198,23 @@ void main() {
     final gone = MultiViewController(repo: repo, source: source, engine: FakeEngine.new)..restore();
     expect(gone.channels.map((x) => x.extId), ['1', '3', '5']);
     gone.dispose();
+
+    // So is a channel of a locked category while the parental code is
+    // required (kids profile, or the app restarted): it does not come back
+    // by itself.
+    repo.db.execute(
+      "INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (9, ?, 'live', 'x', 'Adultes', 0)",
+      [source.id],
+    );
+    repo.db.execute("UPDATE channels SET category_id = 9 WHERE ext_id = '3'");
+    repo.setCategoryLocked(source.id, ContentKind.live, 'x', true);
+    final unlocked = MultiViewController(repo: repo, source: source, engine: FakeEngine.new)..restore();
+    expect(unlocked.channels.map((x) => x.extId), ['1', '3', '5']);
+    unlocked.dispose();
+    repo.hideLocked = true;
+    final locked = MultiViewController(repo: repo, source: source, engine: FakeEngine.new)..restore();
+    expect(locked.channels.map((x) => x.extId), ['1', '5']);
+    locked.dispose();
   });
 
   test('more streams than the subscription allows are flagged', () {

@@ -95,7 +95,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       final res = await openGet(client, uri, userAgent: src.userAgent, timeout: const Duration(seconds: 15));
       final firstByte = sw.elapsedMilliseconds;
       var bytes = 0;
-      await for (final chunk in res) {
+      await for (final chunk in guardBody(res, stall: const Duration(seconds: 15))) {
         bytes += chunk.length;
         if (bytes > 256 * 1024) break; // enough to measure
       }

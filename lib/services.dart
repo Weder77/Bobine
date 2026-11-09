@@ -261,6 +261,12 @@ class AppServices {
 
   void switchProfile(int id) {
     if (repo.profile(id) == null) return;
+    // What plays belongs to the profile being left: its position is saved
+    // there, then playback stops (here and on the TV) so that nothing goes
+    // on, or is remembered, in the other profile.
+    tracker.flushAndForget();
+    unawaited(player.stop());
+    unawaited(pip.close());
     settings.update((s) => s.activeProfileId = id);
     parentalUnlocked = false;
     _applyProfile();
@@ -281,7 +287,16 @@ class AppServices {
   void lockParental() {
     parentalUnlocked = false;
     _applyVisibility();
+    _stopLockedPlayback();
     library.contentChanged();
+  }
+
+  /// Stops what plays (here or on the TV) when it is locked again.
+  void _stopLockedPlayback() {
+    final item = cast.item.value ?? player.current.value;
+    if (item != null && repo.isLocked(item.sourceId, item.kind, item.extId, seriesExt: item.seriesExt)) {
+      unawaited(pip.close());
+    }
   }
 
   /// Sets (or with null removes) the parental code.

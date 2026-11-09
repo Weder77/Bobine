@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/net.dart';
+import '../core/text.dart';
 import '../core/theme.dart';
 import '../data/import/xtream_api.dart';
 import '../data/models.dart';
@@ -151,12 +152,18 @@ class _SourceFormState extends State<SourceForm> {
           final client = createHttpClient();
           try {
             final res = await openGet(client, Uri.parse(loc), userAgent: _ua.text.trim());
-            final head = await gunzipIfNeeded(res)
-                .transform(const Utf8Decoder(allowMalformed: true))
-                .join()
-                .timeout(const Duration(seconds: 60));
-            final n = '#EXTINF'.allMatches(head).length;
-            if (n == 0 && !head.trimLeft().startsWith('#EXTM3U')) {
+            // Counted as it arrives: a playlist can weigh hundreds of MB.
+            final text = guardBody(
+              gunzipIfNeeded(res),
+              maxBytes: 1 << 30,
+            ).transform(const Utf8Decoder(allowMalformed: true));
+            var n = 0;
+            String? first;
+            await for (final line in limitLineLength(text).transform(const LineSplitter())) {
+              if (first == null && line.trim().isNotEmpty) first = line.trimLeft();
+              n += '#EXTINF'.allMatches(line).length;
+            }
+            if (n == 0 && !(first ?? '').startsWith('#EXTM3U')) {
               throw NetException("Le fichier reçu n'est pas une playlist M3U.");
             }
             setState(() => _info = '✓ Playlist valide : ${formatCount(n)} entrées.');
@@ -166,7 +173,7 @@ class _SourceFormState extends State<SourceForm> {
         }
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = redactCredentials(e.toString()));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

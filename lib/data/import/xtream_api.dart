@@ -147,6 +147,24 @@ class XtreamApi {
     return asMapList(json);
   }
 
+  /// Seconds between the panel's clock and UTC, from the account answer
+  /// (`"time_now": "2026-11-07 21:45:10"`, `"timestamp_now": 1794084310`).
+  /// Replays are asked for at the panel's time. Null when it does not say.
+  static int? serverUtcOffset(Object? serverInfo) {
+    if (serverInfo is! Map) return null;
+    final stamp = asInt(serverInfo['timestamp_now']);
+    final text = asString(serverInfo['time_now']);
+    if (stamp == null || stamp <= 0 || text == null) return null;
+    final m = RegExp(r'^(\d{4})-(\d\d)-(\d\d)[ T](\d\d):(\d\d):(\d\d)').firstMatch(text.trim());
+    if (m == null) return null;
+    int n(int i) => int.parse(m[i]!);
+    final wall = DateTime.utc(n(1), n(2), n(3), n(4), n(5), n(6)).millisecondsSinceEpoch ~/ 1000;
+    // To the quarter of an hour: the two values are not always read at the
+    // same instant, and no zone is finer than that.
+    final offset = ((wall - stamp) / 900).round() * 900;
+    return offset.abs() <= 14 * 3600 ? offset : null;
+  }
+
   /// Checks credentials and returns account information.
   Future<Map<String, Object?>> authenticate() async {
     final json = await _get(null);
@@ -165,6 +183,7 @@ class XtreamApi {
     return {
       'status': status,
       'exp_date': exp,
+      'utc_offset': serverUtcOffset(json['server_info']),
       'max_connections': asInt(user['max_connections']),
       'active_cons': asInt(user['active_cons']),
       'is_trial': asInt(user['is_trial']) == 1,

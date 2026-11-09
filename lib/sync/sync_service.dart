@@ -5,6 +5,7 @@ import 'package:sqlite3/sqlite3.dart' show SqliteException;
 
 import '../core/app_log.dart';
 import '../core/secrets.dart';
+import '../core/text.dart';
 import '../data/repository.dart';
 import 'supabase_api.dart';
 import 'sync_crypto.dart';
@@ -78,6 +79,11 @@ class SyncService extends ChangeNotifier {
   Future<void>? _running;
   bool _again = false;
 
+  /// Changes each time the account of this device does (signed in, signed
+  /// out): a synchronisation started before belongs to the previous one and
+  /// must not write anything any more.
+  int _account = 0;
+
   bool get signedIn => _session != null && _keys != null;
   String? get email => _session?.email ?? pendingEmail;
 
@@ -121,11 +127,30 @@ class SyncService extends ChangeNotifier {
   Future<void> _run() async {
     status = SyncStatus.syncing;
     notifyListeners();
-    final remote = SupabaseRemote(_api, _session!, onSession: _keepSession);
-    final engine = SyncEngine(repo: _repo, codec: SyncCodec(_keys!), remote: remote, settings: _settings);
+    // Signing out (or into another account) while this run waits on the
+    // network makes it someone else's: it stops there. It used to finish,
+    // and wrote back "last change received" after the sign-out had erased
+    // it, so that the next account was never read from its beginning.
+    final account = _account;
+    bool stale() => account != _account;
+    final remote = SupabaseRemote(
+      _api,
+      _session!,
+      onSession: (s) {
+        if (!stale()) _keepSession(s);
+      },
+    );
+    final engine = SyncEngine(
+      repo: _repo,
+      codec: SyncCodec(_keys!),
+      remote: remote,
+      settings: _settings,
+      cancelled: stale,
+    );
     try {
       _lastFetch = DateTime.now();
       final changes = await engine.run();
+      if (stale()) return;
       lastSync = DateTime.now();
       _repo.kvSet(_lastKey, lastSync!.toIso8601String());
       message = null;
@@ -133,29 +158,37 @@ class SyncService extends ChangeNotifier {
       if (changes.received + changes.sent > 0) {
         AppLog.add('Synchro : ${changes.received} reçu(s), ${changes.sent} envoyé(s)');
       }
+      if (changes.skipped > 0) AppLog.add('Synchro : ${changes.skipped} élément(s) illisible(s) laissé(s) de côté');
       if (changes.any) onChanges(changes);
-      if (!signedIn) status = SyncStatus.signedOut; // signed out meanwhile
-    } on SyncKeyException {
+    } catch (e) {
+      // The failure of the previous account says nothing about this one.
+      if (stale() || e is SyncCancelled) return;
+      _failed(e);
+    }
+    notifyListeners();
+  }
+
+  void _failed(Object e) {
+    if (e is SyncKeyException) {
       _forget(message: 'Le mot de passe du compte a changé sur un autre appareil : reconnecte-toi.');
-    } on SyncApiException catch (e) {
+    } else if (e is SyncApiException) {
       if (e.sessionLost) {
         _forget(message: e.message);
       } else {
         message = e.message;
         status = SyncStatus.error;
       }
-    } on SqliteException catch (e) {
+    } else if (e is SqliteException) {
       // Busy with an import: next time.
       final busy = e.extendedResultCode & 0xff == 5 || e.extendedResultCode & 0xff == 6;
-      message = busy ? null : 'Erreur de la base locale : $e';
+      message = busy ? null : 'Erreur de la base locale : ${e.message} (${e.extendedResultCode})';
       status = busy ? SyncStatus.idle : SyncStatus.error;
       if (!busy) AppLog.add('Synchro : $e');
-    } catch (e) {
-      message = 'Synchro impossible : $e';
+    } else {
+      message = 'Synchro impossible : ${redactCredentials('$e')}';
       status = SyncStatus.error;
       AppLog.add('Synchro : $e');
     }
-    notifyListeners();
   }
 
   void _keepSession(SupabaseSession s) {
@@ -165,6 +198,7 @@ class SyncService extends ChangeNotifier {
   }
 
   void _begin(SupabaseSession s, SyncKeys keys) {
+    _account++;
     _keys = keys;
     _keepSession(s);
     _repo.kvSet(_keysKey, Secrets.protect(keys.toStorage()));
@@ -178,6 +212,7 @@ class SyncService extends ChangeNotifier {
 
   /// Signs out this device; its data stays here.
   void _forget({String? message}) {
+    _account++;
     _soon?.cancel();
     _session = null;
     _keys = null;
@@ -251,12 +286,15 @@ class SyncService extends ChangeNotifier {
     _begin(session, keys);
   }
 
+  /// Signs this device out. Here first, at once and whatever happens next:
+  /// nothing of the session is kept. Then on the server, when it can be
+  /// reached (offline, the session only ends there when it expires).
   Future<void> signOut() async {
     final s = _session;
     _forget();
     if (s != null) {
       try {
-        await _api.signOut(s);
+        await SupabaseRemote(_api, s, onSession: (_) {}).signOut();
       } catch (_) {
         // Signed out here anyway.
       }

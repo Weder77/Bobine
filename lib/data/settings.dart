@@ -24,6 +24,8 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
     audioLang = (json['audioLang'] as String?) ?? 'fr,fre,fra';
     subtitleLang = (json['subtitleLang'] as String?) ?? '';
     autoFullscreen = (json['autoFullscreen'] as bool?) ?? false;
+    final preview = json['seekPreview'];
+    seekPreview = preview == 'always' || preview == 'never' ? preview as String : 'auto';
     autoNextEpisode = (json['autoNextEpisode'] as bool?) ?? true;
     epgRefreshHours = (json['epgRefreshHours'] as int?) ?? 12;
     contentRefreshHours = (json['contentRefreshHours'] as int?) ?? 24;
@@ -65,6 +67,10 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
   late String audioLang;
   late String subtitleLang;
   late bool autoFullscreen;
+
+  /// Picture of the instant hovered on the seek bar: 'auto' (unless the
+  /// subscription allows a single connection) | 'always' | 'never'.
+  late String seekPreview;
   late bool autoNextEpisode;
   late int epgRefreshHours;
   late int contentRefreshHours;
@@ -200,6 +206,7 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
     'audioLang': audioLang,
     'subtitleLang': subtitleLang,
     'autoFullscreen': autoFullscreen,
+    'seekPreview': seekPreview,
     'autoNextEpisode': autoNextEpisode,
     'epgRefreshHours': epgRefreshHours,
     'contentRefreshHours': contentRefreshHours,

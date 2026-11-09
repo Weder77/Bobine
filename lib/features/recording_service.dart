@@ -35,6 +35,10 @@ class RecordingService {
   Timer? _timer;
   final Map<int, Player> _active = {};
 
+  /// Recordings being started (their status is still "scheduled" until the
+  /// player is ready): a second pass must not start them again.
+  final Set<int> _starting = {};
+
   /// Number of recordings in progress (shown in the top bar).
   final ValueNotifier<int> activeCount = ValueNotifier(0);
 
@@ -116,8 +120,13 @@ class RecordingService {
         if (!now.isBefore(r.stop)) {
           _repo.updateRecording(r.id, status: RecordingStatus.failed, error: "Manqué : l'app était fermée");
           changed = true;
-        } else if (!now.isBefore(r.start)) {
-          await _start(r);
+        } else if (!now.isBefore(r.start) && !_starting.contains(r.id) && !_active.containsKey(r.id)) {
+          _starting.add(r.id);
+          try {
+            await _start(r);
+          } finally {
+            _starting.remove(r.id);
+          }
           changed = true;
         }
       } else if (r.status == RecordingStatus.recording && _active.containsKey(r.id) && !now.isBefore(r.stop)) {
@@ -141,7 +150,7 @@ class RecordingService {
       final stamp =
           '${r.start.year}-${_two(r.start.month)}-${_two(r.start.day)} ${_two(r.start.hour)}h${_two(r.start.minute)}';
       final name = safeFileName('${r.channelName} - ${r.title} - $stamp');
-      final path = p.join(dir.path, '$name.ts');
+      final path = freeFilePath(dir.path, name, 'ts');
       final player = Player(
         configuration: const PlayerConfiguration(
           title: 'Bobine (enregistrement)',
@@ -212,4 +221,16 @@ class RecordingService {
       await _finish(id);
     }
   }
+}
+
+/// "[dir]/[name].[extension]", or "[name] (2)", "(3)"… when a file of that
+/// name is already there: two recordings of the same programme started in
+/// the same minute must not write over each other.
+String freeFilePath(String dir, String name, String extension, {bool Function(String path)? exists}) {
+  final taken = exists ?? (String path) => File(path).existsSync();
+  var path = p.join(dir, '$name.$extension');
+  for (var n = 2; taken(path) && n < 1000; n++) {
+    path = p.join(dir, '$name ($n).$extension');
+  }
+  return path;
 }

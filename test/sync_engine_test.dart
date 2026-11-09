@@ -26,6 +26,9 @@ class MemoryRemote implements SyncRemote {
   @override
   Future<List<RemoteItem>> push(List<RemoteItem> sent) async {
     duringPush?.call();
+    // The column check of the real table: one payload too large and the
+    // whole call fails.
+    if (sent.any((i) => i.payload.length > 16384)) throw StateError('payload too large');
     final newer = <RemoteItem>[];
     for (final i in sent) {
       final current = items[i.id];
@@ -83,6 +86,28 @@ class Device {
 }
 
 Future<void> _tick() => Future<void>.delayed(const Duration(milliseconds: 3));
+
+/// The id, on the account, of the first item of [table].
+Future<String> _itemOf(MemoryRemote remote, String table) async {
+  final codec = SyncCodec(_keys);
+  for (final i in remote.items.values.toList()..sort((a, b) => a.rev.compareTo(b.rev))) {
+    if ((await codec.open(i.id, i.payload))['t'] == table) return i.id;
+  }
+  throw StateError('no $table on the account');
+}
+
+/// Alters the stored content of an item, as a disk or a bug would.
+void _damage(MemoryRemote remote, String id) {
+  final i = remote.items[id]!;
+  final bytes = base64Decode(i.payload)..[20] ^= 1;
+  remote.items[id] = RemoteItem(
+    id: i.id,
+    modifiedAt: i.modifiedAt,
+    deleted: i.deleted,
+    payload: base64Encode(bytes),
+    rev: i.rev,
+  );
+}
 
 void main() {
   test('keys: PBKDF2 test vectors, encryption round trip, tampering and wrong keys', () async {
@@ -277,6 +302,107 @@ void main() {
     expect(a.profile('Léa').name, b.profile('Léa').name);
   });
 
+  test('first sync keeps a profile the device used, even deleted on the account', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote);
+    final srcA = a.xtream();
+    a.repo.toggleFavorite(srcA, ContentKind.movie, 'a-old'); // in "Moi", sent to the account
+    final alice = a.repo.createProfile(name: 'Alice', color: 1);
+    await a.sync();
+    // "Moi" (same uid on every device) is deleted on A.
+    a.repo.profileId = alice;
+    a.repo.deleteProfile(1);
+    await _tick();
+    await a.sync();
+    expect(a.repo.profiles().map((p) => p.name), ['Alice']);
+
+    // A new, empty device follows the account: no "Moi" there either, even
+    // though favourites of the deleted profile are still on the account.
+    final fresh = Device(remote);
+    await fresh.sync();
+    expect(fresh.repo.profiles().map((p) => p.name), ['Alice']);
+    expect(fresh.repo.db.select('SELECT * FROM favorites'), isEmpty);
+
+    // A device used for months without an account: its "Moi" has favourites
+    // and progress that exist nowhere else.
+    final b = Device(remote);
+    final srcB = b.xtream();
+    b.repo.toggleFavorite(srcB, ContentKind.movie, 'b-fav');
+    b.watch(srcB, 'film', const Duration(minutes: 30));
+    b.repo.db.execute('DELETE FROM sync_log'); // nothing was ever noted for it
+    await b.sync();
+    expect(b.repo.profiles().map((p) => p.name).toSet(), {'Moi', 'Alice'});
+    expect(b.repo.isFavorite(b.repo.sources().single.id, ContentKind.movie, 'b-fav'), isTrue);
+    expect(b.repo.progress(b.repo.sources().single.id, ContentKind.movie, 'film')!.position.inMinutes, 30);
+    expect(b.pending, 0);
+
+    // "Moi" lives on the account again, with what B had.
+    await a.sync();
+    expect(a.repo.profiles().map((p) => p.name).toSet(), {'Moi', 'Alice'});
+    a.repo.profileId = a.profile('Moi').id;
+    expect(a.repo.isFavorite(srcA, ContentKind.movie, 'b-fav'), isTrue);
+    expect(a.repo.progress(srcA, ContentKind.movie, 'film')!.position.inMinutes, 30);
+  });
+
+  test('a profile deleted on one linked device is deleted on the other', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote), b = Device(remote);
+    final src = a.xtream();
+    final lea = a.repo.createProfile(name: 'Léa', color: 1);
+    await a.sync();
+    await b.sync();
+    final leaB = b.profile('Léa').id;
+    b.repo.profileId = leaB;
+    b.repo.toggleFavorite(b.repo.sources().single.id, ContentKind.movie, 'x');
+    b.repo.profileId = 1;
+    await b.sync();
+    await _tick();
+    a.repo.deleteProfile(lea);
+    await a.sync();
+    final changes = await b.sync();
+    expect(changes.profiles, isTrue);
+    expect(b.repo.profiles().map((p) => p.name), ['Moi']);
+    expect(b.repo.db.select('SELECT * FROM favorites WHERE profile_id = ?', [leaB]), isEmpty);
+    expect(a.repo.isFavorite(src, ContentKind.movie, 'x'), isFalse);
+  });
+
+  test('first sync: an account without parental code or TMDB key does not erase the device ones', () async {
+    final remote = MemoryRemote();
+    // The account is created on a laptop that has neither.
+    final laptop = Device(remote);
+    laptop.settings.update((s) => s.audioLang = 'en');
+    await laptop.sync();
+    expect(laptop.settings.parentalPin, isNull);
+
+    // The family PC had its code and key before accounts existed.
+    final family = Device(remote);
+    family.settings.update((s) {
+      s.parentalPin = '4821';
+      s.tmdbKey = 'cle-tmdb';
+      s.audioLang = 'de';
+    });
+    family.repo.db.execute('DELETE FROM sync_log'); // as after the v5 migration
+    final changes = await family.sync();
+    expect(family.settings.parentalPin, '4821');
+    expect(family.settings.tmdbKey, 'cle-tmdb');
+    // Values both sides have: the account still wins on the first sync.
+    expect(family.settings.audioLang, 'en');
+    expect(changes.settings, isTrue);
+    expect(family.pending, 0);
+
+    // The code now protects the laptop too.
+    await laptop.sync();
+    expect(laptop.settings.parentalPin, '4821');
+    expect(laptop.settings.tmdbKey, 'cle-tmdb');
+
+    // Once linked, removing the code on purpose goes through normally.
+    await _tick();
+    laptop.settings.update((s) => s.parentalPin = null);
+    await laptop.sync();
+    await family.sync();
+    expect(family.settings.parentalPin, isNull);
+  });
+
   test('data a device held before the update loses to the account on linking', () async {
     final remote = MemoryRemote();
     final a = Device(remote);
@@ -316,5 +442,238 @@ void main() {
     final intruder = Device(remote, SyncKeys.deriveSync('moi@example.com', 'devine', iterations: 10));
     await expectLater(intruder.sync(), throwsA(isA<SyncKeyException>()));
     expect(intruder.repo.sources(), isEmpty);
+  });
+
+  group('a device whose clock is wrong', () {
+    const day = 86400000;
+    late MemoryRemote remote;
+    late Device a, b;
+    late int srcA, srcB;
+
+    setUp(() async {
+      remote = MemoryRemote();
+      a = Device(remote);
+      b = Device(remote);
+      srcA = a.xtream();
+      await a.sync();
+      await b.sync();
+      srcB = b.source('Mon IPTV').id;
+    });
+
+    Duration? at(Device d, int src) => d.repo.progress(src, ContentKind.movie, '9')?.position;
+
+    test('ahead: a change made later on another device is not undone', () async {
+      // B's clock is a day ahead: what it changes is dated tomorrow.
+      b.watch(srcB, '9', const Duration(minutes: 10));
+      b.repo.db.execute('UPDATE sync_log SET changed_at = changed_at + $day');
+      await b.sync();
+      await a.sync();
+      expect(at(a, srcA), const Duration(minutes: 10));
+
+      // Later, on A, whose clock is right: dated today, so "before".
+      a.watch(srcA, '9', const Duration(minutes: 50));
+      await a.sync();
+      expect(at(a, srcA), const Duration(minutes: 50), reason: 'it came back to 10 min');
+      expect(a.pending, 0);
+      await b.sync();
+      expect(at(b, srcB), const Duration(minutes: 50));
+
+      // Deleting works the same way.
+      b.repo.toggleFavorite(srcB, ContentKind.movie, '9');
+      b.repo.db.execute('UPDATE sync_log SET changed_at = changed_at + $day');
+      await b.sync();
+      await a.sync();
+      expect(a.repo.isFavorite(srcA, ContentKind.movie, '9'), isTrue);
+      a.repo.toggleFavorite(srcA, ContentKind.movie, '9');
+      await a.sync();
+      await b.sync();
+      expect(a.repo.isFavorite(srcA, ContentKind.movie, '9'), isFalse);
+      expect(b.repo.isFavorite(srcB, ContentKind.movie, '9'), isFalse);
+    });
+
+    test('late: its own later change is not refused', () async {
+      b.watch(srcB, '9', const Duration(minutes: 10));
+      await b.sync();
+      await a.sync();
+      // A's clock is a day late.
+      a.watch(srcA, '9', const Duration(minutes: 50));
+      a.repo.db.execute('UPDATE sync_log SET changed_at = changed_at - $day');
+      await a.sync();
+      await b.sync();
+      expect(at(a, srcA), const Duration(minutes: 50));
+      expect(at(b, srcB), const Duration(minutes: 50));
+    });
+
+    test('an item written by a newer Bobine is not written over by an older one', () async {
+      a.watch(srcA, '9', const Duration(minutes: 10));
+      await a.sync();
+      // Another device, with a newer version, rewrites it in a format this
+      // one does not know.
+      final id = await _itemOf(remote, 'progress');
+      final codec = SyncCodec(_keys);
+      final record = await codec.open(id, remote.items[id]!.payload);
+      final newer = await codec.seal(id, {...record, 'v': 2, 'nouveau': 'champ'});
+      remote.items[id] = RemoteItem(
+        id: id,
+        modifiedAt: DateTime.now().millisecondsSinceEpoch + 60000,
+        payload: newer,
+        rev: ++remote._rev,
+      );
+      await a.sync(); // received, left aside
+      expect(at(a, srcA), const Duration(minutes: 10));
+
+      // A change here, dated before it: it was not made on top of it.
+      a.watch(srcA, '9', const Duration(minutes: 50));
+      await a.sync();
+      expect(remote.items[id]!.payload, newer, reason: 'the old version wrote over what it could not read');
+      expect(a.pending, 0);
+      await a.sync();
+      expect(remote.items[id]!.payload, newer);
+    });
+
+    test('two changes made without seeing each other: still the most recent one', () async {
+      // Neither device has the other's version: nothing says which came
+      // last but their times.
+      a.watch(srcA, '9', const Duration(minutes: 10));
+      await _tick();
+      b.watch(srcB, '9', const Duration(minutes: 30));
+      await b.sync();
+      await a.sync();
+      await b.sync();
+      expect(at(a, srcA), const Duration(minutes: 30));
+      expect(at(b, srcB), const Duration(minutes: 30));
+    });
+  });
+
+  group('what cannot be read or applied is left aside', () {
+    test('an item damaged on the account does not stop the others, now or later', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote);
+      final src = a.xtream();
+      a.repo.toggleFavorite(src, ContentKind.movie, '503');
+      a.watch(src, '501', const Duration(minutes: 20));
+      await a.sync();
+      _damage(remote, await _itemOf(remote, 'favorites'));
+
+      final b = Device(remote);
+      final first = await b.sync();
+      expect(first.skipped, 1);
+      final srcB = b.source('Mon IPTV').id;
+      expect(b.repo.progress(srcB, ContentKind.movie, '501')!.position, const Duration(minutes: 20));
+      expect(b.repo.isFavorite(srcB, ContentKind.movie, '503'), isFalse);
+      // It is behind this device now: not met again at every synchronisation.
+      expect((await b.sync()).skipped, 0);
+
+      // Alone in what arrives: the rest of the account proves the keys right.
+      a.watch(src, '777', const Duration(minutes: 5));
+      await a.sync();
+      _damage(remote, remote.items.values.reduce((x, y) => x.rev > y.rev ? x : y).id);
+      final later = await b.sync();
+      expect(later.skipped, 1);
+      expect(b.repo.progress(srcB, ContentKind.movie, '777'), isNull);
+
+      // The device that holds the real thing writes over it.
+      a.watch(src, '777', const Duration(minutes: 6));
+      await a.sync();
+      await b.sync();
+      expect(b.repo.progress(srcB, ContentKind.movie, '777')!.position, const Duration(minutes: 6));
+    });
+
+    test('a record this version cannot apply is skipped, not the ones around it', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote);
+      final src = a.xtream();
+      await a.sync();
+      final codec = SyncCodec(_keys);
+      Future<void> plant(Map<String, Object?> record, List<Object?> key) async {
+        final id = codec.itemId(jsonEncode(key));
+        remote.items[id] = RemoteItem(
+          id: id,
+          modifiedAt: DateTime.now().millisecondsSinceEpoch,
+          payload: await codec.seal(id, record),
+          rev: ++remote._rev,
+        );
+      }
+
+      // A source whose login is a number, and something that is no record.
+      await plant(
+        {
+          't': 'sources',
+          'k': ['uid-cassé'],
+          'v': 1,
+          'd': {'name': 'Cassée', 'type': 'xtream', 'url': 'http://x', 'username': 42},
+        },
+        ['sources', 'uid-cassé'],
+      );
+      await plant({'t': 'profiles', 'k': <Object?>[], 'v': 'un'}, ['profiles']);
+      a.watch(src, '501', const Duration(minutes: 20));
+      await a.sync();
+
+      final b = Device(remote);
+      final changes = await b.sync();
+      expect(changes.skipped, 2);
+      expect(b.repo.sources().map((s) => s.name), ['Mon IPTV']);
+      expect(b.repo.progress(b.source('Mon IPTV').id, ContentKind.movie, '501')!.position, const Duration(minutes: 20));
+      expect((await b.sync()).skipped, 0);
+    });
+
+    test('a row too large for the account stays here instead of blocking every sending', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote);
+      final src = a.xtream();
+      await a.sync();
+      a.repo.saveProgress(
+        sourceId: src,
+        kind: ContentKind.movie,
+        extId: 'énorme',
+        position: const Duration(minutes: 3),
+        duration: const Duration(minutes: 100),
+        title: 'Film',
+        image: 'data:image/png;base64,${'A' * 20000}',
+      );
+      a.watch(src, '501', const Duration(minutes: 20));
+      final changes = await a.sync();
+      expect(changes.skipped, 1);
+      expect(a.pending, 0);
+
+      final b = Device(remote);
+      await b.sync();
+      final srcB = b.source('Mon IPTV').id;
+      expect(b.repo.progress(srcB, ContentKind.movie, '501')!.position, const Duration(minutes: 20));
+      expect(b.repo.progress(srcB, ContentKind.movie, 'énorme'), isNull);
+      expect(a.repo.progress(src, ContentKind.movie, 'énorme'), isNotNull);
+    });
+  });
+
+  test('a run whose account is gone stops before writing anything', () async {
+    final remote = MemoryRemote();
+    final other = Device(remote);
+    other.xtream();
+    await other.sync();
+
+    final a = Device(remote);
+    var gone = false;
+    final engine = SyncEngine(
+      repo: a.repo,
+      codec: SyncCodec(_keys),
+      remote: remote,
+      settings: a.settings,
+      cancelled: () => gone,
+    );
+    // Signed out while the account was being read.
+    gone = true;
+    await expectLater(engine.run(), throwsA(isA<SyncCancelled>()));
+    expect(a.repo.sources(), isEmpty);
+    expect(engine.cursor, isNull);
+
+    // Signed out while sending: what was noted is still to send.
+    gone = false;
+    a.repo.createProfile(name: 'Léa', color: 0xFF7FA6FF);
+    remote.duringPush = () => gone = true;
+    final before = remote.items.length;
+    await expectLater(engine.run(), throwsA(isA<SyncCancelled>()));
+    remote.duringPush = null;
+    expect(a.pending, greaterThan(0));
+    expect(remote.items.length, greaterThan(before), reason: 'the server had it; it is sent again, harmlessly');
   });
 }

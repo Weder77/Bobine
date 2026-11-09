@@ -194,6 +194,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 value: st.autoFullscreen,
                 onChanged: (v) => st.update((x) => x.autoFullscreen = v),
               ),
+              SettingsOption(
+                title: 'Miniature au survol de la barre de lecture',
+                subtitle:
+                    "Montre l'image de l'instant survolé. Elle demande une deuxième connexion au fournisseur : "
+                    "« Auto » s'en passe quand l'abonnement n'en autorise qu'une.",
+                child: SettingsSegments<String>(
+                  value: st.seekPreview,
+                  options: const {'auto': 'Auto', 'always': 'Toujours', 'never': 'Jamais'},
+                  onChanged: (v) => st.update((x) => x.seekPreview = v),
+                ),
+              ),
               SettingsText(
                 title: 'Langues audio préférées',
                 subtitle: 'Codes séparés par des virgules (ex. fr,fre,fra,en).',

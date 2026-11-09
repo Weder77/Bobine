@@ -23,14 +23,30 @@ import 'player_chrome.dart';
 import 'player_session.dart';
 import 'player_service.dart';
 import 'player_widgets.dart';
+import 'seek_preview.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key, required this.session});
   final PlayerSession session;
 
-  static Future<void> open(BuildContext context, PlayerSession session) => Navigator.of(context).push(route(session));
+  /// Name of the routes that play something (this screen and the
+  /// multi-view): at most one of them is on screen.
+  static const playbackRoute = 'playback';
+
+  /// Opens the player. With [replacing], it takes the place of a player or
+  /// multi-view already open (a reminder's "Regarder" over a film): stacked,
+  /// they would share one video engine, and leaving the top one would stop
+  /// it under the other.
+  static Future<void> open(BuildContext context, PlayerSession session, {bool replacing = false}) {
+    final nav = Navigator.of(context);
+    if (!replacing) return nav.push(route(session));
+    // Told before the new screen is built: it must not count itself replaced.
+    AppScope.of(context).player.takeOver();
+    return nav.pushAndRemoveUntil(route(session), (r) => r.settings.name != playbackRoute);
+  }
 
   static Route<void> route(PlayerSession session) => PageRouteBuilder(
+    settings: const RouteSettings(name: playbackRoute),
     opaque: true,
     transitionDuration: const Duration(milliseconds: 180),
     reverseTransitionDuration: const Duration(milliseconds: 150),
@@ -90,6 +106,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<(String, String)> _stats = const [];
   String? _osd;
   String? _error;
+
+  /// The picture shown while hovering the seek bar (a second, paused player
+  /// that only exists while the bar is hovered).
+  final SeekPreview _preview = SeekPreview();
+
+  /// Where playback was when [_error] was raised.
+  Duration _errorAt = Duration.zero;
+
+  /// [PlayerService.takeovers] when this screen opened.
+  int _takeovers = 0;
   String _digits = '';
   _Aspect _aspect = _Aspect.auto;
   double _volumeBeforeMute = 100;
@@ -126,6 +152,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     _s = AppScope.of(context);
     _ps = _s.player;
+    _takeovers = _ps.takeovers;
     _cast = _s.cast;
     _castEnded = _cast.endedCount;
     _item = widget.session.item;
@@ -158,8 +185,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
     _subs.add(
       _ps.player.stream.error.listen((e) {
-        if (!mounted || !PlayerService.isFatalError(e)) return;
-        if (!_ps.player.state.playing) setState(() => _error = redactCredentials(e));
+        if (!mounted) return;
+        final state = _ps.player.state;
+        if (!PlayerService.stopsPlayback(e, live: _isLive, playing: state.playing, duration: state.duration)) return;
+        setState(() {
+          _error = redactCredentials(e);
+          _errorAt = state.position;
+        });
       }),
     );
     _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
@@ -172,8 +204,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
         });
       }),
     );
-    // Playback is starting: no pause screen while it loads.
-    _playing = true;
+    // Playback is starting: no pause screen while it loads. Unless this is
+    // the mini-player growing back on a film that ended in it: it stays on
+    // its last picture, controls shown, as when it ends here.
+    final ended = !_casting && !_isLive && _ps.current.value?.url == _item.url && _ps.player.state.completed;
+    _playing = !ended;
     unawaited(_ps.setProp('sub-scale', '${_s.settings.subtitleScale}'));
 
     // Light-weight UI clock: position 4×/s, cache ranges 1×/s, stats 1×/s.
@@ -181,7 +216,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     _fullscreen = AppWindow.fullscreen.value;
     if (!_fullscreen && _s.settings.autoFullscreen) _setFullscreen(true);
-    _showControls();
+    _showControls(sticky: ended);
   }
 
   @override
@@ -199,10 +234,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final ps = _ps;
     final keepAlive = widget.session.keepAlive || _minimized || _casting;
     final wasFullscreen = _fullscreen;
+    // Another player took this one's place: the engine and the window are
+    // its own now, whatever it plays (the same channel, for a reminder
+    // about the channel being watched).
+    final replaced = ps.takeovers != _takeovers;
     scheduleMicrotask(() {
-      if (wasFullscreen) AppWindow.setFullscreen(false);
-      if (!keepAlive) ps.stop();
+      if (wasFullscreen && !replaced) AppWindow.setFullscreen(false);
+      if (!keepAlive && !replaced) ps.stop();
     });
+    _preview.dispose();
     _focus.dispose();
     _position.dispose();
     _cache.dispose();
@@ -211,9 +251,36 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.dispose();
   }
 
+  /// Whether the instant hovered on the bar can be shown as a picture. Not a
+  /// replay: those streams are made on demand and cannot jump.
+  bool get _canPreview {
+    if (_isLive || _item.isReplay || _casting || _item.url.isEmpty) return false;
+    return seekPreviewAllowed(
+      mode: _s.settings.seekPreview,
+      local: isLocalMedia(_item.url),
+      maxConnections: int.tryParse('${_source?.accountInfo?['max_connections'] ?? ''}'),
+      inUse: 1 + _s.recordings.activeCount.value,
+    );
+  }
+
+  void _onSeekPoint(Duration? at) {
+    if (at == null || !_canPreview || _dur <= Duration.zero) return _preview.leave();
+    _preview.hover(_item, at, _dur);
+  }
+
   Future<void> _onTick() async {
     if (!mounted) return;
     _tickCount++;
+    // It plays after all (the engine got through on a later attempt): an
+    // error that stayed on top of a running film would be a lie.
+    final engine = _ps.player.state;
+    if (_error != null &&
+        !_casting &&
+        engine.playing &&
+        !engine.buffering &&
+        engine.position > _errorAt + const Duration(seconds: 1)) {
+      setState(() => _error = null);
+    }
     if (_controls || _showStats || _casting || _item.kind == ContentKind.episode) _position.value = _pos;
     if (_tickCount % 4 == 0 && !_casting) {
       if (_controls || _showStats) _cache.value = await _ps.cacheState();
@@ -286,6 +353,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       from = here > Duration.zero ? here : widget.session.start;
     }
     _s.tracker.flush();
+    // The TV takes the connection: the preview gives its own back.
+    _preview.close();
     setState(() {
       _error = null;
       _timeshift = false;
@@ -561,6 +630,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_source == null) return;
     _s.tracker.flush();
     final p = _s.repo.progress(_item.sourceId, ContentKind.episode, e.extId);
+    // Another episode: the preview of the previous one is given back.
+    _preview.close();
     setState(() {
       _item = episodeItem(_source!, widget.session.series, e);
       _panel = _Panel.none;
@@ -761,7 +832,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
                 if (!_playing && _panel == _Panel.none && _error == null && !_casting)
                   _isLive ? const LivePausedBadge() : _pauseInfo(),
-                if (!_casting) _buildBuffering(),
+                if (!_casting && _error == null) _buildBuffering(),
                 if (_osd != null) _buildOsd(),
                 if (_digits.isNotEmpty) _buildDigits(),
                 if (!_casting) _buildError(),
@@ -891,7 +962,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     onPressed: () {
                       setState(() => _error = null);
                       _ps.status.value = null;
-                      _ps.play(_item, force: true, start: _isLive ? null : _ps.player.state.position);
+                      // Nothing was read: back to where this film was to
+                      // resume, not to its beginning.
+                      final here = _ps.player.state.position;
+                      final resume = _item.url == widget.session.item.url ? widget.session.start : null;
+                      _ps.play(_item, force: true, start: _isLive ? null : (here > Duration.zero ? here : resume));
                     },
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Réessayer'),
@@ -1139,15 +1214,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       valueListenable: _position,
                       builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
                         valueListenable: _cache,
-                        builder: (context, cache, _) => VodSeekRow(
-                          position: pos,
-                          duration: _dur,
-                          ranges: _casting ? const [] : cache.ranges,
-                          onInteraction: _showControls,
-                          onSeek: (d) {
-                            _casting ? _cast.seekTo(d) : _ps.player.seek(d);
-                            _position.value = d;
-                          },
+                        builder: (context, cache, _) => ListenableBuilder(
+                          listenable: _preview,
+                          builder: (context, _) => VodSeekRow(
+                            position: pos,
+                            duration: _dur,
+                            ranges: _casting ? const [] : cache.ranges,
+                            onInteraction: _showControls,
+                            onPoint: _onSeekPoint,
+                            preview: _preview.visible ? _preview.view() : null,
+                            previewWidth: SeekPreview.width,
+                            onSeek: (d) {
+                              _casting ? _cast.seekTo(d) : _ps.player.seek(d);
+                              _position.value = d;
+                            },
+                          ),
                         ),
                       ),
                     ),

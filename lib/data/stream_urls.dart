@@ -40,7 +40,13 @@ class ReplayUrls {
     final type = (c.catchupType ?? (s.isXtream ? 'xc' : 'default')).toLowerCase();
 
     if (type == 'xc' || (s.isXtream && (c.url == null || c.url!.isEmpty))) {
-      final t = '${start.year}-${_two(start.month)}-${_two(start.day)}:${_two(start.hour)}-${_two(start.minute)}';
+      // The panel reads this time on its own clock, not on this computer's:
+      // abroad (or with a provider hosted in another country) the replay
+      // started hours away from the programme. Its offset is known from the
+      // account answer; without it, this computer's time as before.
+      final offset = s.accountInfo?['utc_offset'];
+      final wall = offset is int ? start.toUtc().add(Duration(seconds: offset)) : start;
+      final t = '${wall.year}-${_two(wall.month)}-${_two(wall.day)}:${_two(wall.hour)}-${_two(wall.minute)}';
       return '${s.baseUrl}/timeshift/${StreamUrls._seg(s.username)}/${StreamUrls._seg(s.password)}/'
           '$minutes/$t/${c.extId}.ts';
     }
@@ -96,6 +102,14 @@ class ReplayUrls {
     return t.replaceAllMapped(RegExp(r'\$?\{([A-Za-z]+)(?::([^}]*))?\}'), (m) {
       final key = m[1]!;
       final format = m[2];
+      // "{duration:60}" is the length in minutes, "{offset:3600}" the age in
+      // hours: the number after the colon divides the seconds.
+      if (format != null && (key == 'duration' || key == 'offset')) {
+        final divider = int.tryParse(format.trim());
+        if (divider == null || divider <= 0) return values[key]!;
+        final seconds = key == 'duration' ? duration : lutc - utc;
+        return '${seconds <= 0 ? 0 : seconds ~/ divider}';
+      }
       if (format != null && (key == 'utc' || key == 'start' || key == 'utcend' || key == 'end')) {
         final d = key == 'utcend' || key == 'end' ? stop : start;
         return format

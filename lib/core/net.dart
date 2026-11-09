@@ -133,10 +133,67 @@ Stream<List<int>> gunzipIfNeeded(Stream<List<int>> input) {
   return controller.stream;
 }
 
+/// Largest answer kept whole in memory (API answers: lists of channels,
+/// films, series). Real ones are a few dozen MB for a very big provider.
+const int kMaxMemoryBody = 512 << 20;
+
+/// Longest silence accepted from a server in the middle of an answer.
+const Duration kBodyStall = Duration(seconds: 90);
+
+/// Passes [body] through, and fails when the server stops sending for
+/// [stall] or sends more than [maxBytes] (measured where this is applied:
+/// after decompression to stop a few MB of gzip inflating to gigabytes).
+///
+/// Without this, a download that hangs after its headers blocked a source's
+/// imports until the app was restarted, and an endless answer filled the
+/// memory. What goes wrong in the middle of an answer also comes out as a
+/// [NetException], a message fit to be shown.
+Stream<List<int>> guardBody(Stream<List<int>> body, {Duration stall = kBodyStall, int? maxBytes}) async* {
+  var total = 0;
+  try {
+    await for (final chunk in body.timeout(stall)) {
+      total += chunk.length;
+      if (maxBytes != null && total > maxBytes) {
+        throw NetException('Réponse trop volumineuse (plus de ${maxBytes >> 20} Mo) : téléchargement arrêté.');
+      }
+      yield chunk;
+    }
+  } on TimeoutException {
+    throw NetException("Le serveur a cessé d'envoyer des données.");
+  } on HttpException catch (e) {
+    // The message alone: the address that follows it holds the credentials.
+    throw NetException('Connexion interrompue : ${redactCredentials(e.message)}');
+  } on SocketException catch (e) {
+    throw NetException('Connexion interrompue : ${e.osError?.message ?? e.message}');
+  } on TlsException {
+    throw NetException('Connexion sécurisée interrompue (TLS).');
+  } on FormatException {
+    throw NetException('Réponse illisible (compression invalide).');
+  }
+}
+
+/// Passes decoded text through, and fails when a line grows beyond [max]
+/// characters: a line splitter keeps a line in memory until its end, so a
+/// "playlist" without line breaks would be held whole.
+Stream<String> limitLineLength(Stream<String> chunks, {int max = 4 << 20}) async* {
+  var run = 0;
+  await for (final chunk in chunks) {
+    final nl = chunk.lastIndexOf('\n');
+    final cr = chunk.lastIndexOf('\r');
+    final last = nl > cr ? nl : cr;
+    run = last < 0 ? run + chunk.length : chunk.length - last - 1;
+    if (run > max) throw NetException('Fichier illisible : une ligne dépasse ${max >> 20} Mo.');
+    yield chunk;
+  }
+}
+
 /// Downloads [uri] as text (UTF-8, tolerant).
 Future<String> getText(HttpClient client, Uri uri, {String? userAgent}) async {
   final response = await openGet(client, uri, userAgent: userAgent);
-  final bytes = await gunzipIfNeeded(response).fold<BytesBuilder>(BytesBuilder(copy: false), (b, c) => b..add(c));
+  final bytes = await guardBody(
+    gunzipIfNeeded(response),
+    maxBytes: kMaxMemoryBody,
+  ).fold<BytesBuilder>(BytesBuilder(copy: false), (b, c) => b..add(c));
   return const Utf8Decoder(allowMalformed: true).convert(bytes.takeBytes());
 }
 

@@ -102,6 +102,15 @@ class PlaybackTracker {
     _save(notify: true);
   }
 
+  /// Saves the position now, then forgets the item: whatever is saved next
+  /// belongs to someone else (the profile changes).
+  void flushAndForget() {
+    flush();
+    _item = null;
+    _position = Duration.zero;
+    _duration = Duration.zero;
+  }
+
   /// Marks [item] as watched to the end.
   void markFinished(PlayItem item) {
     if (!item.tracksProgress) return;

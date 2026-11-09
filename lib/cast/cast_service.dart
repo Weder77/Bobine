@@ -112,15 +112,34 @@ class CastService extends ChangeNotifier {
   int _hitsAtLoad = 0;
   bool _unreachedLogged = false;
   Duration? _lastStart;
+
+  /// The TV has played what was last sent (its position can be trusted).
+  bool _started = false;
   DateTime _holdUntil = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _volumeTimer;
   int _ended = 0;
   final _messages = StreamController<String>.broadcast();
 
-  /// Send the stream through this computer (true) or give the TV the
-  /// provider's address (false). Local files always go through it.
-  bool preferRelay = true;
+  /// TVs given the provider's address instead of a stream that goes
+  /// through this computer (the default; local files always do).
+  ///
+  /// In direct mode the TV receives the address as it is, with the account's
+  /// identifiers in it: they travel in clear on the local network and the TV
+  /// tells them to any device that asks what it is playing. So it is a
+  /// choice made for one TV, not for the next one met, and it is forgotten
+  /// when the app closes.
+  final Set<String> _direct = {};
   bool _viaRelay = false;
+
+  /// Whether streams reach [d] through this computer.
+  bool relayFor(CastDevice d) => !_direct.contains(d.key);
+
+  /// Sends streams to [d] directly ([direct]) or through this computer.
+  void setDirect(CastDevice d, bool direct) => direct ? _direct.add(d.key) : _direct.remove(d.key);
+
+  /// Whether direct mode hands the TV the account's identifiers for [it]
+  /// (they are part of the provider's address).
+  static bool directRevealsCredentials(PlayItem it) => !isLocalMedia(it.url) && redactCredentials(it.url) != it.url;
 
   bool get active => _device != null;
   CastDevice? get device => _device;
@@ -206,13 +225,14 @@ class CastService extends ChangeNotifier {
     final d = _device!;
     item.value = it;
     _lastStart = start;
+    _started = false;
     _error = null;
     _loadedAt = DateTime.now();
     _status = RemoteStatus(state: RemoteState.loading, volume: _status.volume, position: start ?? Duration.zero);
     notifyListeners();
 
     final address = castUrl(it.url, d.protocol);
-    _viaRelay = isLocalMedia(address) || preferRelay;
+    _viaRelay = isLocalMedia(address) || relayFor(d);
     final host = session.localAddress;
     if (_viaRelay && host == null) {
       throw CastException('Adresse de cet ordinateur introuvable sur le réseau de la télé.');
@@ -252,10 +272,10 @@ class CastService extends ChangeNotifier {
 
   /// Tries again after an error; [viaRelay] switches the way the TV gets the stream.
   Future<void> retry({bool? viaRelay}) async {
-    if (viaRelay != null) preferRelay = viaRelay;
     final d = _device;
     final it = item.value;
     if (d == null || it == null) return;
+    if (viaRelay != null) setDirect(d, !viaRelay);
     Duration? from;
     if (!it.isLive) from = position > const Duration(seconds: 5) ? position : _lastStart;
     await _disconnect(stopRemote: false, wait: true);
@@ -266,7 +286,14 @@ class CastService extends ChangeNotifier {
   Future<Duration?> stop() async {
     if (_device == null) return null;
     final it = item.value;
-    final pos = (it != null && !it.isLive && position > Duration.zero) ? position : null;
+    Duration? pos;
+    if (it != null && !it.isLive) {
+      // A TV that never started (still loading, or refused the stream)
+      // reports 0: the film goes on from where it was sent, not from the
+      // beginning (which would also overwrite its "Reprendre" position).
+      pos = _started ? position : _lastStart;
+      if (pos == Duration.zero) pos = null;
+    }
     await _disconnect(stopRemote: true);
     return pos;
   }
@@ -351,7 +378,10 @@ class CastService extends ChangeNotifier {
     if (DateTime.now().isBefore(_holdUntil) && s.state != RemoteState.error) s = s.copyWith(position: position);
     final before = _status.state;
     _status = s;
-    if (s.state == RemoteState.playing) _error = null;
+    if (s.state == RemoteState.playing) {
+      _error = null;
+      _started = true;
+    }
     if (s.state == RemoteState.ended && before != RemoteState.ended) _ended++;
     notifyListeners();
   }

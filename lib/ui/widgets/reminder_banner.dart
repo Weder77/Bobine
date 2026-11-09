@@ -62,7 +62,8 @@ class ReminderBanner extends StatelessWidget {
                                 s.reminders.dismiss();
                                 final c = s.repo.channelByExt(r.sourceId, r.channelExt);
                                 final ctx = appNavigatorKey.currentContext;
-                                if (c != null && ctx != null) Launch.channel(ctx, c, [c]);
+                                // Over a film or the multi-view: it takes their place.
+                                if (c != null && ctx != null) Launch.channel(ctx, c, [c], replacing: true);
                               },
                               icon: const Icon(Icons.play_arrow_rounded),
                               label: const Text('Regarder'),

@@ -9,6 +9,7 @@ import '../core/format.dart';
 import '../core/text.dart';
 import '../data/models.dart';
 import '../data/settings.dart';
+import 'reconnect.dart';
 
 /// Something the player can open.
 class PlayItem {
@@ -95,6 +96,17 @@ class PlayerService {
   /// Human readable status ("Reconnexion…") or null.
   final ValueNotifier<String?> status = ValueNotifier(null);
 
+  /// How many times a playback screen took the place of another one (a
+  /// reminder's "Regarder" over a film or over the multi-view). A screen
+  /// that closes after that was replaced: the engine and the window belong
+  /// to its successor. Comparing what they play is not enough: the reminder
+  /// may be for the very channel being watched.
+  int get takeovers => _takeovers;
+  int _takeovers = 0;
+
+  /// The playback screen about to open replaces the ones on screen.
+  void takeOver() => _takeovers++;
+
   /// Completes once libmpv is configured. The UI does not wait for it (the
   /// video texture needs a visible window on some platforms), only [play].
   late final Future<void> ready;
@@ -102,8 +114,8 @@ class PlayerService {
   bool _autoDeinterlaceNative = false;
   DateTime? _bufferingSince;
   Timer? _watchdog;
-  int _reconnects = 0;
-  DateTime _lastReconnect = DateTime.fromMillisecondsSinceEpoch(0);
+  final _reconnect = ReconnectBudget();
+  Timer? _reconnectTimer;
   final List<StreamSubscription> _subs = [];
   Timer? _volumeSave;
 
@@ -173,6 +185,7 @@ class PlayerService {
     _subs.add(
       player.stream.buffering.listen((b) {
         _bufferingSince = b ? (_bufferingSince ?? DateTime.now()) : null;
+        if (!b) _reconnect.playing();
       }),
     );
     // A live stream stuck buffering (server stopped sending) is reopened.
@@ -186,11 +199,7 @@ class PlayerService {
     });
     _subs.add(
       player.stream.playing.listen((p) {
-        if (p) {
-          status.value = null;
-          // A stream that plays for a while resets the reconnection budget.
-          if (DateTime.now().difference(_lastReconnect).inSeconds > 30) _reconnects = 0;
-        }
+        if (p) status.value = null;
       }),
     );
     _subs.add(player.stream.videoParams.listen((_) => _maybeDeinterlace()));
@@ -229,6 +238,38 @@ class PlayerService {
 
   /// Whether an mpv error message means the stream could not be read.
   static bool isFatalError(String message) => _fatal.hasMatch(message);
+
+  static final RegExp _gaveUp = RegExp(
+    r'failed to open|failed to recognize|could not open (the )?(stream|file)',
+    caseSensitive: false,
+  );
+
+  /// Whether a fatal error [message] leaves nothing to watch, and so must be
+  /// shown to the user.
+  ///
+  /// "Not playing" alone missed the commonest case: when the link of a film
+  /// is dead the engine still reports "playing" (nothing was paused), and the
+  /// screen stayed on "Chargement…" for ever. A film or an episode of which
+  /// nothing was read (no duration yet) has failed too, once the engine says
+  /// it gave up on the file; a failed first connection that the engine
+  /// retries by itself is not that. A live stream is reopened by this
+  /// service, which reports it through [status].
+  static bool stopsPlayback(String message, {required bool live, required bool playing, required Duration duration}) {
+    if (!isFatalError(message)) return false;
+    if (!playing) return true;
+    return !live && duration == Duration.zero && isLoadFailure(message);
+  }
+
+  /// Whether what is already loaded is set playing again when its screen
+  /// reopens (the mini-player grows back): yes when it was paused, not when
+  /// it reached its end. For the engine, "play" on a finished film means
+  /// "again from the beginning": growing the mini-player back restarted a
+  /// film that had just ended in it.
+  static bool resumesOnReopen({required bool playing, required bool completed}) => !playing && !completed;
+
+  /// Whether [message] says the engine gave up on opening the file (after
+  /// its own retries), not that one attempt failed.
+  static bool isLoadFailure(String message) => _gaveUp.hasMatch(message);
 
   NativePlayer? get _native {
     final p = player.platform;
@@ -311,11 +352,18 @@ class PlayerService {
   }
 
   /// Opens [item]. If it is already playing, nothing is reloaded.
-  Future<void> play(PlayItem item, {Duration? start, bool force = false}) async {
+  /// [reconnecting]: the automatic reopening of a live stream that stopped.
+  Future<void> play(PlayItem item, {Duration? start, bool force = false, bool reconnecting = false}) async {
     await ready;
+    if (!reconnecting) {
+      // Something the user opened (another channel, "Réessayer"): the
+      // attempts of the previous stream do not count against this one.
+      _reconnectTimer?.cancel();
+      _reconnect.reset();
+    }
     if (!force && current.value?.url == item.url && player.state.playlist.medias.isNotEmpty) {
       current.value = item;
-      if (!player.state.playing) await player.play();
+      if (resumesOnReopen(playing: player.state.playing, completed: player.state.completed)) await player.play();
       return;
     }
     current.value = item;
@@ -333,11 +381,12 @@ class PlayerService {
       await setProp('cache-pause-wait', '2');
       await setProp('demuxer-readahead-secs', '60');
     }
-    if (!item.isLive) _reconnects = 0;
     await player.open(Media(item.url, start: start), play: true);
   }
 
   Future<void> stop() async {
+    _reconnectTimer?.cancel();
+    _reconnect.reset();
     current.value = null;
     status.value = null;
     await player.stop();
@@ -346,16 +395,17 @@ class PlayerService {
   void _onEnded() {
     final item = current.value;
     if (item == null || !item.isLive) return;
-    // Live streams should never end: reconnect with a back-off.
-    if (_reconnects >= 6) {
-      status.value = 'Flux indisponible. Réessaie ou change de chaîne.';
+    // Live streams should never end: reconnect with a back-off. The same
+    // failure often arrives as several errors: one attempt at a time.
+    final wait = _reconnect.next();
+    if (wait == null) {
+      if (_reconnect.exhausted) status.value = 'Flux indisponible. Réessaie ou change de chaîne.';
       return;
     }
-    _reconnects++;
-    _lastReconnect = DateTime.now();
-    status.value = 'Reconnexion… ($_reconnects)';
-    Timer(Duration(milliseconds: 600 * _reconnects), () {
-      if (current.value?.url == item.url) play(item, force: true);
+    status.value = 'Reconnexion… (${_reconnect.attempts})';
+    _reconnectTimer = Timer(wait, () {
+      _reconnect.launched();
+      if (current.value?.url == item.url) play(item, force: true, reconnecting: true);
     });
   }
 
@@ -458,6 +508,7 @@ class PlayerService {
 
   Future<void> dispose() async {
     _watchdog?.cancel();
+    _reconnectTimer?.cancel();
     settings.removeListener(applyTuning);
     for (final s in _subs) {
       await s.cancel();

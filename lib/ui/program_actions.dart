@@ -50,7 +50,10 @@ class _ProgramDialogState extends State<_ProgramDialog> {
     final time = programTime(p);
     final replay = canReplay(c, p);
     final reminded = s.repo.hasReminder(c.sourceId, c.extId, p.start);
-    final recording = s.repo.hasRecording(c.sourceId, c.extId, p.start.subtract(const Duration(minutes: 1)));
+    // Planned for this programme, or (programme on air) already being recorded.
+    final recording =
+        s.repo.hasRecording(c.sourceId, c.extId, p.start.subtract(const Duration(minutes: 1))) ||
+        (time == ProgramTime.live && s.repo.isRecordingAt(c.sourceId, c.extId, DateTime.now()));
     void close() => Navigator.of(context).pop();
 
     final actions = <Widget>[

@@ -11,6 +11,7 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import 'play_items.dart';
 import 'player_service.dart';
+import 'reconnect.dart';
 
 /// How the channels are laid out. Every slot is a 16:9 cell of a 16:9 stage
 /// (2 × 2 or 3 × 3 grid), so videos fill their slot without black bars.
@@ -117,6 +118,7 @@ class MpvTile implements TileEngine {
       ..add(
         _player.stream.buffering.listen((b) {
           _bufferingSince = b ? (_bufferingSince ?? DateTime.now()) : null;
+          if (!b) _reconnect.playing();
           if (_state.value.loading != b && _state.value.message == null) _state.value = TileState(loading: b);
         }),
       )
@@ -124,7 +126,6 @@ class MpvTile implements TileEngine {
         _player.stream.playing.listen((p) {
           if (!p) return;
           _state.value = const TileState(loading: false);
-          if (DateTime.now().difference(_lastRetry).inSeconds > 30) _retries = 0;
         }),
       );
     // A stream stuck loading (the server stopped sending) is reopened.
@@ -147,8 +148,8 @@ class MpvTile implements TileEngine {
   late final Timer _watchdog;
   PlayItem? _item;
   DateTime? _bufferingSince;
-  DateTime _lastRetry = DateTime.fromMillisecondsSinceEpoch(0);
-  int _retries = 0;
+  final _reconnect = ReconnectBudget(step: const Duration(milliseconds: 800));
+  Timer? _retryTimer;
   bool _disposed = false;
 
   @override
@@ -191,7 +192,8 @@ class MpvTile implements TileEngine {
     await _ready;
     if (_disposed) return;
     _item = item;
-    _retries = 0;
+    _retryTimer?.cancel();
+    _reconnect.reset();
     _state.value = const TileState();
     final ua = item.userAgent;
     await _set('user-agent', (ua == null || ua.isEmpty) ? 'libmpv' : ua);
@@ -201,14 +203,15 @@ class MpvTile implements TileEngine {
   void _retry() {
     final item = _item;
     if (item == null || _disposed) return;
-    if (_retries >= 6) {
-      _state.value = const TileState(loading: false, message: 'Flux indisponible');
+    // One attempt at a time: a failure often arrives as several errors.
+    final wait = _reconnect.next();
+    if (wait == null) {
+      if (_reconnect.exhausted) _state.value = const TileState(loading: false, message: 'Flux indisponible');
       return;
     }
-    _retries++;
-    _lastRetry = DateTime.now();
-    _state.value = TileState(message: 'Reconnexion… ($_retries)');
-    Timer(Duration(milliseconds: 800 * _retries), () {
+    _state.value = TileState(message: 'Reconnexion… (${_reconnect.attempts})');
+    _retryTimer = Timer(wait, () {
+      _reconnect.launched();
       if (!_disposed && identical(_item, item)) unawaited(_player.open(Media(item.url), play: true));
     });
   }
@@ -233,6 +236,7 @@ class MpvTile implements TileEngine {
     if (_disposed) return;
     _disposed = true;
     _watchdog.cancel();
+    _retryTimer?.cancel();
     for (final s in _subs) {
       await s.cancel();
     }
@@ -310,7 +314,11 @@ class MultiViewController extends ChangeNotifier {
       final ids = (saved['channels'] as List? ?? const []).take(maxSlots).toList();
       for (var i = 0; i < ids.length; i++) {
         final ext = ids[i];
-        final c = ext is String ? repo.channelByExt(source.id, ext) : null;
+        // Saved by another profile, or before the code was asked again: a
+        // locked channel does not come back by itself.
+        final c = ext is String && !repo.isLocked(source.id, ContentKind.live, ext)
+            ? repo.channelByExt(source.id, ext)
+            : null;
         if (c != null && i < layout.slots) _put(i, c);
       }
       final heard = saved['selected'];

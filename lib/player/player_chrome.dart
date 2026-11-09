@@ -276,12 +276,22 @@ class VodSeekRow extends StatefulWidget {
     required this.ranges,
     required this.onSeek,
     this.onInteraction,
+    this.onPoint,
+    this.preview,
+    this.previewWidth = 0,
   });
   final Duration position;
   final Duration duration;
   final List<CachedRange> ranges;
   final ValueChanged<Duration> onSeek;
   final VoidCallback? onInteraction;
+
+  /// The instant under the pointer (hovering or dragging), null once it left.
+  final ValueChanged<Duration?>? onPoint;
+
+  /// The picture of that instant, [previewWidth] wide, shown above its time.
+  final Widget? preview;
+  final double previewWidth;
 
   @override
   State<VodSeekRow> createState() => _VodSeekRowState();
@@ -291,8 +301,24 @@ class _VodSeekRowState extends State<VodSeekRow> {
   double? _drag;
   double? _hover;
 
+  /// The pointer is over the bar (it may leave it during a drag).
+  bool _inside = false;
+
   double get _total => widget.duration.inMilliseconds.toDouble();
   Duration _at(double f) => Duration(milliseconds: (f.clamp(0.0, 1.0) * _total).round());
+
+  /// Tells who shows the picture where the pointer is.
+  void _point() {
+    final at = _drag ?? _hover;
+    widget.onPoint?.call(at == null || _total <= 0 ? null : _at(at));
+  }
+
+  @override
+  void dispose() {
+    // Left with the pointer still on the bar (the controls hid, the film ended).
+    if (_drag != null || _hover != null) widget.onPoint?.call(null);
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -311,22 +337,41 @@ class _VodSeekRowState extends State<VodSeekRow> {
               final tip = _drag ?? _hover;
               return MouseRegion(
                 cursor: SystemMouseCursors.click,
-                onHover: (e) => setState(() => _hover = frac(e.localPosition.dx)),
-                onExit: (_) => setState(() => _hover = null),
+                onEnter: (_) => _inside = true,
+                onHover: (e) {
+                  setState(() => _hover = frac(e.localPosition.dx));
+                  _point();
+                },
+                onExit: (_) {
+                  _inside = false;
+                  setState(() => _hover = null);
+                  _point();
+                },
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapUp: (d) {
                     widget.onInteraction?.call();
                     widget.onSeek(_at(frac(d.localPosition.dx)));
                   },
-                  onHorizontalDragStart: (d) => setState(() => _drag = frac(d.localPosition.dx)),
+                  onHorizontalDragStart: (d) {
+                    setState(() => _drag = frac(d.localPosition.dx));
+                    _point();
+                  },
                   onHorizontalDragUpdate: (d) {
                     widget.onInteraction?.call();
                     setState(() => _drag = frac(d.localPosition.dx));
+                    _point();
                   },
                   onHorizontalDragEnd: (_) {
                     if (_drag != null) widget.onSeek(_at(_drag!));
-                    setState(() => _drag = null);
+                    // No hover is reported while a button is down: without
+                    // this the time (and its picture) jumped back to where
+                    // the pointer was before the drag.
+                    setState(() {
+                      _hover = _inside ? _drag : null;
+                      _drag = null;
+                    });
+                    _point();
                   },
                   child: SizedBox(
                     height: 22,
@@ -352,6 +397,17 @@ class _VodSeekRowState extends State<VodSeekRow> {
                               ),
                               child: Text(playerTime(_at(tip)), style: darkMono(12, color: DarkColors.text, height: 1)),
                             ),
+                          ),
+                        if (tip != null && _total > 0 && widget.preview != null)
+                          Positioned(
+                            // Centred on the pointer, kept within the bar.
+                            left: (tip * w - widget.previewWidth / 2).clamp(
+                              0.0,
+                              math.max(0.0, w - widget.previewWidth),
+                            ),
+                            // Above the time (22 high, 8 above the bar).
+                            bottom: 22 + 30 + 6,
+                            child: IgnorePointer(child: widget.preview!),
                           ),
                       ],
                     ),

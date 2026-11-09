@@ -49,10 +49,23 @@ Source _loadSource(Database db, int sourceId) {
   return Source.fromRow(rows.first);
 }
 
-void _clearContent(Database db, int sourceId) {
-  for (final t in ['channels', 'movies', 'series', 'episodes', 'categories']) {
+/// Removes the content of a source before writing the new one. The kinds
+/// in [keep] (films, series) are left as they are, with their categories:
+/// their download failed, and an empty list must not replace them.
+void _clearContent(Database db, int sourceId, {Set<ContentKind> keep = const {}}) {
+  final tables = [
+    'channels',
+    if (!keep.contains(ContentKind.movie)) 'movies',
+    if (!keep.contains(ContentKind.series)) ...['series', 'episodes'],
+  ];
+  for (final t in tables) {
     db.execute('DELETE FROM $t WHERE source_id = ?', [sourceId]);
   }
+  final kinds = [
+    for (final k in [ContentKind.live, ContentKind.movie, ContentKind.series])
+      if (!keep.contains(k)) "'${k.db}'",
+  ].join(', ');
+  db.execute('DELETE FROM categories WHERE source_id = ? AND kind IN ($kinds)', [sourceId]);
 }
 
 /// Row buffers filled during download/parse, then written in one short transaction.
@@ -130,17 +143,28 @@ void _commit(
   ProgressSink progress, {
   String? discoveredEpg,
   Map<String, Object?>? account,
+  Set<ContentKind> keep = const {},
+  String? warning,
 }) {
   progress('Enregistrement', 0);
   db.execute('BEGIN IMMEDIATE');
   try {
-    _clearContent(db, sourceId);
+    _clearContent(db, sourceId, keep: keep);
     batch.write(db, sourceId, progress);
     db.execute(
-      'UPDATE sources SET content_updated_at = ?, last_error = NULL, '
-      'epg_url = COALESCE(epg_url, ?), account_info = COALESCE(?, account_info) WHERE id = ?',
-      [_now(), Secrets.protect(discoveredEpg), account == null ? null : jsonEncode(account), sourceId],
+      'UPDATE sources SET content_updated_at = ?, last_error = ?, account_info = COALESCE(?, account_info) '
+      'WHERE id = ?',
+      [_now(), warning, account == null ? null : jsonEncode(account), sourceId],
     );
+    // The guide named by the playlist, when the source has none. A statement
+    // of its own, run only then: naming epg_url in the UPDATE above noted the
+    // source as changed (for the synchronisation) at every single import.
+    if (discoveredEpg != null) {
+      db.execute('UPDATE sources SET epg_url = ? WHERE id = ? AND epg_url IS NULL', [
+        Secrets.protect(discoveredEpg),
+        sourceId,
+      ]);
+    }
     db.execute('COMMIT');
   } catch (_) {
     db.execute('ROLLBACK');
@@ -264,10 +288,15 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
         timeout: const Duration(seconds: 60),
       );
     }
-    await for (final line in gunzipIfNeeded(
-      bytes,
-    ).transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter())) {
+    final text = guardBody(gunzipIfNeeded(bytes), maxBytes: 1 << 30).transform(const Utf8Decoder(allowMalformed: true));
+    await for (final line in limitLineLength(text).transform(const LineSplitter())) {
       parser.addLine(line);
+      if (parser.notAPlaylist) {
+        throw NetException(
+          "Le serveur a renvoyé une page web ou un message d'erreur au lieu de la playlist. "
+          'Les chaînes déjà importées sont gardées.',
+        );
+      }
     }
     if (count == 0) {
       throw NetException("La playlist est vide ou n'est pas au format M3U.");
@@ -295,16 +324,29 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
 
     progress('Téléchargement', 0);
     final warnings = <String>[];
+    // Films or series whose list (or categories) could not be downloaded:
+    // what the source already has is kept instead of being emptied.
+    final failed = <ContentKind>{};
+    // The names of the TV categories could not be downloaded.
+    var liveNamesMissing = false;
     Future<List<Map<String, Object?>>> safe(
       Future<List<Map<String, Object?>>> f,
       String what, {
       bool required = false,
+      ContentKind? keeps,
     }) async {
       try {
         return await f;
       } catch (e) {
+        // Channels are the heart of a source: without them the import fails
+        // and nothing is touched.
         if (required) rethrow;
-        warnings.add('$what : $e');
+        if (keeps != null) {
+          failed.add(keeps);
+        } else {
+          liveNamesMissing = true;
+        }
+        warnings.add('$what : ${redactCredentials('$e')}');
         return const [];
       }
     }
@@ -312,11 +354,26 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
     final results = await Future.wait([
       safe(api.liveCategories(), 'Catégories TV'),
       safe(api.liveStreams(), 'Chaînes', required: true),
-      safe(api.vodCategories(), 'Catégories films'),
-      safe(api.vodStreams(), 'Films'),
-      safe(api.seriesCategories(), 'Catégories séries'),
-      safe(api.seriesList(), 'Séries'),
+      safe(api.vodCategories(), 'Catégories films', keeps: ContentKind.movie),
+      safe(api.vodStreams(), 'Films', keeps: ContentKind.movie),
+      safe(api.seriesCategories(), 'Catégories séries', keeps: ContentKind.series),
+      safe(api.seriesList(), 'Séries', keeps: ContentKind.series),
     ]);
+    // Half a kind is not written: its old content stays whole.
+    if (failed.contains(ContentKind.movie)) results[2] = results[3] = const [];
+    if (failed.contains(ContentKind.series)) results[4] = results[5] = const [];
+    // The channels came without the names of their categories: they are
+    // imported all the same, under the names (and in the order) the source
+    // already had. A category never seen before is called "Autres".
+    if (liveNamesMissing) {
+      results[0] = [
+        for (final r in db.select(
+          'SELECT ext_id, name FROM categories WHERE source_id = ? AND kind = ? ORDER BY position',
+          [sourceId, ContentKind.live.db],
+        ))
+          {'category_id': r['ext_id'], 'category_name': r['name']},
+      ];
+    }
     final total = results[1].length + results[3].length + results[5].length;
     progress('Analyse', total);
 
@@ -413,11 +470,16 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
       ]);
     }
 
-    _commit(db, sourceId, batch, progress, account: account);
+    final warning = warnings.isEmpty
+        ? null
+        : 'Mise à jour incomplète, l’ancien contenu est gardé pour ce qui a échoué (${warnings.join(' ; ')}).';
+    _commit(db, sourceId, batch, progress, account: account, keep: failed, warning: warning);
+    int kept(String table) =>
+        db.select('SELECT count(*) AS n FROM $table WHERE source_id = ?', [sourceId]).first['n'] as int;
     return ContentImportResult(
       live: batch.channels.length,
-      movies: batch.movies.length,
-      series: batch.series.length,
+      movies: failed.contains(ContentKind.movie) ? kept('movies') : batch.movies.length,
+      series: failed.contains(ContentKind.series) ? kept('series') : batch.series.length,
       warnings: warnings,
     );
   } finally {
@@ -475,7 +537,10 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       if (!file.existsSync()) throw NetException('Fichier EPG introuvable : ${file.path}');
       bytes = file.openRead();
     }
-    await for (final chunk in gunzipIfNeeded(bytes).transform(const Utf8Decoder(allowMalformed: true))) {
+    // A guide is read as it arrives, so its size costs time, not memory:
+    // the bound only stops an endless answer.
+    final guarded = guardBody(gunzipIfNeeded(bytes), maxBytes: 4 << 30);
+    await for (final chunk in guarded.transform(const Utf8Decoder(allowMalformed: true))) {
       parser.add(chunk);
     }
     parser.close();
