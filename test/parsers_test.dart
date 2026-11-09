@@ -224,6 +224,22 @@ http://srv/plain/stream4.ts
       expect(info.rating, 8.1);
     });
 
+    test('the clock of the panel is read from the account answer', () {
+      int? offset(Object? info) => XtreamApi.serverUtcOffset(info);
+      // 2026-11-07 19:45:10 UTC.
+      final stamp = DateTime.utc(2026, 11, 7, 19, 45, 10).millisecondsSinceEpoch ~/ 1000;
+      expect(offset({'timezone': 'Europe/Paris', 'timestamp_now': stamp, 'time_now': '2026-11-07 20:45:10'}), 3600);
+      expect(offset({'timestamp_now': '$stamp', 'time_now': '2026-11-07 14:45:12'}), -5 * 3600);
+      expect(offset({'timestamp_now': stamp, 'time_now': '2026-11-08 01:15:09'}), 5 * 3600 + 1800);
+      expect(offset({'timestamp_now': stamp, 'time_now': '2026-11-07 19:45:10'}), 0);
+      // Missing, unreadable or absurd: no offset rather than a wrong one.
+      expect(offset(null), isNull);
+      expect(offset({'url': 'srv'}), isNull);
+      expect(offset({'timestamp_now': stamp, 'time_now': 'hier'}), isNull);
+      expect(offset({'timestamp_now': 0, 'time_now': '2026-11-07 20:45:10'}), isNull);
+      expect(offset({'timestamp_now': stamp, 'time_now': '2031-01-01 00:00:00'}), isNull);
+    });
+
     test('credentials from get.php link', () {
       final c = XtreamCredentials.tryParse(
         'http://line.example.com:8080/get.php?username=bob&password=s3cr3t&type=m3u_plus&output=ts',
