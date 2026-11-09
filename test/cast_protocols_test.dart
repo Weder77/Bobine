@@ -569,6 +569,34 @@ void main() {
     });
   });
 
+  group('address of this computer for the TV', () {
+    test('the one on the TV network, never the TV itself', () {
+      final tv = InternetAddress('192.168.1.67');
+      final mine = [
+        InternetAddress('10.8.0.2'), // VPN
+        InternetAddress('172.17.0.1'), // Docker / Hyper-V
+        InternetAddress('192.168.56.1'), // VirtualBox
+        InternetAddress('192.168.1.20'), // Wi-Fi
+      ];
+      expect(pickLocalAddress(tv, mine)!.address, '192.168.1.20');
+      expect(pickLocalAddress(tv, [...mine, tv])!.address, '192.168.1.20');
+      expect(pickLocalAddress(tv, [InternetAddress('10.8.0.2')]), isNull);
+      // Bigger networks: the closest addresses are tried first.
+      final far = InternetAddress('10.0.2.7');
+      expect(pickLocalAddress(far, [InternetAddress('192.168.1.20'), InternetAddress('10.0.1.5')]), isNull);
+      expect(
+        candidatesByPrefix(far, [InternetAddress('192.168.1.20'), InternetAddress('10.0.1.5')]).first.address,
+        '10.0.1.5',
+      );
+    });
+
+    test('a renderer on this computer, or on loopback, is reached at its own address', () async {
+      expect((await localAddressFor('127.0.0.1', 1))!.isLoopback, isTrue);
+      final mine = await localIPv4();
+      if (mine.isNotEmpty) expect((await localAddressFor(mine.first.$2.address, 1))!.address, mine.first.$2.address);
+    });
+  });
+
   group('cast addresses', () {
     test('Xtream live channels are asked in HLS for Chromecast only', () {
       const ts = 'http://host:8080/live/user/pass/123.ts';

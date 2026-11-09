@@ -648,11 +648,11 @@ class _ResumeCard extends StatelessWidget {
                       child: Artwork(url: p.image, label: p.title, decodeWidth: 420),
                     ),
                     if (hover)
-                      const Center(
+                      Center(
                         child: CircleAction(
                           icon: Icons.play_arrow_rounded,
                           filled: true,
-                          onTap: _noop,
+                          onTap: onTap,
                           tooltip: 'Reprendre',
                           size: 48,
                         ),
@@ -728,8 +728,6 @@ class _ResumeCard extends StatelessWidget {
     );
   }
 }
-
-void _noop() {}
 
 // ------------------------------------------------------------- live now
 

@@ -49,13 +49,15 @@ class DlnaSession implements CastSession {
     if (device.avTransport == null) throw CastException("Cet appareil ne sait pas lire de vidéo.");
     try {
       final s = await Socket.connect(device.host, device.port, timeout: const Duration(seconds: 6));
-      localAddress = s.address;
       s.destroy();
     } on SocketException {
       throw CastException("L'appareil ne répond pas. Vérifie qu'il est allumé et sur le même réseau.");
     } on TimeoutException {
       throw CastException("L'appareil ne répond pas. Vérifie qu'il est allumé et sur le même réseau.");
     }
+    // Not `s.address`: for an outgoing connection it is the TV's own address.
+    localAddress = await localAddressFor(device.host, device.port);
+    debugPrint('Cast DLNA : cet ordinateur vu de la télé : ${localAddress?.address ?? 'introuvable'}');
     final cm = device.connectionManager;
     if (cm != null) {
       try {

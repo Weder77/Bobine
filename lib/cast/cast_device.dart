@@ -91,3 +91,71 @@ Future<List<(NetworkInterface, InternetAddress)>> localIPv4() async {
     return const [];
   }
 }
+
+/// This computer's address on the network of the device at [host], i.e. the
+/// one the device can open (the relay is published there).
+///
+/// Dart gives no local address for an outgoing connection (`Socket.address`
+/// is the address connected to, the TV's own), so it is worked out from the
+/// computer's addresses: the one on the TV's network (same /24), else the one
+/// a connection to the TV actually leaves from.
+Future<InternetAddress?> localAddressFor(String host, int port) async {
+  InternetAddress? target = InternetAddress.tryParse(host);
+  if (target == null) {
+    try {
+      target = (await InternetAddress.lookup(host, type: InternetAddressType.IPv4)).firstOrNull;
+    } on SocketException {
+      return null;
+    }
+  }
+  if (target == null) return null;
+  if (target.isLoopback) return target;
+  final candidates = [for (final (_, a) in await localIPv4()) a];
+  // A renderer on this computer (Kodi, VLC…).
+  if (candidates.any((a) => a.address == target!.address)) return target;
+  final same = pickLocalAddress(target, candidates);
+  if (same != null) return same;
+  for (final a in candidatesByPrefix(target, candidates)) {
+    try {
+      final s = await Socket.connect(target, port, sourceAddress: a, timeout: const Duration(seconds: 3));
+      s.destroy();
+      return a;
+    } catch (_) {}
+  }
+  return candidatesByPrefix(target, candidates).firstOrNull;
+}
+
+/// The address of [candidates] on the same /24 network as [target] (home
+/// networks), the closest one first; null when none is.
+InternetAddress? pickLocalAddress(InternetAddress target, List<InternetAddress> candidates) {
+  final sorted = candidatesByPrefix(target, candidates);
+  if (sorted.isEmpty || _sharedBits(sorted.first, target) < 24) return null;
+  return sorted.first;
+}
+
+/// [candidates] (IPv4) sorted by the length of the prefix they share with [target].
+List<InternetAddress> candidatesByPrefix(InternetAddress target, List<InternetAddress> candidates) {
+  final v4 = candidates.where((a) => a.type == InternetAddressType.IPv4 && a.address != target.address).toList();
+  v4.sort((a, b) => _sharedBits(b, target).compareTo(_sharedBits(a, target)));
+  return v4;
+}
+
+int _sharedBits(InternetAddress a, InternetAddress b) {
+  final x = a.rawAddress, y = b.rawAddress;
+  if (x.length != y.length) return 0;
+  var bits = 0;
+  for (var i = 0; i < x.length; i++) {
+    final d = x[i] ^ y[i];
+    if (d == 0) {
+      bits += 8;
+      continue;
+    }
+    var mask = 0x80;
+    while (mask > 0 && d & mask == 0) {
+      bits++;
+      mask >>= 1;
+    }
+    break;
+  }
+  return bits;
+}
