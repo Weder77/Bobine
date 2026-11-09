@@ -959,6 +959,14 @@ class Repository {
     [sourceId, channelExt, start.millisecondsSinceEpoch ~/ 1000],
   ).isNotEmpty;
 
+  /// Whether [channelExt] is being recorded at [at], or about to be (a
+  /// recording started by hand begins "now", not at the programme's start).
+  bool isRecordingAt(int sourceId, String channelExt, DateTime at) => db.select(
+    "SELECT 1 FROM recordings WHERE source_id = ? AND channel_ext = ? AND start <= ? AND stop > ? "
+    "AND status IN ('scheduled', 'recording')",
+    [sourceId, channelExt, at.millisecondsSinceEpoch ~/ 1000, at.millisecondsSinceEpoch ~/ 1000],
+  ).isNotEmpty;
+
   // ------------------------------------------------------------------- TMDB
 
   /// Cached TMDB match: (json or null for "no match", fetched at).

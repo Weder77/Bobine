@@ -3,6 +3,7 @@ import 'package:bobine/core/text.dart';
 import 'package:bobine/data/db.dart';
 import 'package:bobine/data/models.dart';
 import 'package:bobine/data/repository.dart';
+import 'package:bobine/features/recording_service.dart';
 
 /// A source with two live categories (one adult-looking), three channels and
 /// a small guide.
@@ -189,6 +190,40 @@ void main() {
     expect(r.status, RecordingStatus.done);
     expect(r.path, '/tmp/match.mkv');
     expect(repo.hasRecording(id, 'c', now), isFalse);
+  });
+
+  test('a channel being recorded is known whatever started the recording', () {
+    final (repo, id) = _fixture();
+    final now = DateTime.now();
+    expect(repo.isRecordingAt(id, 'c', now), isFalse);
+    // "Enregistrer" on a programme on air: the recording starts now.
+    final rid = repo.addRecording(
+      sourceId: id,
+      channelExt: 'c',
+      channelName: 'Sport Max',
+      title: 'Match',
+      start: now.subtract(const Duration(seconds: 5)),
+      stop: now.add(const Duration(hours: 1)),
+    );
+    expect(repo.isRecordingAt(id, 'c', now), isTrue);
+    expect(repo.isRecordingAt(id, 'a', now), isFalse);
+    expect(repo.isRecordingAt(id, 'c', now.add(const Duration(hours: 2))), isFalse);
+    repo.updateRecording(rid, status: RecordingStatus.done);
+    expect(repo.isRecordingAt(id, 'c', now), isFalse);
+  });
+
+  test('two recordings of the same name do not share a file', () {
+    final taken = <String>{};
+    String next() {
+      final path = freeFilePath('/videos', 'TF1 - Le journal - 2026-11-09 20h00', 'ts', exists: taken.contains);
+      taken.add(path);
+      return path;
+    }
+
+    expect(next(), endsWith('TF1 - Le journal - 2026-11-09 20h00.ts'));
+    expect(next(), endsWith('TF1 - Le journal - 2026-11-09 20h00 (2).ts'));
+    expect(next(), endsWith('TF1 - Le journal - 2026-11-09 20h00 (3).ts'));
+    expect(taken, hasLength(3));
   });
 
   test('channels on air: every quality of the channel, by tvg-id or by name, hidden ones left out', () {
