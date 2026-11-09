@@ -118,6 +118,7 @@ class MpvTile implements TileEngine {
       ..add(
         _player.stream.buffering.listen((b) {
           _bufferingSince = b ? (_bufferingSince ?? DateTime.now()) : null;
+          if (!b) _reconnect.playing();
           if (_state.value.loading != b && _state.value.message == null) _state.value = TileState(loading: b);
         }),
       )

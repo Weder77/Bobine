@@ -185,6 +185,7 @@ class PlayerService {
     _subs.add(
       player.stream.buffering.listen((b) {
         _bufferingSince = b ? (_bufferingSince ?? DateTime.now()) : null;
+        if (!b) _reconnect.playing();
       }),
     );
     // A live stream stuck buffering (server stopped sending) is reopened.
