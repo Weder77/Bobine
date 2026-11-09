@@ -342,6 +342,20 @@ class SyncEngine {
 
   void _forget(String table, String key) => _db.execute('DELETE FROM sync_log WHERE tbl = ? AND key = ?', [table, key]);
 
+  /// Notes [key] as changed after [received], so that this device's version
+  /// is sent and wins: used when what the account says (a deletion, an empty
+  /// value) is deliberately not applied here.
+  void _noteAfter(String table, String key, RemoteItem received) => _db.execute(
+    'INSERT OR REPLACE INTO sync_log (tbl, key, changed_at) VALUES (?, ?, ?)',
+    [table, key, math.max(DateTime.now().millisecondsSinceEpoch, received.modifiedAt + 1)],
+  );
+
+  /// Profiles that hold favourites, progress, recent channels or reminders.
+  Set<int> _profilesWithData() => {
+    for (final t in kSyncKeys.entries.where((e) => e.value.contains('profile_id')))
+      for (final r in _db.select('SELECT DISTINCT profile_id FROM ${t.key}')) r['profile_id'] as int,
+  };
+
   /// Applies received items in one transaction, without noting them as
   /// local changes. The account wins ties.
   void _apply(List<_Incoming> items, SyncChanges changes, {required bool linking, int? cursor}) {
@@ -354,21 +368,42 @@ class SyncEngine {
         for (final i in items)
           if (i.table == 'sources' || i.table == 'profiles') '${i.table} ${i.key.first}',
       };
+      // What this device held before its first sync (never sent anywhere).
+      final ownData = linking ? _profilesWithData() : const <int>{};
+      Map<String, Object?>? localSettings;
+      final deletedProfiles = <_Incoming>[];
       for (final i in items) {
         switch (i.table) {
           case 'profiles':
-            _applyProfile(i, changes, linking, adopted, remoteUids);
+            if (i.data == null) {
+              deletedProfiles.add(i);
+            } else {
+              _applyProfile(i, changes, linking, adopted, remoteUids, ownData);
+            }
           case 'sources':
             _applySource(i, changes, linking, adopted, remoteUids);
           case 'settings':
             final name = '${i.key.first}';
             if (!_localIsNewer('settings', name, i.item.modifiedAt) && i.data != null) {
-              settingValues[name] = i.data!['value'];
-              _forget('settings', name);
+              final value = i.data!['value'];
+              if (linking && value == null && (localSettings ??= settings.syncedValues())[name] != null) {
+                // First sync: an account without this value (parental code,
+                // TMDB key) does not erase the one set on this device, which
+                // is sent to the account instead.
+                _noteAfter('settings', name, i.item);
+              } else {
+                settingValues[name] = value;
+                _forget('settings', name);
+              }
             }
           default:
             _applyRow(i, changes);
         }
+      }
+      // Deleted profiles last: whether one is the only profile left here is
+      // known once the others are in.
+      for (final i in deletedProfiles) {
+        _applyProfile(i, changes, linking, adopted, remoteUids, ownData);
       }
       if (cursor != null) {
         _db.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', [cursorKey, '$cursor']);
@@ -393,7 +428,14 @@ class SyncEngine {
     adopted.add(id);
   }
 
-  void _applyProfile(_Incoming i, SyncChanges changes, bool linking, Set<int> adopted, Set<String> remoteUids) {
+  void _applyProfile(
+    _Incoming i,
+    SyncChanges changes,
+    bool linking,
+    Set<int> adopted,
+    Set<String> remoteUids,
+    Set<int> ownData,
+  ) {
     final uid = '${i.key.first}';
     final d = i.data;
     var id = _idOf('profiles', uid);
@@ -410,8 +452,16 @@ class SyncEngine {
     if (_localIsNewer('profiles', uid, i.item.modifiedAt)) return;
     _forget('profiles', uid);
     if (d == null) {
-      // A device always keeps one profile.
-      if (id != null && (_db.select('SELECT count(*) AS n FROM profiles').first['n'] as int) > 1) {
+      if (id == null) return;
+      // A device always keeps one profile. On its first sync it also keeps a
+      // profile it used: "Moi" has the same uid on every device, and its
+      // favourites and progress here were never on the account, so deleting
+      // it with them (because "Moi" was deleted elsewhere) would lose them.
+      final last = (_db.select('SELECT count(*) AS n FROM profiles').first['n'] as int) <= 1;
+      if (last || (linking && ownData.contains(id))) {
+        // It stays here, so it lives on the account again.
+        _noteAfter('profiles', uid, i.item);
+      } else {
         _db.execute('DELETE FROM profiles WHERE id = ?', [id]);
         changes.profiles = true;
       }

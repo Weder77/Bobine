@@ -277,6 +277,107 @@ void main() {
     expect(a.profile('Léa').name, b.profile('Léa').name);
   });
 
+  test('first sync keeps a profile the device used, even deleted on the account', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote);
+    final srcA = a.xtream();
+    a.repo.toggleFavorite(srcA, ContentKind.movie, 'a-old'); // in "Moi", sent to the account
+    final alice = a.repo.createProfile(name: 'Alice', color: 1);
+    await a.sync();
+    // "Moi" (same uid on every device) is deleted on A.
+    a.repo.profileId = alice;
+    a.repo.deleteProfile(1);
+    await _tick();
+    await a.sync();
+    expect(a.repo.profiles().map((p) => p.name), ['Alice']);
+
+    // A new, empty device follows the account: no "Moi" there either, even
+    // though favourites of the deleted profile are still on the account.
+    final fresh = Device(remote);
+    await fresh.sync();
+    expect(fresh.repo.profiles().map((p) => p.name), ['Alice']);
+    expect(fresh.repo.db.select('SELECT * FROM favorites'), isEmpty);
+
+    // A device used for months without an account: its "Moi" has favourites
+    // and progress that exist nowhere else.
+    final b = Device(remote);
+    final srcB = b.xtream();
+    b.repo.toggleFavorite(srcB, ContentKind.movie, 'b-fav');
+    b.watch(srcB, 'film', const Duration(minutes: 30));
+    b.repo.db.execute('DELETE FROM sync_log'); // nothing was ever noted for it
+    await b.sync();
+    expect(b.repo.profiles().map((p) => p.name).toSet(), {'Moi', 'Alice'});
+    expect(b.repo.isFavorite(b.repo.sources().single.id, ContentKind.movie, 'b-fav'), isTrue);
+    expect(b.repo.progress(b.repo.sources().single.id, ContentKind.movie, 'film')!.position.inMinutes, 30);
+    expect(b.pending, 0);
+
+    // "Moi" lives on the account again, with what B had.
+    await a.sync();
+    expect(a.repo.profiles().map((p) => p.name).toSet(), {'Moi', 'Alice'});
+    a.repo.profileId = a.profile('Moi').id;
+    expect(a.repo.isFavorite(srcA, ContentKind.movie, 'b-fav'), isTrue);
+    expect(a.repo.progress(srcA, ContentKind.movie, 'film')!.position.inMinutes, 30);
+  });
+
+  test('a profile deleted on one linked device is deleted on the other', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote), b = Device(remote);
+    final src = a.xtream();
+    final lea = a.repo.createProfile(name: 'Léa', color: 1);
+    await a.sync();
+    await b.sync();
+    final leaB = b.profile('Léa').id;
+    b.repo.profileId = leaB;
+    b.repo.toggleFavorite(b.repo.sources().single.id, ContentKind.movie, 'x');
+    b.repo.profileId = 1;
+    await b.sync();
+    await _tick();
+    a.repo.deleteProfile(lea);
+    await a.sync();
+    final changes = await b.sync();
+    expect(changes.profiles, isTrue);
+    expect(b.repo.profiles().map((p) => p.name), ['Moi']);
+    expect(b.repo.db.select('SELECT * FROM favorites WHERE profile_id = ?', [leaB]), isEmpty);
+    expect(a.repo.isFavorite(src, ContentKind.movie, 'x'), isFalse);
+  });
+
+  test('first sync: an account without parental code or TMDB key does not erase the device ones', () async {
+    final remote = MemoryRemote();
+    // The account is created on a laptop that has neither.
+    final laptop = Device(remote);
+    laptop.settings.update((s) => s.audioLang = 'en');
+    await laptop.sync();
+    expect(laptop.settings.parentalPin, isNull);
+
+    // The family PC had its code and key before accounts existed.
+    final family = Device(remote);
+    family.settings.update((s) {
+      s.parentalPin = '4821';
+      s.tmdbKey = 'cle-tmdb';
+      s.audioLang = 'de';
+    });
+    family.repo.db.execute('DELETE FROM sync_log'); // as after the v5 migration
+    final changes = await family.sync();
+    expect(family.settings.parentalPin, '4821');
+    expect(family.settings.tmdbKey, 'cle-tmdb');
+    // Values both sides have: the account still wins on the first sync.
+    expect(family.settings.audioLang, 'en');
+    expect(changes.settings, isTrue);
+    expect(family.pending, 0);
+
+    // The code now protects the laptop too.
+    await laptop.sync();
+    expect(laptop.settings.parentalPin, '4821');
+    expect(laptop.settings.tmdbKey, 'cle-tmdb');
+
+    // Once linked, removing the code on purpose goes through normally.
+    await _tick();
+    laptop.settings.update((s) => s.parentalPin = null);
+    await laptop.sync();
+    await family.sync();
+    expect(family.settings.parentalPin, isNull);
+  });
+
   test('data a device held before the update loses to the account on linking', () async {
     final remote = MemoryRemote();
     final a = Device(remote);
