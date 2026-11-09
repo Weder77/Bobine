@@ -430,7 +430,9 @@ void main() {
     });
 
     test('direct mode gives the provider address; Xtream live in HLS for Chromecast', () async {
-      cast.preferRelay = false;
+      cast
+        ..setDirect(_tv, true)
+        ..setDirect(_dlna, true);
       await cast.start(_tv, _channel());
       final (media, start) = session.loaded.single;
       expect(media.url, 'http://host:8080/live/u/p/7.m3u8');
@@ -445,8 +447,43 @@ void main() {
       expect(session.loaded.single.$1.contentType, 'video/mp2t');
     });
 
+    test('direct mode is chosen for one TV, not for the next one', () async {
+      // The relay did not work with this TV: the user sends it the address.
+      await cast.start(_tv, _movie());
+      expect(cast.viaRelay, isTrue);
+      await cast.retry(viaRelay: false);
+      expect(cast.viaRelay, isFalse);
+      expect(session.loaded.single.$1.url, 'http://host:8080/movie/u/p/9.mkv');
+      // The next film on the same TV goes the same way…
+      await cast.load(_movie(url: 'http://host:8080/movie/u/p/10.mkv'));
+      expect(session.loaded.last.$1.url, 'http://host:8080/movie/u/p/10.mkv');
+
+      // … but another TV has not been trusted with the identifiers.
+      await cast.start(_dlna, _movie());
+      expect(cast.viaRelay, isTrue);
+      expect(session.loaded.single.$1.url, isNot(contains('/u/p/')));
+      expect(session.loaded.single.$1.url, contains('/c/'));
+
+      // Back on the first one, then through this computer again.
+      await cast.start(_tv, _movie());
+      expect(cast.viaRelay, isFalse);
+      await cast.retry(viaRelay: true);
+      expect(cast.viaRelay, isTrue);
+      expect(cast.relayFor(_tv), isTrue);
+    });
+
+    test('what direct mode would hand to the TV', () {
+      bool reveals(String url) => CastService.directRevealsCredentials(_movie(url: url));
+      expect(reveals('http://host:8080/movie/jean/s3cret/9.mkv'), isTrue);
+      expect(reveals('http://host:8080/live/jean/s3cret/7.ts'), isTrue);
+      expect(reveals('https://cdn.example/film.mp4?token=abc123'), isTrue);
+      // Nothing to protect: a public address, a file of this computer.
+      expect(reveals('https://cdn.example/chaine/index.m3u8'), isFalse);
+      expect(reveals(r'C:\Videos\Bobine\film.ts'), isFalse);
+    });
+
     test('recordings always go through the relay', () async {
-      cast.preferRelay = false;
+      cast.setDirect(_dlna, true);
       await cast.start(_dlna, _movie(url: r'C:\Videos\Bobine\film.ts'));
       expect(session.loaded.single.$1.url, contains('/c/'));
       expect(cast.viaRelay, isTrue);
@@ -505,7 +542,8 @@ void main() {
       expect(failing.active, isTrue);
       expect(failing.viaRelay, isTrue);
       await failing.retry(viaRelay: false);
-      expect(failing.preferRelay, isFalse);
+      expect(failing.relayFor(_tv), isFalse);
+      expect(failing.viaRelay, isFalse);
       expect(session.actions.first, 'connect');
     });
 

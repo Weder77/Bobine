@@ -223,6 +223,39 @@ class CastRemoteView extends StatelessWidget {
   final void Function({bool? viaRelay}) onRetry;
   final VoidCallback onStop;
 
+  /// Switches the way the stream reaches the TV. Direct mode gives the TV
+  /// the provider's address: when the account's identifiers are in it, the
+  /// user is told what that means and decides.
+  Future<void> _switchMode(BuildContext context) async {
+    final toDirect = cast.viaRelay;
+    final item = cast.item.value;
+    if (toDirect && item != null && CastService.directRevealsCredentials(item)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Diffuser en direct ?'),
+          content: SizedBox(
+            width: 480,
+            child: Text(
+              'En direct, la télé va chercher le flux elle-même : elle reçoit l’adresse de ton fournisseur, '
+              'identifiant et mot de passe compris. Ils circulent en clair sur ton réseau, et la télé les donne '
+              'à tout appareil du réseau qui lui demande ce qu’elle lit.\n\n'
+              'À réserver à ton propre réseau. Ce choix vaut pour « ${cast.device?.name ?? 'cette télé'} », '
+              'jusqu’à la fermeture de Bobine.',
+              style: const TextStyle(height: 1.5),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Diffuser en direct')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    onRetry(viaRelay: !toDirect);
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: cast,
@@ -314,7 +347,7 @@ class CastRemoteView extends StatelessWidget {
                         ),
                         if (failed && !local)
                           OutlinedButton(
-                            onPressed: () => onRetry(viaRelay: !cast.viaRelay),
+                            onPressed: () => _switchMode(context),
                             child: Text(cast.viaRelay ? 'Essayer en direct' : 'Essayer via cet ordinateur'),
                           ),
                       ],
@@ -344,12 +377,20 @@ class CastRemoteView extends StatelessWidget {
                       style: TextStyle(fontSize: 12.5, color: DarkColors.faint),
                     ),
                   ],
+                  if (!cast.viaRelay && !failed && !local && _revealing(cast)) ...[
+                    const SizedBox(height: 6),
+                    const Text(
+                      'En direct : la télé reçoit l’adresse de ton fournisseur, identifiants compris.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 12.5, color: DarkColors.faint),
+                    ),
+                  ],
                   // The TV may refuse the stream while reporting that it
                   // plays: the other way to send it stays at hand.
                   if (!failed && !local && device != null) ...[
                     const SizedBox(height: 4),
                     TextButton(
-                      onPressed: () => onRetry(viaRelay: !cast.viaRelay),
+                      onPressed: () => _switchMode(context),
                       style: TextButton.styleFrom(
                         foregroundColor: DarkColors.faint,
                         textStyle: const TextStyle(fontSize: 12.5, decoration: TextDecoration.underline),
@@ -369,6 +410,12 @@ class CastRemoteView extends StatelessWidget {
       );
     },
   );
+
+  /// The TV is being given an address that holds the account's identifiers.
+  static bool _revealing(CastService c) {
+    final item = c.item.value;
+    return item != null && CastService.directRevealsCredentials(item);
+  }
 
   static bool _tsLive(CastService c) {
     final it = c.item.value;
