@@ -70,6 +70,81 @@ void main() {
     expect(repo.channels(id).length, 3);
   });
 
+  test('locked content stays out of "Reprendre" and is refused by id while the code is required', () {
+    final (repo, id) = _fixture();
+    final db = repo.db;
+    for (final (cid, kind, ext) in [
+      (20, 'movie', 'mf'),
+      (21, 'movie', 'mx'),
+      (30, 'series', 'sf'),
+      (31, 'series', 'sx'),
+    ]) {
+      db.execute('INSERT INTO categories (id, source_id, kind, ext_id, name, position) VALUES (?, ?, ?, ?, ?, 0)', [
+        cid,
+        id,
+        kind,
+        ext,
+        ext.endsWith('x') ? 'Adultes' : 'Famille',
+      ]);
+    }
+    void movie(String ext, int cat) => db.execute(
+      'INSERT INTO movies (source_id, ext_id, category_id, name, search, position) VALUES (?, ?, ?, ?, ?, 0)',
+      [id, ext, cat, 'Film $ext', 'film $ext'],
+    );
+    void series(String ext, int cat) => db.execute(
+      'INSERT INTO series (source_id, ext_id, category_id, name, search, position) VALUES (?, ?, ?, ?, ?, 0)',
+      [id, ext, cat, 'Série $ext', 'serie $ext'],
+    );
+    movie('family', 20);
+    movie('adult', 21);
+    series('show', 30);
+    series('xshow', 31);
+    db.execute(
+      'INSERT INTO episodes (source_id, series_ext, ext_id, season, episode, title) VALUES (?, ?, ?, 1, 1, ?)',
+      [id, 'xshow', 'xe1', 'Pilote'],
+    );
+    void watched(ContentKind kind, String ext, {String? seriesExt}) => repo.saveProgress(
+      sourceId: id,
+      kind: kind,
+      extId: ext,
+      position: const Duration(minutes: 10),
+      duration: const Duration(minutes: 90),
+      title: ext,
+      seriesExt: seriesExt,
+    );
+    watched(ContentKind.movie, 'family');
+    watched(ContentKind.movie, 'adult');
+    watched(ContentKind.episode, 'e1', seriesExt: 'show');
+    watched(ContentKind.episode, 'xe1', seriesExt: 'xshow');
+    // A film the provider no longer lists: nothing to protect.
+    watched(ContentKind.movie, 'gone');
+    repo.setCategoryLocked(id, ContentKind.movie, 'mx', true);
+    repo.setCategoryLocked(id, ContentKind.series, 'sx', true);
+    repo.setCategoryLocked(id, ContentKind.live, 'xx', true);
+
+    // The code was typed: everything is there.
+    Set<String> resume() => repo.continueWatching(id).map((p) => p.extId).toSet();
+    expect(resume(), {'family', 'adult', 'e1', 'xe1', 'gone'});
+    expect(repo.isLocked(id, ContentKind.movie, 'adult'), isFalse);
+
+    repo.hideLocked = true;
+    expect(resume(), {'family', 'e1', 'gone'});
+    expect(repo.isLocked(id, ContentKind.movie, 'adult'), isTrue);
+    expect(repo.isLocked(id, ContentKind.movie, 'family'), isFalse);
+    expect(repo.isLocked(id, ContentKind.series, 'xshow'), isTrue);
+    expect(repo.isLocked(id, ContentKind.episode, 'xe1', seriesExt: 'xshow'), isTrue);
+    // Without its series: found through the episode.
+    expect(repo.isLocked(id, ContentKind.episode, 'xe1'), isTrue);
+    expect(repo.isLocked(id, ContentKind.episode, 'e1', seriesExt: 'show'), isFalse);
+    expect(repo.isLocked(id, ContentKind.live, 'b'), isTrue);
+    expect(repo.isLocked(id, ContentKind.live, 'a'), isFalse);
+    expect(repo.isLocked(id, ContentKind.movie, 'gone'), isFalse);
+    // Hiding a category tidies up, it does not lock.
+    repo.setCategoryHidden(id, ContentKind.movie, 'mf', true);
+    expect(repo.isLocked(id, ContentKind.movie, 'family'), isFalse);
+    expect(resume(), contains('family'));
+  });
+
   test('categories follow the order the user chose', () {
     final (repo, id) = _fixture();
     repo.setCategoryOrder(id, ContentKind.live, ['sp', 'fr', 'xx']);

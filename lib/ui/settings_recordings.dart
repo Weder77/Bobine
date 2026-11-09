@@ -17,7 +17,11 @@ class RecordingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
-    final list = s.repo.recordings();
+    // Recordings of a locked channel stay out while the code is required.
+    final list = [
+      for (final r in s.repo.recordings())
+        if (!s.repo.isLocked(r.sourceId, ContentKind.live, r.channelExt)) r,
+    ];
     return SettingsSection(
       title: 'Enregistrements',
       children: [

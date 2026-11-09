@@ -166,11 +166,25 @@ class _ProfileChoiceState extends State<_ProfileChoice> {
   }
 }
 
-/// Creates ([profile] null) or edits a profile.
-Future<void> showProfileEditor(BuildContext context, {Profile? profile}) => showDialog<void>(
-  context: context,
-  builder: (_) => _ProfileEditor(profile: profile),
-);
+/// Creates ([profile] null) or edits a profile. From a kids profile the
+/// parental code is asked first: the editor can turn "Profil enfant" off,
+/// delete the profile or create an unrestricted one.
+Future<void> showProfileEditor(BuildContext context, {Profile? profile}) async {
+  final s = AppScope.of(context);
+  if (s.profile.kids && s.settings.parentalEnabled) {
+    final pin = await askPin(context, title: 'Modifier les profils', message: 'Tape le code parental.');
+    if (pin == null || !context.mounted) return;
+    if (pin != s.settings.parentalPin) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+      return;
+    }
+  }
+  if (!context.mounted) return;
+  await showDialog<void>(
+    context: context,
+    builder: (_) => _ProfileEditor(profile: profile),
+  );
+}
 
 class _ProfileEditor extends StatefulWidget {
   const _ProfileEditor({this.profile});

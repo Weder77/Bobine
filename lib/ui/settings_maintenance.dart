@@ -10,6 +10,7 @@ import '../services.dart';
 import 'diagnostic_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/markdown.dart';
+import 'widgets/pin_dialog.dart';
 
 /// Réglages → Sauvegarde et diagnostic.
 class BackupSection extends StatelessWidget {
@@ -54,10 +55,25 @@ class BackupSection extends StatelessWidget {
     );
   }
 
+  /// Asks the parental code when one is set; true when it may go on.
+  /// A backup "with credentials" holds the code in clear, and restoring a
+  /// file replaces it (or removes it) and the locks of the categories.
+  Future<bool> _parentAgrees(BuildContext context, String title) async {
+    final s = AppScope.of(context);
+    if (!s.settings.parentalEnabled) return true;
+    final pin = await askPin(context, title: title, message: 'Tape le code parental.');
+    if (pin == null || !context.mounted) return false;
+    if (pin == s.settings.parentalPin) return true;
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+    return false;
+  }
+
   Future<void> _export(BuildContext context) async {
     final s = AppScope.of(context);
     final credentials = await showDialog<bool>(context: context, builder: (_) => const _ExportDialog());
     if (credentials == null || !context.mounted) return;
+    if (credentials && !await _parentAgrees(context, 'Sauvegarde avec identifiants')) return;
+    if (!context.mounted) return;
     final loc = await getSaveLocation(
       suggestedName: s.backup.suggestedFileName(),
       acceptedTypeGroups: const [
@@ -105,6 +121,7 @@ class BackupSection extends StatelessWidget {
       ),
     );
     if (ok != true || !context.mounted) return;
+    if (!await _parentAgrees(context, 'Restaurer une sauvegarde') || !context.mounted) return;
     try {
       final report = await s.backup.restoreFrom(file.path);
       s.afterRestore(report);

@@ -57,6 +57,43 @@ class Repository {
     return w;
   }
 
+  /// SQL condition: the row of [t] sits in a category the parental control
+  /// locks, and the code is required now ([hideLocked]). Unlike [_visible],
+  /// hidden categories do not count: hiding tidies up, locking protects.
+  String _lockedOut(String t, ContentKind kind, int sourceId) {
+    if (!hideLocked) return '0';
+    return '$t.category_id IN (SELECT c.id FROM categories c JOIN category_prefs p '
+        'ON p.source_id = c.source_id AND p.kind = c.kind AND p.ext_id = c.ext_id '
+        "WHERE c.source_id = $sourceId AND c.kind = '${kind.db}' AND p.locked = 1)";
+  }
+
+  /// Whether the parental control keeps this item away now: a channel, a
+  /// film, a series or an episode (through its series) of a locked category
+  /// while the code was not typed. Used wherever an item is reached by its
+  /// id and not through a list ("Reprendre", multi-view, recordings, reminders).
+  bool isLocked(int sourceId, ContentKind kind, String extId, {String? seriesExt}) {
+    if (!hideLocked) return false;
+    final (table, of, id) = switch (kind) {
+      ContentKind.live => ('channels', ContentKind.live, extId),
+      ContentKind.movie => ('movies', ContentKind.movie, extId),
+      ContentKind.series => ('series', ContentKind.series, extId),
+      ContentKind.episode => ('series', ContentKind.series, seriesExt ?? _seriesOfEpisode(sourceId, extId)),
+    };
+    if (id == null) return false;
+    return db.select(
+      'SELECT 1 FROM $table t WHERE t.source_id = ? AND t.ext_id = ? AND ${_lockedOut('t', of, sourceId)} LIMIT 1',
+      [sourceId, id],
+    ).isNotEmpty;
+  }
+
+  String? _seriesOfEpisode(int sourceId, String extId) {
+    final rows = db.select('SELECT series_ext FROM episodes WHERE source_id = ? AND ext_id = ? LIMIT 1', [
+      sourceId,
+      extId,
+    ]);
+    return rows.isEmpty ? null : rows.first['series_ext'] as String?;
+  }
+
   int get _nowSec => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
   /// Runs a write, retrying later if the database is busy (background import).
@@ -505,11 +542,18 @@ class Repository {
   }
 
   /// Items to show in "Continuer à regarder": unfinished movies, plus for each
-  /// series the most recent episode.
+  /// series the most recent episode. Films and series of a locked category
+  /// stay out while the parental code is required.
   List<ProgressEntry> continueWatching(int sourceId, {int limit = 20}) {
     final rows = db.select(
-      'SELECT * FROM progress WHERE profile_id = $profileId AND source_id = ? AND finished = 0 AND position_ms > 30000 '
-      'ORDER BY updated_at DESC LIMIT 200',
+      'SELECT * FROM progress pr WHERE pr.profile_id = $profileId AND pr.source_id = ? AND pr.finished = 0 '
+      'AND pr.position_ms > 30000 '
+      "AND NOT EXISTS (SELECT 1 FROM movies m WHERE pr.kind = '${ContentKind.movie.db}' "
+      'AND m.source_id = pr.source_id AND m.ext_id = pr.ext_id AND ${_lockedOut('m', ContentKind.movie, sourceId)}) '
+      "AND NOT EXISTS (SELECT 1 FROM series sr WHERE pr.kind = '${ContentKind.episode.db}' "
+      'AND sr.source_id = pr.source_id AND sr.ext_id = pr.series_ext '
+      'AND ${_lockedOut('sr', ContentKind.series, sourceId)}) '
+      'ORDER BY pr.updated_at DESC LIMIT 200',
       [sourceId],
     );
     final seenSeries = <String>{};

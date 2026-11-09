@@ -12,10 +12,21 @@ import 'series_detail_screen.dart';
 
 /// Entry points used by every screen to start playback or open details.
 class Launch {
+  /// Whether the parental control keeps this item away now (the user is
+  /// told). Lists already leave locked items out; this covers what is
+  /// reached by its id: "Reprendre", reminders, recordings, quick actions.
+  static bool _locked(BuildContext context, int sourceId, ContentKind kind, String extId, {String? seriesExt}) {
+    if (!AppScope.of(context).repo.isLocked(sourceId, kind, extId, seriesExt: seriesExt)) return false;
+    ScaffoldMessenger.maybeOf(context)
+        ?.showSnackBar(const SnackBar(content: Text('Contenu verrouillé par le contrôle parental.')));
+    return true;
+  }
+
   static Future<void> channel(BuildContext context, Channel c, List<Channel> list, {bool keepAlive = false}) async {
     final s = AppScope.of(context);
     final source = s.repo.source(c.sourceId);
     if (source == null) return;
+    if (_locked(context, c.sourceId, ContentKind.live, c.extId)) return;
     var index = list.indexWhere((x) => x.extId == c.extId);
     final channels = index < 0 ? [c] : list;
     if (index < 0) index = 0;
@@ -29,6 +40,7 @@ class Launch {
     final s = AppScope.of(context);
     final source = s.repo.source(m.sourceId);
     if (source == null) return;
+    if (_locked(context, m.sourceId, ContentKind.movie, m.extId)) return;
     final p = s.repo.progress(m.sourceId, ContentKind.movie, m.extId);
     await PlayerScreen.open(
       context,
@@ -49,6 +61,7 @@ class Launch {
     final s = AppScope.of(context);
     final source = s.repo.source(e.sourceId);
     if (source == null) return;
+    if (_locked(context, e.sourceId, ContentKind.episode, e.extId, seriesExt: e.seriesExt)) return;
     final p = s.repo.progress(e.sourceId, ContentKind.episode, e.extId);
     await PlayerScreen.open(
       context,
@@ -66,6 +79,7 @@ class Launch {
     final s = AppScope.of(context);
     final source = s.repo.source(c.sourceId);
     if (source == null) return;
+    if (_locked(context, c.sourceId, ContentKind.live, c.extId)) return;
     final item = replayItem(source, c, p);
     if (item == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Pas de replay pour cette chaîne.")));
@@ -76,6 +90,7 @@ class Launch {
 
   /// Plays a finished recording.
   static Future<void> recording(BuildContext context, Recording r) async {
+    if (_locked(context, r.sourceId, ContentKind.live, r.channelExt)) return;
     if (r.path == null || !File(r.path!).existsSync()) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fichier introuvable.')));
       return;
@@ -102,9 +117,13 @@ class Launch {
     }
   }
 
-  static Future<void> openMovie(BuildContext context, Movie m) =>
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)));
+  static Future<void> openMovie(BuildContext context, Movie m) async {
+    if (_locked(context, m.sourceId, ContentKind.movie, m.extId)) return;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)));
+  }
 
-  static Future<void> openSeries(BuildContext context, Series sr) =>
-      Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: sr)));
+  static Future<void> openSeries(BuildContext context, Series sr) async {
+    if (_locked(context, sr.sourceId, ContentKind.series, sr.extId)) return;
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: sr)));
+  }
 }

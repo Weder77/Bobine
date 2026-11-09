@@ -310,7 +310,11 @@ class MultiViewController extends ChangeNotifier {
       final ids = (saved['channels'] as List? ?? const []).take(maxSlots).toList();
       for (var i = 0; i < ids.length; i++) {
         final ext = ids[i];
-        final c = ext is String ? repo.channelByExt(source.id, ext) : null;
+        // Saved by another profile, or before the code was asked again: a
+        // locked channel does not come back by itself.
+        final c = ext is String && !repo.isLocked(source.id, ContentKind.live, ext)
+            ? repo.channelByExt(source.id, ext)
+            : null;
         if (c != null && i < layout.slots) _put(i, c);
       }
       final heard = saved['selected'];
