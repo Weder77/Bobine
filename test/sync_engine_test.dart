@@ -504,6 +504,33 @@ void main() {
       expect(at(b, srcB), const Duration(minutes: 50));
     });
 
+    test('an item written by a newer Bobine is not written over by an older one', () async {
+      a.watch(srcA, '9', const Duration(minutes: 10));
+      await a.sync();
+      // Another device, with a newer version, rewrites it in a format this
+      // one does not know.
+      final id = await _itemOf(remote, 'progress');
+      final codec = SyncCodec(_keys);
+      final record = await codec.open(id, remote.items[id]!.payload);
+      final newer = await codec.seal(id, {...record, 'v': 2, 'nouveau': 'champ'});
+      remote.items[id] = RemoteItem(
+        id: id,
+        modifiedAt: DateTime.now().millisecondsSinceEpoch + 60000,
+        payload: newer,
+        rev: ++remote._rev,
+      );
+      await a.sync(); // received, left aside
+      expect(at(a, srcA), const Duration(minutes: 10));
+
+      // A change here, dated before it: it was not made on top of it.
+      a.watch(srcA, '9', const Duration(minutes: 50));
+      await a.sync();
+      expect(remote.items[id]!.payload, newer, reason: 'the old version wrote over what it could not read');
+      expect(a.pending, 0);
+      await a.sync();
+      expect(remote.items[id]!.payload, newer);
+    });
+
     test('two changes made without seeing each other: still the most recent one', () async {
       // Neither device has the other's version: nothing says which came
       // last but their times.

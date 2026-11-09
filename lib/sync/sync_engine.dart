@@ -178,7 +178,7 @@ class SyncEngine {
           final unseen = <RemoteItem>[];
           for (final theirs in newer) {
             final b = mine[theirs.id];
-            if (b != null && theirs.rev > 0 && theirs.rev <= after) {
+            if (b != null && theirs.rev > 0 && theirs.rev <= after && !await _fromNewerVersion(theirs)) {
               // A version this device had already received: the change sent
               // was made after it, on top of it. Its time says otherwise
               // only because a clock is wrong (this one late, or the one of
@@ -411,6 +411,20 @@ class SyncEngine {
     const order = {'profiles': 0, 'sources': 1};
     out.sort((a, b) => (order[a.table] ?? 2).compareTo(order[b.table] ?? 2));
     return out;
+  }
+
+  /// Whether [item] was written by a newer Bobine than this one. Such an
+  /// item was received and left aside, not applied: a change made here was
+  /// not made "on top of it", and an old version must not write over what
+  /// it could not read. (A damaged item is another matter: the device that
+  /// holds the real thing does write over it.)
+  Future<bool> _fromNewerVersion(RemoteItem item) async {
+    try {
+      final v = (await codec.open(item.id, item.payload))['v'];
+      return v is int && v > _version;
+    } on SyncKeyException {
+      return false;
+    }
   }
 
   /// Whether these keys read anything of what the account holds: yes means
