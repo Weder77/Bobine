@@ -245,8 +245,12 @@ class PlayerService {
   static bool stopsPlayback(String message, {required bool live, required bool playing, required Duration duration}) {
     if (!isFatalError(message)) return false;
     if (!playing) return true;
-    return !live && duration == Duration.zero && _gaveUp.hasMatch(message);
+    return !live && duration == Duration.zero && isLoadFailure(message);
   }
+
+  /// Whether [message] says the engine gave up on opening the file (after
+  /// its own retries), not that one attempt failed.
+  static bool isLoadFailure(String message) => _gaveUp.hasMatch(message);
 
   NativePlayer? get _native {
     final p = player.platform;

@@ -23,6 +23,7 @@ import 'player_chrome.dart';
 import 'player_session.dart';
 import 'player_service.dart';
 import 'player_widgets.dart';
+import 'seek_preview.dart';
 
 class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key, required this.session});
@@ -103,6 +104,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<(String, String)> _stats = const [];
   String? _osd;
   String? _error;
+
+  /// The picture shown while hovering the seek bar (a second, paused player
+  /// that only exists while the bar is hovered).
+  final SeekPreview _preview = SeekPreview();
 
   /// Where playback was when [_error] was raised.
   Duration _errorAt = Duration.zero;
@@ -229,12 +234,30 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (wasFullscreen && !replaced) AppWindow.setFullscreen(false);
       if (!keepAlive && !replaced) ps.stop();
     });
+    _preview.dispose();
     _focus.dispose();
     _position.dispose();
     _cache.dispose();
     _decoder.dispose();
     _panelScroll.dispose();
     super.dispose();
+  }
+
+  /// Whether the instant hovered on the bar can be shown as a picture. Not a
+  /// replay: those streams are made on demand and cannot jump.
+  bool get _canPreview {
+    if (_isLive || _item.isReplay || _casting || _item.url.isEmpty) return false;
+    return seekPreviewAllowed(
+      mode: _s.settings.seekPreview,
+      local: isLocalMedia(_item.url),
+      maxConnections: int.tryParse('${_source?.accountInfo?['max_connections'] ?? ''}'),
+      inUse: 1 + _s.recordings.activeCount.value,
+    );
+  }
+
+  void _onSeekPoint(Duration? at) {
+    if (at == null || !_canPreview || _dur <= Duration.zero) return _preview.leave();
+    _preview.hover(_item, at, _dur);
   }
 
   Future<void> _onTick() async {
@@ -322,6 +345,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       from = here > Duration.zero ? here : widget.session.start;
     }
     _s.tracker.flush();
+    // The TV takes the connection: the preview gives its own back.
+    _preview.close();
     setState(() {
       _error = null;
       _timeshift = false;
@@ -597,6 +622,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_source == null) return;
     _s.tracker.flush();
     final p = _s.repo.progress(_item.sourceId, ContentKind.episode, e.extId);
+    // Another episode: the preview of the previous one is given back.
+    _preview.close();
     setState(() {
       _item = episodeItem(_source!, widget.session.series, e);
       _panel = _Panel.none;
@@ -1179,15 +1206,21 @@ class _PlayerScreenState extends State<PlayerScreen> {
                       valueListenable: _position,
                       builder: (context, pos, _) => ValueListenableBuilder<CacheState>(
                         valueListenable: _cache,
-                        builder: (context, cache, _) => VodSeekRow(
-                          position: pos,
-                          duration: _dur,
-                          ranges: _casting ? const [] : cache.ranges,
-                          onInteraction: _showControls,
-                          onSeek: (d) {
-                            _casting ? _cast.seekTo(d) : _ps.player.seek(d);
-                            _position.value = d;
-                          },
+                        builder: (context, cache, _) => ListenableBuilder(
+                          listenable: _preview,
+                          builder: (context, _) => VodSeekRow(
+                            position: pos,
+                            duration: _dur,
+                            ranges: _casting ? const [] : cache.ranges,
+                            onInteraction: _showControls,
+                            onPoint: _onSeekPoint,
+                            preview: _preview.visible ? _preview.view() : null,
+                            previewWidth: SeekPreview.width,
+                            onSeek: (d) {
+                              _casting ? _cast.seekTo(d) : _ps.player.seek(d);
+                              _position.value = d;
+                            },
+                          ),
                         ),
                       ),
                     ),
