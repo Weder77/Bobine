@@ -1,15 +1,18 @@
 import 'package:flutter/foundation.dart';
 
+import '../cast/cast_service.dart';
 import '../core/window.dart';
 import 'player_service.dart';
 import 'player_session.dart';
 
 /// Picture-in-picture: the video keeps playing in a small window while the
 /// user browses ([session] set), or in a floating window above the other
-/// apps on Windows ([floating]).
+/// apps on Windows ([floating]). While casting, the small window controls
+/// the TV.
 class PipController {
-  PipController(this._player);
+  PipController(this._player, [this._cast]);
   final PlayerService _player;
+  final CastService? _cast;
 
   /// What to reopen full screen; null when no mini-player is shown.
   final ValueNotifier<PlayerSession?> session = ValueNotifier(null);
@@ -39,10 +42,11 @@ class PipController {
   /// the full screen player).
   void release() => session.value = null;
 
-  /// Stops playback and closes the mini-player / floating window.
+  /// Stops playback (on the TV too) and closes the mini-player / floating window.
   Future<void> close() async {
     await unfloat();
     session.value = null;
+    if (_cast?.active ?? false) await _cast!.stop();
     await _player.stop();
   }
 }

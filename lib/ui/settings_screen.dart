@@ -1108,6 +1108,7 @@ class _Shortcuts extends StatelessWidget {
     ('I', 'Statistiques (codec, décodage, cache, débit)'),
     ('P', 'Mini-lecteur (continuer à regarder en naviguant)'),
     ('O', 'Fenêtre flottante par-dessus les autres apps (Windows)'),
+    ('T', 'Caster sur la télé (Chromecast, Google TV, télés DLNA)'),
     ('Clic droit / touche Menu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
     (
       'Manette',

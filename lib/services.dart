@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'cast/cast_service.dart';
 import 'core/app_log.dart';
 import 'core/legacy.dart';
 import 'core/text.dart';
@@ -66,6 +67,7 @@ class AppServices {
     required this.backup,
     required this.updates,
     required this.sync,
+    required this.cast,
     required this.mpvCacheDir,
   });
 
@@ -100,6 +102,9 @@ class AppServices {
 
   /// Account and synchronisation with the user's other devices.
   final SyncService sync;
+
+  /// Playback on a TV of the network (Chromecast, DLNA).
+  final CastService cast;
 
   /// libmpv disk cache folder (diagnostic page).
   final String mpvCacheDir;
@@ -142,11 +147,12 @@ class AppServices {
       },
     );
     final player = PlayerService(settings, mpvCache.path)..init();
-    final tracker = PlaybackTracker(player, repo, onSaved: library.userChanged);
-    final pip = PipController(player);
+    late final AppServices services;
+    final cast = CastService(describe: (item) => services._castTitles(item));
+    final tracker = PlaybackTracker(player, repo, onSaved: library.userChanged, cast: cast);
+    final pip = PipController(player, cast);
     final reminders = ReminderService(repo, settings);
     final recordings = RecordingService(repo, settings, onChanged: library.userChanged);
-    late final AppServices services;
     final sync = SyncService(repo, settings, onChanges: (c) => services._afterSync(c));
 
     services = AppServices._(
@@ -165,6 +171,7 @@ class AppServices {
       backup: BackupService(repo, settings),
       updates: UpdateService(repo, settings),
       sync: sync,
+      cast: cast,
       mpvCacheDir: mpvCache.path,
     );
     // A change the user makes is sent a few seconds later.
@@ -322,6 +329,15 @@ class AppServices {
 
   /// Name of [c] as shown in the app (cleaned unless turned off).
   String channelName(Channel c) => settings.cleanNames ? cleanChannelName(c.name) : c.name;
+
+  /// What the TV shows while casting: channel and current programme, or the
+  /// title of the film / episode.
+  (String, String?) _castTitles(PlayItem item) {
+    if (!item.isLive) return (item.title, item.subtitle);
+    final c = repo.channelByExt(item.sourceId, item.extId);
+    if (c == null) return (item.title, null);
+    return (channelName(c), epg.now(c)?.title);
+  }
 
   void toggleFavorite(ContentKind kind, String extId, int sourceId) {
     repo.toggleFavorite(sourceId, kind, extId);
