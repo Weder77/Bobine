@@ -55,6 +55,13 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
 
+**Nouveautés 1.6 : caster sur la télé**
+- **Caster** ce que tu regardes sur une télé du réseau : bouton *Caster* en haut du lecteur, ou touche **T**. Compatible **Chromecast, Google TV, Android TV** et télés **DLNA** (Samsung, LG, Sony, Philips, Panasonic, Kodi, box…), trouvées toutes seules sur le réseau.
+- Le lecteur devient une **télécommande** : lecture / pause, barre de progression et sauts de 10 s, volume de la télé, zapping ↑/↓ et numéro de chaîne, qualité, épisode suivant. Le lecteur de l'ordinateur s'arrête (une seule connexion chez le fournisseur) et « Reprendre » suit la position sur la télé.
+- **Retour** ou **P** : la télé continue et un mini-lecteur la pilote pendant que tu navigues. Choisir un autre film ou une autre chaîne l'envoie sur la télé. « Arrêter et regarder ici » reprend sur l'ordinateur là où en était la télé.
+- Par défaut, le flux **passe par l'ordinateur** (petit relais local) : la télé reçoit le même User-Agent que Bobine, des redirections déjà suivies, du HTTP simple au lieu d'un HTTPS douteux, les en-têtes dont Chromecast et certaines télés DLNA ont besoin, et peut lire les **enregistrements**. Garde Bobine ouvert pendant la diffusion. En cas d'échec, « Essayer en direct » donne l'adresse du fournisseur à la télé.
+- Chromecast ne lit pas le MPEG-TS brut : les chaînes Xtream lui sont demandées en HLS automatiquement. Les pistes audio et les sous-titres se choisissent sur la télé.
+
 **Nouveautés 1.5 : multi-écran**
 - **2 à 4 chaînes en même temps**, pour suivre plusieurs matchs : bouton *Multi-écran* dans Direct, clic droit sur une chaîne → *Ajouter au multi-écran*, ou touche **V** dans le lecteur en direct.
 - Dispositions **côte à côte**, **1 + 2**, **2 × 2** et **1 + 3**, faites de cases 16:9 pour que l'image remplisse chaque case.
@@ -211,6 +218,7 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 | P | Mini-lecteur |
 | O | Fenêtre flottante (Windows) |
 | V | Multi-écran avec la chaîne en cours (direct) |
+| T | Caster sur la télé (Chromecast, Google TV, télés DLNA) |
 | Échap | Quitter le plein écran / retour |
 
 Dans le **multi-écran** : **1 à 4** ou clic pour choisir la chaîne entendue, **← / →** chaîne suivante, **Entrée** ou double-clic pour agrandir, **A** ajouter, **C** changer de chaîne, **Suppr** retirer, **P** regarder seule dans le lecteur, **M** son, **F** plein écran, **Échap** quitter.
@@ -223,6 +231,8 @@ Hors du lecteur, les **flèches** déplacent le focus (cartes, menus, boutons), 
 - **Image corrompue ou verte** : passe le **décodage vidéo** sur « Logiciel » (*Paramètres → Lecture*).
 - **Effet de peigne** sur certaines chaînes : désentrelacement sur « Toujours ».
 - **Petit SSD ou peu de RAM** : réduis la taille du cache (*Paramètres → Cache*).
+- **La télé n'apparaît pas dans *Caster*** : elle doit être allumée et sur le même réseau que l'ordinateur (pas un Wi-Fi invité ni un VPN). Sous Windows, autorise Bobine dans le pare-feu quand il le demande (réseaux privés) : c'est par là que la télé reçoit la vidéo.
+- **La télé ne lit pas le flux** : « Essayer en direct » sur l'écran de diffusion ; pour Chromecast, les chaînes d'une playlist M3U en MPEG-TS ne passent pas, essaie une télé DLNA ou le format HLS.
 - **Programmes du guide décalés d'une heure ou plus** : *Paramètres → Sources → Modifier → Options avancées → Décalage du guide TV*.
 - **Autre souci** : *Paramètres → Sauvegarde → Diagnostic* teste la connexion à chaque source et affiche le journal ; « Copier le rapport » donne un texte sans mot de passe à partager.
 
@@ -236,6 +246,8 @@ Sous Windows elle se trouve dans `%APPDATA%\com.bobine\Bobine\`. Aucune donnée 
 **Compte et synchronisation** (facultatifs) : le compte est hébergé sur Supabase (région Europe). Ton mot de passe ne quitte jamais l'ordinateur : Bobine en tire, avec PBKDF2 (600 000 itérations), une clé de connexion envoyée au serveur et une clé de chiffrement qui reste sur l'appareil. Chaque élément est chiffré en AES-256-GCM et rangé sous un identifiant opaque (HMAC) : le serveur ne connaît que ton adresse e-mail, le nombre d'éléments et leurs dates de modification. Sans le mot de passe, personne ne peut lire ces données ; en cas d'oubli, « Mot de passe oublié » en définit un nouveau et le compte repart des données de l'ordinateur. *Paramètres → Compte → Supprimer le compte* efface tout sur le serveur.
 
 Sous Windows, les **mots de passe et URL contenant des identifiants sont chiffrés** avec DPAPI (liés à ton compte Windows) : une copie de `bobine.db` est illisible sur un autre compte ou un autre PC. Les identifiants sont aussi masqués dans les messages d'erreur. La taille et la position de la fenêtre sont mémorisées dans `HKCU\Software\Bobine`.
+
+**Caster** : la recherche des télés reste sur le réseau local (mDNS et SSDP). Pendant une diffusion, Bobine ouvre un petit serveur sur le réseau local qui ne sert que l'émission en cours, sous une adresse aléatoire oubliée dès la fin de la diffusion.
 
 Bobine est un lecteur : il ne fournit aucun contenu.
 
@@ -264,7 +276,14 @@ lib/
 │   ├── player_screen.dart   Lecteur plein écran (commandes, raccourcis, zapping)
 │   ├── player_chrome.dart   Barres, panneaux (chaînes, mini-guide, pistes, épisodes), écran de pause
 │   ├── player_widgets.dart  Noms des pistes audio et sous-titres
-│   └── multi_view.dart      Multi-écran : dispositions, petits lecteurs des cases, chaîne entendue
+│   ├── multi_view.dart      Multi-écran : dispositions, petits lecteurs des cases, chaîne entendue
+│   └── cast_view.dart       Caster : panneau des appareils, écran « En diffusion sur… », mini-lecteur
+├── cast/
+│   ├── mdns.dart, ssdp.dart Recherche des Chromecast (mDNS) et des télés DLNA (SSDP, description UPnP)
+│   ├── chromecast.dart      Protocole Google Cast (TLS, messages protobuf) avec le lecteur par défaut de la télé
+│   ├── dlna.dart            Télés DLNA / UPnP (SOAP : AVTransport, RenderingControl)
+│   ├── relay.dart           Relais HTTP local : User-Agent, HLS réécrit, plages d'octets, fichiers locaux
+│   └── cast_service.dart    Session en cours, position, commandes, reprise sur l'ordinateur
 └── ui/              Accueil, Direct + guide, Films/Séries, fiches, recherche, paramètres
 test/                Tests (analyseurs, import complet avec faux serveur, lecteur, images, synchro)
 tool/                Faux serveur Xtream + générateur de vidéos de test
@@ -298,6 +317,8 @@ flutter test
 - [x] **Synchronisation par compte** (sources, profils, favoris, progression, réglages) entre plusieurs appareils, chiffrée de bout en bout.
 - [x] Replay / catch-up, rappels, enregistrements, mini-lecteur, profils, contrôle parental, TMDB, sauvegarde, manette, installateur (1.1).
 - [x] Multi-écran (2 à 4 chaînes) (1.5).
+- [x] Caster sur la télé : Chromecast, Google TV, télés DLNA (1.6).
+- [ ] AirPlay (Apple TV).
 - [ ] Portail Stalker (MAC).
 - [ ] Version Android TV / mobile (même code Flutter + media_kit).
 - [ ] Signature de l'installateur Windows (évite l'avertissement SmartScreen).

@@ -87,16 +87,19 @@ class PlayerTextButton extends StatelessWidget {
 
 /// Round white play / pause button (52 px).
 class PlayPauseButton extends StatelessWidget {
-  const PlayPauseButton({super.key, required this.player, required this.onTap});
+  const PlayPauseButton({super.key, required this.player, required this.onTap, this.playing});
   final Player player;
   final VoidCallback onTap;
+
+  /// State to show instead of the local player's (casting).
+  final bool? playing;
 
   @override
   Widget build(BuildContext context) => StreamBuilder<bool>(
     stream: player.stream.playing,
     initialData: player.state.playing,
     builder: (context, snap) {
-      final playing = snap.data == true;
+      final playing = this.playing ?? snap.data == true;
       return Tooltip(
         message: playing ? 'Pause (Espace)' : 'Lecture (Espace)',
         child: IconButton(
@@ -1494,10 +1497,13 @@ String resolutionLabel(int? height) {
 
 /// Volume: mute button, slider shown on hover.
 class VolumeControl extends StatefulWidget {
-  const VolumeControl({super.key, required this.service, required this.onMute, required this.onChanged});
+  const VolumeControl({super.key, required this.service, required this.onMute, required this.onChanged, this.remote});
   final PlayerService service;
   final VoidCallback onMute;
   final ValueChanged<double> onChanged;
+
+  /// Volume of the TV (0 to 100) shown instead of the local one while casting.
+  final double? remote;
 
   @override
   State<VolumeControl> createState() => _VolumeControlState();
@@ -1514,7 +1520,8 @@ class _VolumeControlState extends State<VolumeControl> {
       stream: widget.service.player.stream.volume,
       initialData: widget.service.player.state.volume,
       builder: (context, snap) {
-        final v = snap.data ?? 100;
+        final v = widget.remote ?? snap.data ?? 100;
+        final max = widget.remote != null ? 100.0 : 150.0;
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1543,7 +1550,7 @@ class _VolumeControlState extends State<VolumeControl> {
                       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                       overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                     ),
-                    child: Slider(value: v.clamp(0, 150), max: 150, onChanged: widget.onChanged),
+                    child: Slider(value: v.clamp(0, max), max: max, onChanged: widget.onChanged),
                   ),
                 ),
               ),

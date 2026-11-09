@@ -1,0 +1,371 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../core/text.dart';
+import '../player/player_service.dart';
+import 'cast_device.dart';
+import 'cast_media.dart';
+import 'cast_session.dart';
+import 'chromecast.dart';
+import 'dlna.dart';
+import 'mdns.dart';
+import 'relay.dart';
+import 'ssdp.dart';
+
+/// Sends what is playing to a TV of the local network (Chromecast or DLNA)
+/// and keeps the remote playback in sync for the player's controls.
+///
+/// One device at a time. While casting, the local player is stopped (the
+/// IPTV account often allows a single connection) and the TV reads the
+/// stream, through this computer by default (see [CastRelay]).
+class CastService extends ChangeNotifier {
+  CastService({this.describe, CastRelay? relay, this.sessionFactory, this.browsers}) : _relay = relay ?? CastRelay();
+
+  /// Title and subtitle the TV shows for an item (clean channel name, programme).
+  final (String, String?) Function(PlayItem item)? describe;
+
+  /// Tests: fake devices instead of the network.
+  final CastSession Function(CastDevice device)? sessionFactory;
+  final List<Future<void> Function(Duration timeout, void Function(CastDevice) onDevice)>? browsers;
+
+  final CastRelay _relay;
+
+  // ------------------------------------------------------------ discovery
+
+  /// Devices found by the last search (the connected one always included).
+  final ValueNotifier<List<CastDevice>> devices = ValueNotifier(const []);
+  final ValueNotifier<bool> scanning = ValueNotifier(false);
+  DateTime? _lastScan;
+
+  /// Looks for devices on the network for [timeout]; the list fills as they answer.
+  Future<void> scan({Duration timeout = const Duration(seconds: 4)}) async {
+    if (scanning.value) return;
+    scanning.value = true;
+    final found = <String, CastDevice>{};
+    final current = _device;
+    if (current != null) found[current.key] = current;
+    final shown = <String, CastDevice>{for (final d in devices.value) d.key: d, ...found};
+    void add(CastDevice d) {
+      found[d.key] = d;
+      shown[d.key] = d;
+      devices.value = _sorted(shown.values);
+    }
+
+    final search =
+        browsers ??
+        [
+          (t, f) => ChromecastBrowser().browse(timeout: t, onDevice: f),
+          (t, f) => DlnaBrowser().browse(timeout: t, onDevice: f),
+        ];
+    try {
+      await Future.wait([
+        for (final b in search) b(timeout, add).catchError((Object e) => debugPrint('Recherche des appareils : $e')),
+      ]);
+    } finally {
+      devices.value = _sorted(found.values);
+      scanning.value = false;
+      _lastScan = DateTime.now();
+    }
+  }
+
+  /// Searches again when the last search is old (the panel opens).
+  void scanIfStale() {
+    final last = _lastScan;
+    if (last == null || DateTime.now().difference(last).inSeconds > 30) unawaited(scan());
+  }
+
+  static List<CastDevice> _sorted(Iterable<CastDevice> list) => list.toList()
+    ..sort((a, b) {
+      final n = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      return n != 0 ? n : a.protocol.index.compareTo(b.protocol.index);
+    });
+
+  // -------------------------------------------------------------- session
+
+  CastSession? _session;
+  CastDevice? _device;
+
+  /// What the TV plays; null when not casting.
+  final ValueNotifier<PlayItem?> item = ValueNotifier(null);
+  RemoteStatus _status = RemoteStatus();
+  bool _connecting = false;
+  String? _error;
+  Timer? _poll;
+  bool _polling = false;
+  int _pollErrors = 0;
+  StreamSubscription<RemoteStatus>? _updates;
+  int _generation = 0;
+  int _loadSeq = 0;
+  DateTime _loadedAt = DateTime.now();
+  Duration? _lastStart;
+  DateTime _holdUntil = DateTime.fromMillisecondsSinceEpoch(0);
+  Timer? _volumeTimer;
+  int _ended = 0;
+  final _messages = StreamController<String>.broadcast();
+
+  /// Send the stream through this computer (true) or give the TV the
+  /// provider's address (false). Local files always go through it.
+  bool preferRelay = true;
+  bool _viaRelay = false;
+
+  bool get active => _device != null;
+  CastDevice? get device => _device;
+  bool get connecting => _connecting;
+  bool get viaRelay => _viaRelay;
+  RemoteStatus get status => _status;
+
+  /// What went wrong, shown with "Réessayer".
+  String? get error => _error ?? (_status.state == RemoteState.error ? (_status.error ?? 'Erreur de lecture.') : null);
+  bool get playing => _status.state == RemoteState.playing;
+  bool get loading => _connecting || _status.state == RemoteState.loading || _status.state == RemoteState.buffering;
+  Duration? get duration => _status.duration;
+  double get volume => _status.volume ?? 1;
+
+  /// Bumped each time the TV reaches the end of a film or episode.
+  int get endedCount => _ended;
+
+  /// Short messages for the player (an action the TV refused).
+  Stream<String> get messages => _messages.stream;
+
+  /// Position on the TV, moving on between two status updates.
+  Duration get position {
+    final s = _status;
+    var p = s.position;
+    if (s.state == RemoteState.playing) p += DateTime.now().difference(s.at);
+    final d = s.duration;
+    if (d != null && p > d) p = d;
+    return p.isNegative ? Duration.zero : p;
+  }
+
+  CastSession _create(CastDevice d) => switch (d.protocol) {
+    CastProtocol.chromecast => ChromecastSession(d),
+    CastProtocol.dlna => DlnaSession(d),
+  };
+
+  /// Connects to [d] and plays [it] there from [start].
+  Future<void> start(CastDevice d, PlayItem it, {Duration? start}) async {
+    // Same device again: the old connection must be gone before the new one
+    // starts the player on the TV.
+    if (_device != null) await _disconnect(stopRemote: _device != d, wait: _device == d);
+    final gen = ++_generation;
+    _device = d;
+    _connecting = true;
+    _error = null;
+    _status = RemoteStatus(state: RemoteState.loading);
+    item.value = it;
+    notifyListeners();
+    final session = (sessionFactory ?? _create)(d);
+    _session = session;
+    try {
+      await session.connect();
+      if (gen != _generation) {
+        unawaited(session.close().catchError((Object _) {}));
+        return;
+      }
+      _updates = session.updates.listen((s) {
+        if (gen == _generation) _setStatus(s);
+      });
+      _connecting = false;
+      _startPolling(gen);
+      await _load(it, start, gen, ++_loadSeq);
+    } catch (e) {
+      if (gen != _generation) return;
+      _connecting = false;
+      _fail(e);
+    }
+  }
+
+  /// Plays [it] on the connected TV (zapping, next episode).
+  Future<void> load(PlayItem it, {Duration? start}) async {
+    if (_session == null) return;
+    final gen = _generation;
+    final seq = ++_loadSeq;
+    try {
+      await _load(it, start, gen, seq);
+    } catch (e) {
+      if (gen == _generation && seq == _loadSeq) _fail(e);
+    }
+  }
+
+  Future<void> _load(PlayItem it, Duration? start, int gen, int seq) async {
+    final session = _session!;
+    final d = _device!;
+    item.value = it;
+    _lastStart = start;
+    _error = null;
+    _loadedAt = DateTime.now();
+    _status = RemoteStatus(state: RemoteState.loading, volume: _status.volume, position: start ?? Duration.zero);
+    notifyListeners();
+
+    final address = castUrl(it.url, d.protocol);
+    var url = address;
+    _viaRelay = isLocalMedia(address) || preferRelay;
+    if (_viaRelay) {
+      final host = session.localAddress;
+      if (host == null) throw CastException('Adresse de cet ordinateur introuvable sur le réseau de la télé.');
+      _relay.clear();
+      url = await _relay.publish(address, host: host, userAgent: it.userAgent);
+    }
+    if (gen != _generation || seq != _loadSeq) return;
+    final (title, subtitle) = describe?.call(it) ?? (it.title, it.subtitle);
+    final media = CastMedia(
+      url: url,
+      contentType: castContentType(address, live: it.isLive, protocol: d.protocol),
+      live: it.isLive,
+      title: title,
+      subtitle: subtitle,
+      image: it.image,
+    );
+    debugPrint('Cast : ${d.kindLabel} « ${d.name} » ← ${redactCredentials(address)}${_viaRelay ? ' (relais)' : ''}');
+    await session.load(media, start: it.isLive ? null : start);
+  }
+
+  /// Tries again after an error; [viaRelay] switches the way the TV gets the stream.
+  Future<void> retry({bool? viaRelay}) async {
+    if (viaRelay != null) preferRelay = viaRelay;
+    final d = _device;
+    final it = item.value;
+    if (d == null || it == null) return;
+    Duration? from;
+    if (!it.isLive) from = position > const Duration(seconds: 5) ? position : _lastStart;
+    await _disconnect(stopRemote: false, wait: true);
+    await start(d, it, start: from);
+  }
+
+  /// Stops casting; returns where the film or episode was on the TV.
+  Future<Duration?> stop() async {
+    if (_device == null) return null;
+    final it = item.value;
+    final pos = (it != null && !it.isLive && position > Duration.zero) ? position : null;
+    await _disconnect(stopRemote: true);
+    return pos;
+  }
+
+  Future<void> _disconnect({required bool stopRemote, bool wait = false}) async {
+    _generation++;
+    _poll?.cancel();
+    _poll = null;
+    _volumeTimer?.cancel();
+    await _updates?.cancel();
+    _updates = null;
+    final s = _session;
+    _session = null;
+    _device = null;
+    _connecting = false;
+    _error = null;
+    _status = RemoteStatus();
+    item.value = null;
+    _relay.clear();
+    notifyListeners();
+    if (s == null) return;
+    final closing = () async {
+      if (stopRemote) {
+        try {
+          await s.stop().timeout(const Duration(seconds: 4));
+        } catch (_) {}
+      }
+      try {
+        await s.close().timeout(const Duration(seconds: 5));
+      } catch (_) {}
+    }();
+    if (wait) await closing;
+  }
+
+  void _startPolling(int gen) {
+    _poll?.cancel();
+    _pollErrors = 0;
+    _poll = Timer.periodic(const Duration(seconds: 1), (_) async {
+      final session = _session;
+      if (_polling || gen != _generation || session == null) return;
+      // A stream the TV never starts.
+      if (_status.state == RemoteState.loading && DateTime.now().difference(_loadedAt).inSeconds > 45) {
+        _fail(CastException("La télé n'arrive pas à lire ce flux."));
+        return;
+      }
+      _polling = true;
+      try {
+        final st = await session.poll();
+        if (gen == _generation) {
+          _pollErrors = 0;
+          _setStatus(st);
+        }
+      } catch (e) {
+        if (gen == _generation && ++_pollErrors >= 5) _fail(e);
+      } finally {
+        _polling = false;
+      }
+    });
+  }
+
+  void _setStatus(RemoteStatus s) {
+    if (_error != null && s.state != RemoteState.playing) return;
+    // Just after a seek, the TV may still report the old position.
+    if (DateTime.now().isBefore(_holdUntil) && s.state != RemoteState.error) s = s.copyWith(position: position);
+    final before = _status.state;
+    _status = s;
+    if (s.state == RemoteState.playing) _error = null;
+    if (s.state == RemoteState.ended && before != RemoteState.ended) _ended++;
+    notifyListeners();
+  }
+
+  void _fail(Object e) {
+    final message = e is CastException ? e.message : "La diffusion a échoué.";
+    debugPrint('Cast : ${redactCredentials('$e')}');
+    _error = message;
+    _status = _status.copyWith(state: RemoteState.error, error: message);
+    notifyListeners();
+  }
+
+  Future<void> _guard(Future<void> Function(CastSession s) action) async {
+    final s = _session;
+    if (s == null) return;
+    try {
+      await action(s);
+    } on CastException catch (e) {
+      if (!_messages.isClosed) _messages.add(e.message);
+    } catch (e) {
+      debugPrint('Cast : ${redactCredentials('$e')}');
+    }
+  }
+
+  // ------------------------------------------------------------- controls
+
+  Future<void> play() async {
+    _status = _status.copyWith(state: RemoteState.playing, position: position);
+    notifyListeners();
+    await _guard((s) => s.play());
+  }
+
+  Future<void> pause() async {
+    _status = _status.copyWith(state: RemoteState.paused, position: position);
+    notifyListeners();
+    await _guard((s) => s.pause());
+  }
+
+  Future<void> togglePlay() =>
+      (_status.state == RemoteState.playing || _status.state == RemoteState.buffering) ? pause() : play();
+
+  Future<void> seekTo(Duration to) async {
+    final it = item.value;
+    if (it == null || it.isLive) return;
+    var target = to.isNegative ? Duration.zero : to;
+    final d = duration;
+    if (d != null && target > d) target = d;
+    _status = _status.copyWith(position: target);
+    _holdUntil = DateTime.now().add(const Duration(milliseconds: 2500));
+    notifyListeners();
+    await _guard((s) => s.seek(target));
+  }
+
+  Future<void> seekBy(Duration delta) => seekTo(position + delta);
+
+  /// [level] from 0 to 1 (slider moves are grouped).
+  void setVolume(double level) {
+    final v = level.clamp(0.0, 1.0);
+    _status = _status.copyWith(volume: v);
+    notifyListeners();
+    _volumeTimer?.cancel();
+    _volumeTimer = Timer(const Duration(milliseconds: 150), () => _guard((s) => s.setVolume(v)));
+  }
+}

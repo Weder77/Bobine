@@ -8,6 +8,7 @@ import '../core/window.dart';
 import '../services.dart';
 import '../ui/widgets/common.dart';
 import '../ui/widgets/reminder_banner.dart';
+import 'cast_view.dart';
 import 'player_screen.dart';
 import 'player_service.dart';
 
@@ -25,14 +26,15 @@ class PipLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     return ListenableBuilder(
-      listenable: Listenable.merge([s.pip.session, s.pip.floating, s.player.current]),
+      listenable: Listenable.merge([s.pip.session, s.pip.floating, s.player.current, s.cast.item]),
       builder: (context, _) {
         final session = s.pip.session.value;
+        final playing = s.player.current.value != null || s.cast.active;
         // Playback stopped elsewhere: nothing left to show.
-        if (session != null && s.player.current.value == null) {
+        if (session != null && !playing) {
           scheduleMicrotask(s.pip.close);
         }
-        final show = session != null && s.player.current.value != null;
+        final show = session != null && playing;
         if (s.pip.floating.value && show) {
           return Stack(
             children: [
@@ -53,7 +55,7 @@ Future<void> expandPip(AppServices s) async {
   final nav = appNavigatorKey.currentState;
   if (session == null || nav == null) return;
   await s.pip.unfloat();
-  final current = s.player.current.value;
+  final current = s.cast.active ? s.cast.item.value : s.player.current.value;
   s.pip.release();
   await nav.push(PlayerScreen.route(session.copyWith(item: current ?? session.item, clearStart: true)));
 }
@@ -76,7 +78,8 @@ class _MiniPlayerState extends State<MiniPlayer> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final size = MediaQuery.sizeOf(context);
-    final item = s.player.current.value;
+    final casting = s.cast.active;
+    final item = casting ? s.cast.item.value : s.player.current.value;
     final right = (24 - _offset.dx).clamp(8.0, size.width - _width - 8);
     final bottom = (24 - _offset.dy).clamp(8.0, size.height - _height - 8);
     return Positioned(
@@ -105,24 +108,33 @@ class _MiniPlayerState extends State<MiniPlayer> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Video(
-                    controller: s.player.video,
-                    controls: NoVideoControls,
-                    fill: Colors.black,
-                    subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
-                  ),
+                  if (casting)
+                    CastMiniView(cast: s.cast, image: _image(item))
+                  else
+                    Video(
+                      controller: s.player.video,
+                      controls: NoVideoControls,
+                      fill: Colors.black,
+                      subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+                    ),
                   AnimatedOpacity(
-                    opacity: _hover ? 1 : 0,
+                    // Always shown while casting: there is no picture to look at.
+                    opacity: _hover || casting ? 1 : 0,
                     duration: const Duration(milliseconds: 200),
                     child: _PipControls(
                       title: _title(s, item),
                       onExpand: () => expandPip(s),
                       onClose: s.pip.close,
-                      onFloat: AppWindow.canFloat ? () => s.pip.float(s.pip.session.value!) : null,
+                      onFloat: AppWindow.canFloat && !casting ? () => s.pip.float(s.pip.session.value!) : null,
                     ),
                   ),
                   if (item != null && !item.isLive)
-                    Positioned(left: 0, right: 0, bottom: 0, child: _PipProgress(player: s.player)),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: casting ? _CastProgress(s: s) : _PipProgress(player: s.player),
+                    ),
                 ],
               ),
             ),
@@ -132,6 +144,9 @@ class _MiniPlayerState extends State<MiniPlayer> {
     );
   }
 }
+
+/// Poster shown while the TV plays a film or an episode.
+String? _image(PlayItem? item) => (item == null || item.isLive) ? null : item.image;
 
 /// "TF1 · Le journal" or "Les Veilleurs · S01E02".
 String _title(AppServices s, PlayItem? item) {
@@ -251,7 +266,7 @@ class _PipControls extends StatelessWidget {
       child: Stack(
         children: [
           Positioned(
-            top: 10,
+            top: 6,
             right: 10,
             child: Row(
               children: [
@@ -270,17 +285,28 @@ class _PipControls extends StatelessWidget {
             ),
           ),
           Center(
-            child: StreamBuilder<bool>(
-              stream: s.player.player.stream.playing,
-              initialData: s.player.player.state.playing,
-              builder: (context, snap) => button(
-                snap.data == true ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                snap.data == true ? 'Pause' : 'Lecture',
-                s.player.player.playOrPause,
-                size: 56,
-                iconSize: 26,
-              ),
-            ),
+            child: s.cast.active
+                ? ListenableBuilder(
+                    listenable: s.cast,
+                    builder: (context, _) => button(
+                      s.cast.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      s.cast.playing ? 'Pause sur la télé' : 'Lecture sur la télé',
+                      s.cast.togglePlay,
+                      size: 56,
+                      iconSize: 26,
+                    ),
+                  )
+                : StreamBuilder<bool>(
+                    stream: s.player.player.stream.playing,
+                    initialData: s.player.player.state.playing,
+                    builder: (context, snap) => button(
+                      snap.data == true ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                      snap.data == true ? 'Pause' : 'Lecture',
+                      s.player.player.playOrPause,
+                      size: 56,
+                      iconSize: 26,
+                    ),
+                  ),
           ),
           Positioned(
             left: 14,
@@ -296,6 +322,38 @@ class _PipControls extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Progress of a film or episode on the TV.
+class _CastProgress extends StatefulWidget {
+  const _CastProgress({required this.s});
+  final AppServices s;
+
+  @override
+  State<_CastProgress> createState() => _CastProgressState();
+}
+
+class _CastProgressState extends State<_CastProgress> {
+  late final Timer _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _timer.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.s.cast;
+    final dur = c.duration?.inMilliseconds ?? 0;
+    return ProgressLine(dur <= 0 ? 0 : c.position.inMilliseconds / dur, height: 3, track: const Color(0x33FFFFFF));
   }
 }
 
