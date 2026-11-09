@@ -245,6 +245,44 @@ http://srv/plain/stream4.ts
       expect(redactCredentials('Connexion impossible'), 'Connexion impossible');
     });
 
+    test('credentials are masked whatever the shape of the address', () {
+      // M3U playlists exported by Xtream panels: no "/live/" in the address.
+      expect(
+        redactCredentials('mpv error: Failed to open http://h:8080/bob/s3cr3t/1234.ts.'),
+        'mpv error: Failed to open http://h:8080/bob/***/1234.ts.',
+      );
+      expect(redactCredentials('http://h:8080/bob/s3cr3t/1234'), 'http://h:8080/bob/***/1234');
+      expect(
+        redactCredentials('Cast : ← https://h/bob/s3cr3t/77.mkv (relais)'),
+        'Cast : ← https://h/bob/***/77.mkv (relais)',
+      );
+      expect(redactCredentials('http://bob:s3cr3t@h/list.m3u'), 'http://bob:***@h/list.m3u');
+      expect(
+        redactCredentials('uri = https://api.themoviedb.org/3/search/movie?api_key=abcdef123&query=dune'),
+        'uri = https://api.themoviedb.org/3/search/movie?api_key=***&query=dune',
+      );
+      expect(redactCredentials('http://h/hls/bob/s3cr3t/1.m3u8'), 'http://h/hls/bob/***/1.m3u8');
+      expect(redactCredentials('http://h/x?auth=abc&key=def&monkey=1'), 'http://h/x?auth=***&key=***&monkey=1');
+      // Values bound to a failed SQL statement.
+      expect(
+        redactCredentials(
+          'DB write failed: SqliteException(5): database is locked\n'
+          '  Causing statement: UPDATE sources SET password = ? WHERE id = ?, parameters: s3cr3t, 1',
+        ),
+        'DB write failed: SqliteException(5): database is locked\n'
+        '  Causing statement: UPDATE sources SET password = ? WHERE id = ?, parameters: ***',
+      );
+      // Ordinary addresses and the relay's own are left readable.
+      for (final plain in [
+        'https://github.com/Weder77/Bobine/releases/tag/v1.6.5',
+        'http://192.168.1.78:50311/c/0123456789abcdef0123456789abcdef/m/435092.mkv',
+        'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+        'Relais : télé HEAD → 200 video/x-matroska, 5,35 Go',
+      ]) {
+        expect(redactCredentials(plain), plain);
+      }
+    });
+
     test('search key folds accents', () {
       expect(searchKey('  Les Misérables  ÉTÉ '), 'les miserables ete');
     });

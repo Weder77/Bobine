@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/open_url.dart';
+import '../core/text.dart';
 import '../core/theme.dart';
 import '../data/import/xtream_api.dart';
 import '../data/models.dart';
@@ -93,7 +94,7 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
         if (_season == null || !_episodes.any((e) => e.season == _season)) _season = _defaultSeason();
       });
     } catch (e) {
-      if (mounted && _episodes.isEmpty) setState(() => _error = e.toString());
+      if (mounted && _episodes.isEmpty) setState(() => _error = redactCredentials(e.toString()));
     } finally {
       api.close();
       if (mounted) setState(() => _loading = false);

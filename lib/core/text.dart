@@ -87,14 +87,38 @@ bool matchesWords(String key, List<String> words) {
   return true;
 }
 
-final RegExp _secretQuery = RegExp(r'((?:password|pass|pwd|token)=)[^&\s]+', caseSensitive: false);
-final RegExp _secretPath = RegExp(r'(/(?:live|movie|series|timeshift)/[^/\s]+/)[^/\s]+/', caseSensitive: false);
+final RegExp _secretQuery = RegExp(
+  r'(\b(?:password|pass|pwd|token|access_token|api_key|apikey|key|auth|secret|signature|sig)=)[^&\s"]+',
+  caseSensitive: false,
+);
+final RegExp _secretPath = RegExp(
+  r'(/(?:live|movie|series|timeshift|hls|vod|play|streaming)/[^/\s]+/)[^/\s]+/',
+  caseSensitive: false,
+);
+
+/// "http://user:password@host".
+final RegExp _secretUserInfo = RegExp(r'(://[^/\s:@]*:)[^/\s@]+@');
+
+/// "http://host:8080/user/password/1234.ts": the addresses of an M3U
+/// playlist exported by an Xtream panel, without "/live/".
+final RegExp _secretShortPath = RegExp(
+  r'''(https?://[^/\s]+/[^/\s?#]+/)[^/\s?#]+(/\d+(?:\.[A-Za-z0-9]{1,5})?)(?=$|[\s?#"'),;.\]])''',
+  caseSensitive: false,
+);
+
+/// Values bound to a failed SQL statement (sqlite3 prints them: a source's
+/// address and password, the parental code…).
+final RegExp _sqlParameters = RegExp(r', parameters: .*');
 
 /// Masks credentials in URLs / messages before they are shown or stored
-/// ("…?username=bob&password=***", "/live/bob/***/123.ts").
+/// ("…?username=bob&password=***", "/live/bob/***/123.ts",
+/// "http://bob:***@host", "http://host/bob/***/123.ts").
 String redactCredentials(String text) => text
     .replaceAllMapped(_secretQuery, (m) => '${m.group(1)}***')
-    .replaceAllMapped(_secretPath, (m) => '${m.group(1)}***/');
+    .replaceAllMapped(_secretPath, (m) => '${m.group(1)}***/')
+    .replaceAllMapped(_secretUserInfo, (m) => '${m.group(1)}***@')
+    .replaceAllMapped(_secretShortPath, (m) => '${m.group(1)}***${m.group(2)}')
+    .replaceAll(_sqlParameters, ', parameters: ***');
 
 final RegExp _countryPrefix = RegExp(
   r'^\s*(\|?[a-z]{2,3}\|?\s*[:|\-]\s*|\[[a-z]{2,3}\]\s*|\([a-z]{2,3}\)\s*)',

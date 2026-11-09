@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../core/format.dart';
 import '../core/net.dart';
+import '../core/text.dart';
 import '../core/theme.dart';
 import '../data/import/xtream_api.dart';
 import '../data/models.dart';
@@ -166,7 +167,7 @@ class _SourceFormState extends State<SourceForm> {
         }
       }
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = redactCredentials(e.toString()));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

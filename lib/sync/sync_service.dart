@@ -5,6 +5,7 @@ import 'package:sqlite3/sqlite3.dart' show SqliteException;
 
 import '../core/app_log.dart';
 import '../core/secrets.dart';
+import '../core/text.dart';
 import '../data/repository.dart';
 import 'supabase_api.dart';
 import 'sync_crypto.dart';
@@ -147,11 +148,11 @@ class SyncService extends ChangeNotifier {
     } on SqliteException catch (e) {
       // Busy with an import: next time.
       final busy = e.extendedResultCode & 0xff == 5 || e.extendedResultCode & 0xff == 6;
-      message = busy ? null : 'Erreur de la base locale : $e';
+      message = busy ? null : 'Erreur de la base locale : ${e.message} (${e.extendedResultCode})';
       status = busy ? SyncStatus.idle : SyncStatus.error;
       if (!busy) AppLog.add('Synchro : $e');
     } catch (e) {
-      message = 'Synchro impossible : $e';
+      message = 'Synchro impossible : ${redactCredentials('$e')}';
       status = SyncStatus.error;
       AppLog.add('Synchro : $e');
     }
