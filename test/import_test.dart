@@ -30,6 +30,9 @@ void main() {
 
   late String base;
   final now = DateTime.now();
+  // Xtream actions answered with an error, and "the playlist is a web page".
+  final broken = <String>{};
+  var portal = false;
 
   setUpAll(() async {
     tmp = await Directory.systemTemp.createTemp('bobine_test');
@@ -39,6 +42,15 @@ void main() {
       final res = req.response;
       final q = req.uri.queryParameters;
       switch (req.uri.path) {
+        case '/flaky.m3u':
+          if (portal) {
+            res.headers.contentType = ContentType.html;
+            res.write('<!DOCTYPE html>\n<html><body>\n<h1>Abonnement expiré</h1>\n<p>Contacte ton revendeur.</p>\n');
+            res.write('</body></html>\n');
+          } else {
+            res.write('#EXTM3U\n#EXTINF:-1 group-title="Infos",Info 24\n$base/live/u/p/1.ts\n');
+            res.write('#EXTINF:-1 group-title="Infos",Info 25\n$base/live/u/p/2.ts\n');
+          }
         case '/playlist.m3u':
           res.write('#EXTM3U x-tvg-url="$base/xmltv.php?username=u&password=p"\n');
           for (var i = 0; i < 1500; i++) {
@@ -57,6 +69,10 @@ void main() {
                 'user_info': {'auth': 0},
               }),
             );
+            break;
+          }
+          if (broken.contains(q['action'])) {
+            res.statusCode = 500;
             break;
           }
           final data = switch (q['action']) {
@@ -230,6 +246,82 @@ void main() {
     final list = repo.channels(id);
     expect(epg.now(list[0]), isNotNull);
     expect(epg.now(list[1]), isNotNull);
+  });
+
+  test('a list that fails to download keeps what the source had, and says so', () async {
+    final path = '${tmp.path}/partial.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
+    await importXtream(path, id, null);
+    expect(repo.movies(id), hasLength(2));
+    final categories = repo.categories(id, ContentKind.movie).map((c) => c.name).toSet();
+    addTearDown(broken.clear);
+
+    // The films list answers an error: the films stay, with their categories.
+    broken.add('get_vod_streams');
+    final r = await importXtream(path, id, null);
+    expect(r.live, 300);
+    expect(r.movies, 2);
+    expect(repo.movies(id).map((m) => m.name), contains('Mad Max (2015)'));
+    expect(repo.categories(id, ContentKind.movie).map((c) => c.name).toSet(), categories);
+    expect(repo.movies(id).every((m) => m.categoryId != null), isTrue);
+    expect(repo.series(id), hasLength(1));
+    expect(repo.channels(id), hasLength(300));
+    expect(repo.source(id)!.lastError, allOf(contains('incomplète'), contains('Films')));
+
+    // The series categories fail too: series and their episodes stay.
+    broken.add('get_series_categories');
+    await importXtream(path, id, null);
+    expect(repo.series(id).single.name, 'Dark');
+    expect(repo.categories(id, ContentKind.series).single.name, 'Drame');
+
+    // Without the channels, nothing is touched at all.
+    broken
+      ..clear()
+      ..add('get_live_streams');
+    await expectLater(importXtream(path, id, null), throwsA(anything));
+    expect(repo.channels(id), hasLength(300));
+    expect(repo.movies(id), hasLength(2));
+
+    // Back to normal: the warning goes away.
+    broken.clear();
+    await importXtream(path, id, null);
+    expect(repo.source(id)!.lastError, isNull);
+    expect(repo.movies(id), hasLength(2));
+  });
+
+  test('a web page served instead of the playlist does not replace the channels', () async {
+    final path = '${tmp.path}/portal.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'M3U', type: SourceType.m3u, url: '$base/flaky.m3u');
+    await importM3u(path, id, null);
+    expect(repo.channels(id).map((c) => c.name), ['Info 24', 'Info 25']);
+    portal = true;
+    addTearDown(() => portal = false);
+    await expectLater(importM3u(path, id, null), throwsA(predicate((e) => '$e'.contains('page web'))));
+    expect(repo.channels(id).map((c) => c.name), ['Info 24', 'Info 25']);
+  });
+
+  test('refreshing a source does not mark it as changed for the synchronisation', () async {
+    final path = '${tmp.path}/noted.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    int noted() => repo.db.select("SELECT count(*) AS n FROM sync_log WHERE tbl = 'sources'").first['n'] as int;
+    final xt = repo.insertSource(name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
+    final m3u = repo.insertSource(name: 'M3U', type: SourceType.m3u, url: '$base/playlist.m3u');
+    // The playlist names its guide: saved once, which is a real change.
+    await importM3u(path, m3u, null);
+    expect(repo.source(m3u)!.epgUrl, contains('/xmltv.php'));
+    repo.db.execute('DELETE FROM sync_log');
+    await importXtream(path, xt, null);
+    await importM3u(path, m3u, null);
+    expect(noted(), 0);
+    expect(repo.source(m3u)!.epgUrl, contains('/xmltv.php'));
+    // A guide the user typed is not replaced by the playlist's.
+    repo.db.execute("UPDATE sources SET epg_url = 'http://moi.example/guide.xml' WHERE id = ?", [m3u]);
+    repo.db.execute('DELETE FROM sync_log');
+    await importM3u(path, m3u, null);
+    expect(repo.source(m3u)!.epgUrl, 'http://moi.example/guide.xml');
+    expect(noted(), 0);
   });
 
   test('EPG offset shifts programme times', () async {

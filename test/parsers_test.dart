@@ -5,6 +5,45 @@ import 'package:bobine/data/import/xmltv_parser.dart';
 import 'package:bobine/data/import/xtream_api.dart';
 
 void main() {
+  test('the guide named by a playlist is a web address or nothing', () {
+    String? guide(String header) {
+      final p = M3uParser((_) {})..addLine(header);
+      return p.epgUrl;
+    }
+
+    expect(
+      guide('#EXTM3U url-tvg="http://epg.example/a.xml.gz,http://autre.example/b.xml"'),
+      'http://epg.example/a.xml.gz',
+    );
+    expect(guide('#EXTM3U x-tvg-url="HTTPS://epg.example/a.xml"'), 'HTTPS://epg.example/a.xml');
+    // A path chosen by the provider would be opened as a file by the import.
+    expect(guide(r'#EXTM3U url-tvg="\\evil.example\share\epg.xml"'), isNull);
+    expect(guide('#EXTM3U url-tvg="file:///etc/passwd"'), isNull);
+    expect(guide(r'#EXTM3U url-tvg="C:\Users\moi\secret.txt"'), isNull);
+    expect(guide('#EXTM3U url-tvg="/dev/zero"'), isNull);
+    expect(guide('#EXTM3U'), isNull);
+  });
+
+  test('a web page or an error message is not a playlist', () {
+    for (final first in ['<!DOCTYPE html>', '<html>', '{"error":"expired"}', '[]', '<?xml version="1.0"?>']) {
+      final entries = <M3uEntry>[];
+      final p = M3uParser(entries.add)
+        ..addLine('')
+        ..addLine(first)
+        ..addLine('Abonnement expiré')
+        ..addLine('http://x/1.ts');
+      expect(p.notAPlaylist, isTrue, reason: first);
+      expect(entries, isEmpty, reason: first);
+    }
+    // Plain lists of addresses and files starting with a comment still are.
+    final entries = <M3uEntry>[];
+    final plain = M3uParser(entries.add)
+      ..addLine('\ufeff# ma liste')
+      ..addLine('http://x/1.ts');
+    expect(plain.notAPlaylist, isFalse);
+    expect(entries.single.url, 'http://x/1.ts');
+  });
+
   group('M3U', () {
     List<M3uEntry> parse(String text, {void Function(M3uParser)? inspect}) {
       final out = <M3uEntry>[];

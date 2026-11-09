@@ -61,6 +61,12 @@ class M3uParser {
   Map<String, String> _pendingAttrs = const {};
   String? _pendingGroup;
   bool _first = true;
+  bool _started = false;
+
+  /// The document is a web page or an error message (HTML, XML, JSON), not
+  /// a playlist: known from its first line. Importing it would replace the
+  /// real channels by one "channel" per line.
+  bool notAPlaylist = false;
 
   void addLine(String raw) {
     var line = raw.trim();
@@ -70,6 +76,11 @@ class M3uParser {
       _first = false;
     }
     if (line.isEmpty) return;
+    if (!_started) {
+      _started = true;
+      notAPlaylist = line.startsWith('<') || line.startsWith('{') || line.startsWith('[');
+    }
+    if (notAPlaylist) return;
 
     if (line.startsWith('#')) {
       final upper = line.length >= 8 ? line.substring(0, 8).toUpperCase() : line.toUpperCase();
@@ -126,10 +137,14 @@ class M3uParser {
     return out;
   }
 
+  /// First address of a `url-tvg` list, when it is a web address. A local
+  /// or network path is refused: the playlist comes from the provider, and
+  /// the guide import would open whatever file it names (a `\\server\share`
+  /// path makes Windows log in to that server).
   static String? _firstUrl(String? v) {
     if (v == null) return null;
     final first = v.split(',').first.trim();
-    return first.isEmpty ? null : first;
+    return RegExp(r'^https?://[^\s/]', caseSensitive: false).hasMatch(first) ? first : null;
   }
 
   static String _nameFromUrl(String url) {
