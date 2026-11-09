@@ -9,6 +9,7 @@ import '../core/format.dart';
 import '../core/text.dart';
 import '../data/models.dart';
 import '../data/settings.dart';
+import 'reconnect.dart';
 
 /// Something the player can open.
 class PlayItem {
@@ -102,8 +103,8 @@ class PlayerService {
   bool _autoDeinterlaceNative = false;
   DateTime? _bufferingSince;
   Timer? _watchdog;
-  int _reconnects = 0;
-  DateTime _lastReconnect = DateTime.fromMillisecondsSinceEpoch(0);
+  final _reconnect = ReconnectBudget();
+  Timer? _reconnectTimer;
   final List<StreamSubscription> _subs = [];
   Timer? _volumeSave;
 
@@ -186,11 +187,7 @@ class PlayerService {
     });
     _subs.add(
       player.stream.playing.listen((p) {
-        if (p) {
-          status.value = null;
-          // A stream that plays for a while resets the reconnection budget.
-          if (DateTime.now().difference(_lastReconnect).inSeconds > 30) _reconnects = 0;
-        }
+        if (p) status.value = null;
       }),
     );
     _subs.add(player.stream.videoParams.listen((_) => _maybeDeinterlace()));
@@ -311,8 +308,15 @@ class PlayerService {
   }
 
   /// Opens [item]. If it is already playing, nothing is reloaded.
-  Future<void> play(PlayItem item, {Duration? start, bool force = false}) async {
+  /// [reconnecting]: the automatic reopening of a live stream that stopped.
+  Future<void> play(PlayItem item, {Duration? start, bool force = false, bool reconnecting = false}) async {
     await ready;
+    if (!reconnecting) {
+      // Something the user opened (another channel, "Réessayer"): the
+      // attempts of the previous stream do not count against this one.
+      _reconnectTimer?.cancel();
+      _reconnect.reset();
+    }
     if (!force && current.value?.url == item.url && player.state.playlist.medias.isNotEmpty) {
       current.value = item;
       if (!player.state.playing) await player.play();
@@ -333,11 +337,12 @@ class PlayerService {
       await setProp('cache-pause-wait', '2');
       await setProp('demuxer-readahead-secs', '60');
     }
-    if (!item.isLive) _reconnects = 0;
     await player.open(Media(item.url, start: start), play: true);
   }
 
   Future<void> stop() async {
+    _reconnectTimer?.cancel();
+    _reconnect.reset();
     current.value = null;
     status.value = null;
     await player.stop();
@@ -346,16 +351,17 @@ class PlayerService {
   void _onEnded() {
     final item = current.value;
     if (item == null || !item.isLive) return;
-    // Live streams should never end: reconnect with a back-off.
-    if (_reconnects >= 6) {
-      status.value = 'Flux indisponible. Réessaie ou change de chaîne.';
+    // Live streams should never end: reconnect with a back-off. The same
+    // failure often arrives as several errors: one attempt at a time.
+    final wait = _reconnect.next();
+    if (wait == null) {
+      if (_reconnect.exhausted) status.value = 'Flux indisponible. Réessaie ou change de chaîne.';
       return;
     }
-    _reconnects++;
-    _lastReconnect = DateTime.now();
-    status.value = 'Reconnexion… ($_reconnects)';
-    Timer(Duration(milliseconds: 600 * _reconnects), () {
-      if (current.value?.url == item.url) play(item, force: true);
+    status.value = 'Reconnexion… (${_reconnect.attempts})';
+    _reconnectTimer = Timer(wait, () {
+      _reconnect.launched();
+      if (current.value?.url == item.url) play(item, force: true, reconnecting: true);
     });
   }
 
@@ -458,6 +464,7 @@ class PlayerService {
 
   Future<void> dispose() async {
     _watchdog?.cancel();
+    _reconnectTimer?.cancel();
     settings.removeListener(applyTuning);
     for (final s in _subs) {
       await s.cancel();
