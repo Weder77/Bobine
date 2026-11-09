@@ -288,9 +288,8 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
         timeout: const Duration(seconds: 60),
       );
     }
-    await for (final line in gunzipIfNeeded(
-      bytes,
-    ).transform(const Utf8Decoder(allowMalformed: true)).transform(const LineSplitter())) {
+    final text = guardBody(gunzipIfNeeded(bytes), maxBytes: 1 << 30).transform(const Utf8Decoder(allowMalformed: true));
+    await for (final line in limitLineLength(text).transform(const LineSplitter())) {
       parser.addLine(line);
       if (parser.notAPlaylist) {
         throw NetException(
@@ -519,7 +518,10 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       if (!file.existsSync()) throw NetException('Fichier EPG introuvable : ${file.path}');
       bytes = file.openRead();
     }
-    await for (final chunk in gunzipIfNeeded(bytes).transform(const Utf8Decoder(allowMalformed: true))) {
+    // A guide is read as it arrives, so its size costs time, not memory:
+    // the bound only stops an endless answer.
+    final guarded = guardBody(gunzipIfNeeded(bytes), maxBytes: 4 << 30);
+    await for (final chunk in guarded.transform(const Utf8Decoder(allowMalformed: true))) {
       parser.add(chunk);
     }
     parser.close();

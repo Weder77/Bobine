@@ -110,6 +110,44 @@ http://srv/plain/stream4.ts
   });
 
   group('XMLTV', () {
+    test('an element that never ends is refused instead of being kept whole', () {
+      var programmes = 0;
+      final p = XmltvParser(onProgramme: (c, s, e, t, d, g) => programmes++, onChannel: (id, names) {})
+        ..maxElementChars = 2000;
+      p.add('<tv><programme start="20240131200000 +0100" channel="a"><title>Sans fin</title><desc>');
+      Object? error;
+      var fed = 0;
+      try {
+        for (; fed < 100; fed++) {
+          p.add('x' * 100);
+        }
+      } catch (e) {
+        error = e;
+      }
+      expect(error, isA<XmltvException>());
+      expect('$error', startsWith('Guide TV illisible'));
+      // Stopped as soon as the limit was passed, not at the end of the file.
+      expect(fed, lessThan(25));
+      expect(programmes, 0);
+    });
+
+    test('a long guide of ordinary programmes never reaches the element limit', () {
+      var programmes = 0;
+      final p = XmltvParser(onProgramme: (c, s, e, t, d, g) => programmes++, onChannel: (id, names) {})
+        ..maxElementChars = 2000;
+      const one =
+          '<programme start="20240131200000 +0100" stop="20240131210000 +0100" channel="a">'
+          '<title>Journal</title><desc>Un résumé de quelques lignes, comme dans un vrai guide.</desc></programme>\n';
+      final xml = '<tv>${one * 500}</tv>';
+      // Far more text than the limit in all, in chunks cut anywhere.
+      expect(xml.length, greaterThan(50000));
+      for (var i = 0; i < xml.length; i += 333) {
+        p.add(xml.substring(i, i + 333 > xml.length ? xml.length : i + 333));
+      }
+      p.close();
+      expect(programmes, 500);
+    });
+
     test('parses chunked input, entities, CDATA and timezones', () {
       final progs = <List<Object?>>[];
       final chans = <String, List<String>>{};

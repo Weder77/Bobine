@@ -61,12 +61,10 @@ class ImageFetcher {
     _active++;
     try {
       final res = await openGet(_client, Uri.parse(url), timeout: const Duration(seconds: 15));
-      final builder = BytesBuilder(copy: false);
-      await for (final chunk in res) {
-        builder.add(chunk);
-        if (builder.length > 8 * 1024 * 1024) throw StateError('image too large');
-      }
-      final bytes = builder.takeBytes();
+      // A picture that stops arriving would otherwise keep its download slot
+      // for good, and after a few of them no picture loads any more.
+      final guarded = guardBody(res, stall: const Duration(seconds: 20), maxBytes: 8 << 20);
+      final bytes = (await guarded.fold(BytesBuilder(copy: false), (b, chunk) => b..add(chunk))).takeBytes();
       if (bytes.length < 16) throw StateError('empty image');
       final tmp = File('${file.path}.tmp');
       await tmp.writeAsBytes(bytes, flush: false);

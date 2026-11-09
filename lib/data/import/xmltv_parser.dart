@@ -15,6 +15,14 @@ typedef ProgrammeCallback = void Function(
 );
 typedef ChannelCallback = void Function(String id, List<String> displayNames);
 
+/// A guide that cannot be read. [toString] is the message to show.
+class XmltvException implements Exception {
+  const XmltvException(this.message);
+  final String message;
+  @override
+  String toString() => message;
+}
+
 class XmltvParser {
   XmltvParser({required this.onProgramme, required this.onChannel, this.preferredLang = 'fr'});
 
@@ -24,9 +32,19 @@ class XmltvParser {
 
   String _buf = '';
 
+  /// Longest element (a programme with its description, a channel) kept
+  /// while waiting for its end. A real one is a few kB; a file with an
+  /// element that never closes would otherwise be held whole in memory,
+  /// and searched again from its start at every chunk.
+  int maxElementChars = 8 << 20;
+
   void add(String chunk) {
     _buf = _buf.isEmpty ? chunk : _buf + chunk;
     _process();
+    if (_buf.length > maxElementChars) {
+      _buf = '';
+      throw const XmltvException('Guide TV illisible : un élément ne se termine jamais.');
+    }
   }
 
   void close() {
