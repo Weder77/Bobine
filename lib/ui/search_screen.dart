@@ -6,6 +6,7 @@ import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
+import '../data/search_worker.dart';
 import '../services.dart';
 import 'launch.dart';
 import 'program_actions.dart';
@@ -33,6 +34,13 @@ class _SearchScreenState extends State<SearchScreen> {
   List<ProgramHit> _programs = const [];
   String _query = '';
 
+  /// Query waiting for the search in progress to end (the latest wins).
+  String? _pending;
+  bool _searching = false;
+
+  /// "Tendances" of the empty page, worked out once (it reads the catalogue).
+  List<Object>? _trends;
+
   @override
   void initState() {
     super.initState();
@@ -52,15 +60,58 @@ class _SearchScreenState extends State<SearchScreen> {
     _debounce = Timer(const Duration(milliseconds: 200), () => _run(widget.controller.text));
   }
 
+  /// Searches [q]. The database is read on another isolate, one search at a
+  /// time: what is typed meanwhile replaces the query that waits.
   void _run(String q) {
+    if (!mounted) return;
     final src = _s.activeSource;
     final t = q.trim();
-    if (!mounted) return;
-    setState(() {
-      _query = t;
-      _results = src == null || t.length < 2 ? null : _s.repo.search(src.id, t);
-      _programs = src == null || t.length < 3 ? const [] : _s.repo.searchPrograms(src.id, t);
-    });
+    if (src == null || t.length < 2) {
+      _pending = null;
+      setState(() {
+        _query = t;
+        _results = null;
+        _programs = const [];
+      });
+      return;
+    }
+    _pending = t;
+    if (!_searching) unawaited(_drain());
+  }
+
+  Future<void> _drain() async {
+    _searching = true;
+    try {
+      while (mounted) {
+        final t = _pending;
+        final src = _s.activeSource;
+        if (t == null || src == null) break;
+        _pending = null;
+        SearchOutcome out;
+        try {
+          out = await searchInBackground(
+            _s.dbPath,
+            sourceId: src.id,
+            query: t,
+            profileId: _s.repo.profileId,
+            hideLocked: _s.repo.hideLocked,
+          );
+        } catch (e) {
+          // No second connection (unusual): search here.
+          debugPrint('Recherche en arrière-plan impossible : $e');
+          out = runSearch(_s.repo, src.id, t);
+        }
+        // Something else was typed, or the field was emptied, meanwhile.
+        if (!mounted || _pending != null || widget.controller.text.trim() != t) continue;
+        setState(() {
+          _query = t;
+          _results = out.results;
+          _programs = out.programs;
+        });
+      }
+    } finally {
+      _searching = false;
+    }
   }
 
   /// Opening a result remembers the query.
@@ -81,7 +132,7 @@ class _SearchScreenState extends State<SearchScreen> {
   List<Widget> _empty() {
     final src = _s.activeSource;
     final recent = _s.repo.recentSearches();
-    final trends = src == null ? const <Object>[] : _s.repo.trending(src.id);
+    final trends = src == null ? const <Object>[] : (_trends ??= _s.repo.trending(src.id));
     return [
       if (recent.isNotEmpty) ...[
         Text('RECHERCHES RÉCENTES', style: monoStyle(13, color: AppColors.faint).copyWith(letterSpacing: 0.8)),

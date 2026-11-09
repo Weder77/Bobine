@@ -898,16 +898,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
       if (mounted) setState(() => _shown = base);
       return;
     }
-    final onAir = {
-      for (final h in widget.s.repo.searchPrograms(
-        widget.source.id,
-        _query.text,
-        back: Duration.zero,
-        ahead: Duration.zero,
-        limit: 2000,
-      ))
-        h.channel.extId,
-    };
+    final onAir = widget.s.repo.channelsOnAir(widget.source.id, _query.text);
     final list = _onlyFavorites ? _favorites : _all;
     if (mounted) {
       setState(

@@ -167,10 +167,7 @@ class LiveCatalog extends ChangeNotifier {
   List<ChannelTile> filtered(String query) {
     final words = searchWords(query);
     if (words.isEmpty || source == null) return tiles;
-    final onAir = {
-      for (final h in _s.repo.searchPrograms(source!.id, query, back: Duration.zero, ahead: Duration.zero, limit: 2000))
-        h.channel.extId,
-    };
+    final onAir = _s.repo.channelsOnAir(source!.id, query);
     return [
       for (final t in tiles)
         if (t.variants.any((c) => matchesWords(c.search, words) || onAir.contains(c.extId))) t,

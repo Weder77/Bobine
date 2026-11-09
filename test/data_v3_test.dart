@@ -116,6 +116,62 @@ void main() {
     expect(repo.hasRecording(id, 'c', now), isFalse);
   });
 
+  test('channels on air: every quality of the channel, by tvg-id or by name, hidden ones left out', () {
+    final (repo, id) = _fixture();
+    final db = repo.db;
+    final now = DateTime.now();
+    DateTime at(int seconds) => now.add(Duration(seconds: seconds));
+    // Nothing matching is on air now; the football starts in 10 minutes.
+    expect(repo.channelsOnAir(id, 'journal'), isEmpty);
+    expect(repo.channelsOnAir(id, 'marseille', at: at(700)), {'c'});
+    expect(repo.channelsOnAir(id, 'journal', at: at(3700)), {'a'});
+    // A second quality with the same tvg-id, and a channel matched by its name.
+    db.execute(
+      'INSERT INTO channels (source_id, ext_id, category_id, name, search, epg_id, match_key, position) '
+      "VALUES (?, 'a2', 10, 'Info 24 HD', 'info 24 hd', 'INFO24.fr', 'info24', 3)",
+      [id],
+    );
+    db.execute(
+      'INSERT INTO channels (source_id, ext_id, category_id, name, search, epg_id, match_key, position) '
+      "VALUES (?, 'd', 10, 'FR: Info 24', 'fr info 24', NULL, 'info24', 4)",
+      [id],
+    );
+    db.execute("INSERT INTO epg_channels (source_id, name_key, epg_id) VALUES (?, 'info24', 'info24.fr')", [id]);
+    expect(repo.channelsOnAir(id, 'JOURNAL soir', at: at(3700)), {'a', 'a2', 'd'});
+    expect(repo.channelsOnAir(id, 'journal matin', at: at(3700)), isEmpty);
+    repo.setChannelHidden(id, 'a2', true);
+    expect(repo.channelsOnAir(id, 'journal', at: at(3700)), {'a', 'd'});
+    repo.setCategoryHidden(id, ContentKind.live, 'fr', true);
+    expect(repo.channelsOnAir(id, 'journal', at: at(3700)), isEmpty);
+    expect(repo.channelsOnAir(id, '  '), isEmpty);
+  });
+
+  test('the guide search gives the first channel of the list for a programme, and only visible ones', () {
+    final (repo, id) = _fixture();
+    final db = repo.db;
+    // Another quality of Info 24, earlier in the list.
+    db.execute(
+      'INSERT INTO channels (source_id, ext_id, category_id, name, search, epg_id, match_key, position) '
+      "VALUES (?, 'a0', 10, 'Info 24 FHD', 'info 24 fhd', 'info24.fr', 'info24', -1)",
+      [id],
+    );
+    // A guide channel no channel of the playlist uses.
+    db.execute('INSERT INTO epg_programs (source_id, channel, start, stop, title, search) VALUES (?, ?, ?, ?, ?, ?)', [
+      id,
+      'ailleurs.tv',
+      0,
+      9999999999,
+      'Le Journal d ailleurs',
+      'le journal d ailleurs',
+    ]);
+    final hits = repo.searchPrograms(id, 'journal');
+    expect(hits.map((h) => h.channel.extId).toSet(), {'a0'});
+    expect(hits, hasLength(2));
+    repo.setChannelHidden(id, 'a0', true);
+    expect(repo.searchPrograms(id, 'journal').map((h) => h.channel.extId).toSet(), {'a'});
+    expect(repo.searchPrograms(id, 'journal', limit: 1), hasLength(1));
+  });
+
   test('the guide search finds programmes with their channel, without accents', () {
     final (repo, id) = _fixture();
     final hits = repo.searchPrograms(id, 'journal');

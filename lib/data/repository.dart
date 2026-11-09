@@ -609,8 +609,45 @@ class Repository {
   int epgProgramCount(int sourceId) =>
       db.select('SELECT COUNT(*) FROM epg_programs WHERE source_id = ?', [sourceId]).first.columnAt(0) as int;
 
+  /// Guide channels (keys of `epg_programs.channel`) that belong to a
+  /// channel the user can see: by `tvg-id`, else by normalised name.
+  String _visibleEpgKeys(int sourceId) =>
+      'SELECT lower(ch.epg_id) FROM channels ch WHERE ch.source_id = $sourceId AND ch.epg_id IS NOT NULL '
+      'AND ${_visible('ch', ContentKind.live, sourceId)} '
+      'UNION SELECT e.epg_id FROM epg_channels e JOIN channels c2 '
+      'ON c2.source_id = e.source_id AND c2.match_key = e.name_key '
+      'WHERE e.source_id = $sourceId AND ${_visible('c2', ContentKind.live, sourceId)}';
+
+  static String _like(String word) =>
+      '%${word.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%';
+
+  /// The channel shown for the guide channel [key] (first of the list when
+  /// several qualities share it), or null when the user sees none.
+  Channel? _channelForEpgKey(int sourceId, String key) {
+    final visible = _visible('ch', ContentKind.live, sourceId);
+    // "+position": sort the few matches instead of walking the whole list.
+    var rows = db.select(
+      'SELECT ch.* FROM channels ch WHERE ch.source_id = ? AND lower(ch.epg_id) = ? AND $visible '
+      'ORDER BY +ch.position LIMIT 1',
+      [sourceId, key],
+    );
+    if (rows.isEmpty) {
+      rows = db.select(
+        'SELECT ch.* FROM channels ch WHERE ch.source_id = ? AND ch.match_key IN '
+        '(SELECT e.name_key FROM epg_channels e WHERE e.source_id = ? AND e.epg_id = ?) AND $visible '
+        'ORDER BY +ch.position LIMIT 1',
+        [sourceId, sourceId, key],
+      );
+    }
+    return rows.isEmpty ? null : Channel.fromRow(rows.first);
+  }
+
   /// Searches programme titles of the guide in the next / last few days,
   /// for channels the user can see.
+  ///
+  /// The guide is read once (programmes first, their channel looked up
+  /// afterwards): joining every matching programme to every channel made
+  /// the search take minutes on big playlists.
   List<ProgramHit> searchPrograms(
     int sourceId,
     String query, {
@@ -624,31 +661,51 @@ class Repository {
     final from = now.subtract(back).millisecondsSinceEpoch ~/ 1000;
     final to = now.add(ahead).millisecondsSinceEpoch ~/ 1000;
     final clause = List.filled(words.length, "p.search LIKE ? ESCAPE '\\'").join(' AND ');
-    final likes = words.map((w) => '%${w.replaceAll('\\', '\\\\').replaceAll('%', '\\%').replaceAll('_', '\\_')}%');
     final rows = db.select(
-      'SELECT p.channel AS p_channel, p.start AS p_start, p.stop AS p_stop, p.title AS p_title, '
-      'p.description AS p_description, p.category AS p_category, ch.* '
-      'FROM epg_programs p JOIN channels ch ON ch.source_id = p.source_id AND ('
-      'lower(ch.epg_id) = p.channel OR ch.match_key IN '
-      '(SELECT e.name_key FROM epg_channels e WHERE e.source_id = p.source_id AND e.epg_id = p.channel)) '
+      'SELECT p.channel, p.start, p.stop, p.title, p.description, p.category FROM epg_programs p '
       'WHERE p.source_id = ? AND p.stop > ? AND p.start < ? AND $clause '
-      'AND ${_visible('ch', ContentKind.live, sourceId)} '
-      'GROUP BY p.channel, p.start ORDER BY (p.stop < ?) , p.start LIMIT ?',
-      [sourceId, from, to, ...likes, now.millisecondsSinceEpoch ~/ 1000, limit],
+      'AND p.channel IN (${_visibleEpgKeys(sourceId)}) '
+      'ORDER BY (p.stop < ?), p.start, p.channel LIMIT ?',
+      [sourceId, from, to, ...words.map(_like), now.millisecondsSinceEpoch ~/ 1000, limit],
     );
-    return [
-      for (final r in rows)
+    final channels = <String, Channel?>{};
+    final out = <ProgramHit>[];
+    for (final r in rows) {
+      final key = r['channel'] as String;
+      final channel = channels.putIfAbsent(key, () => _channelForEpgKey(sourceId, key));
+      if (channel == null) continue;
+      out.add(
         ProgramHit(
-          Channel.fromRow(r),
+          channel,
           Program(
-            start: DateTime.fromMillisecondsSinceEpoch((r['p_start'] as int) * 1000),
-            stop: DateTime.fromMillisecondsSinceEpoch((r['p_stop'] as int) * 1000),
-            title: r['p_title'] as String,
-            description: r['p_description'] as String?,
-            category: r['p_category'] as String?,
+            start: DateTime.fromMillisecondsSinceEpoch((r['start'] as int) * 1000),
+            stop: DateTime.fromMillisecondsSinceEpoch((r['stop'] as int) * 1000),
+            title: r['title'] as String,
+            description: r['description'] as String?,
+            category: r['category'] as String?,
           ),
         ),
-    ];
+      );
+    }
+    return out;
+  }
+
+  /// Channels (provider ids, every quality of them) whose programme on air
+  /// at [at] matches [query]: the "ligue 1" filter of Direct and multi-view.
+  Set<String> channelsOnAir(int sourceId, String query, {DateTime? at}) {
+    final words = searchWords(query);
+    if (words.isEmpty) return const {};
+    final now = (at ?? DateTime.now()).millisecondsSinceEpoch ~/ 1000;
+    final clause = List.filled(words.length, "p.search LIKE ? ESCAPE '\\'").join(' AND ');
+    final rows = db.select(
+      'WITH hit(key) AS (SELECT DISTINCT p.channel FROM epg_programs p '
+      'WHERE p.source_id = ? AND p.stop > ? AND p.start <= ? AND $clause) '
+      'SELECT ch.ext_id FROM channels ch WHERE ch.source_id = ? AND ${_visible('ch', ContentKind.live, sourceId)} '
+      'AND (lower(ch.epg_id) IN (SELECT key FROM hit) OR ch.match_key IN '
+      '(SELECT e.name_key FROM epg_channels e WHERE e.source_id = ? AND e.epg_id IN (SELECT key FROM hit)))',
+      [sourceId, now, now, ...words.map(_like), sourceId, sourceId],
+    );
+    return {for (final r in rows) r['ext_id'] as String};
   }
 
   // ------------------------------------------------- category / channel prefs
