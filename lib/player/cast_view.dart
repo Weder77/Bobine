@@ -344,6 +344,23 @@ class CastRemoteView extends StatelessWidget {
                       style: TextStyle(fontSize: 12.5, color: DarkColors.faint),
                     ),
                   ],
+                  // The TV may refuse the stream while reporting that it
+                  // plays: the other way to send it stays at hand.
+                  if (!failed && !local && device != null) ...[
+                    const SizedBox(height: 4),
+                    TextButton(
+                      onPressed: () => onRetry(viaRelay: !cast.viaRelay),
+                      style: TextButton.styleFrom(
+                        foregroundColor: DarkColors.faint,
+                        textStyle: const TextStyle(fontSize: 12.5, decoration: TextDecoration.underline),
+                      ),
+                      child: Text(
+                        cast.viaRelay
+                            ? 'La télé n’affiche pas la vidéo ? Essayer en direct'
+                            : 'La télé n’affiche pas la vidéo ? Essayer via cet ordinateur',
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),

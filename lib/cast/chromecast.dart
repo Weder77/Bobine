@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'cast_device.dart';
+import 'cast_media.dart';
 import 'cast_session.dart';
 
 /// One message of the Google Cast protocol (CastMessage protobuf).
@@ -391,6 +392,10 @@ class ChromecastSession implements CastSession {
       _send(transport!, CastNs.connection, {'type': 'CONNECT'});
     }
   }
+
+  @override
+  String contentTypeFor(String url, {required bool live}) =>
+      castContentType(url, live: live, protocol: CastProtocol.chromecast);
 
   @override
   Future<void> load(CastMedia media, {Duration? start}) async {

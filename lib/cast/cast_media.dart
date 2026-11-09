@@ -46,3 +46,50 @@ String castContentType(String url, {required bool live, required CastProtocol pr
     _ => live ? 'video/mp2t' : 'video/mp4',
   };
 }
+
+/// Spellings of the same format: renderers each list their own.
+const _mimeFamilies = [
+  ['video/x-matroska', 'video/x-mkv', 'video/mkv', 'video/matroska'],
+  ['video/mp4', 'video/x-mp4', 'video/mpeg4', 'video/m4v', 'video/x-m4v'],
+  [
+    'video/mp2t',
+    'video/vnd.dlna.mpeg-tts',
+    'video/x-mpegts',
+    'video/mpegts',
+    'video/mpeg',
+    'video/x-mpeg',
+    'video/mpeg2',
+    'video/x-mpeg2',
+  ],
+  ['video/x-msvideo', 'video/avi', 'video/x-avi', 'video/msvideo', 'video/divx', 'video/x-divx'],
+  ['video/quicktime', 'video/x-quicktime', 'video/mp4'],
+  ['application/x-mpegurl', 'application/vnd.apple.mpegurl', 'audio/x-mpegurl', 'audio/mpegurl'],
+  ['video/webm'],
+  ['video/x-flv', 'video/flv'],
+];
+
+/// [mime] as a DLNA renderer spells it in its list of accepted formats
+/// ([sink], from GetProtocolInfo): some refuse a file announced with
+/// another spelling ("video/x-mkv" instead of "video/x-matroska").
+/// [mime] itself when the renderer accepts anything or lists no match.
+String rendererMime(String mime, List<String> sink) {
+  final listed = <String, String>{};
+  for (final p in sink) {
+    final parts = p.split(':');
+    if (parts.length < 4 || parts[0].trim().toLowerCase() != 'http-get') continue;
+    final m = parts[2].trim();
+    if (m == '*') return mime;
+    listed.putIfAbsent(m.toLowerCase(), () => m);
+  }
+  final key = mime.toLowerCase();
+  final same = listed[key];
+  if (same != null) return same;
+  for (final family in _mimeFamilies) {
+    if (!family.contains(key)) continue;
+    for (final alias in family) {
+      final s = listed[alias];
+      if (s != null) return s;
+    }
+  }
+  return mime;
+}

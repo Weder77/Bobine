@@ -86,6 +86,10 @@ abstract class CastSession {
   Stream<RemoteStatus> get updates;
 
   Future<void> connect();
+
+  /// MIME type to announce for [url], as this device expects it.
+  String contentTypeFor(String url, {required bool live});
+
   Future<void> load(CastMedia media, {Duration? start});
   Future<void> play();
   Future<void> pause();
