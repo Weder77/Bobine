@@ -1,3 +1,8 @@
+import 'dart:io';
+
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/repository.dart';
+import 'package:bobine/data/settings.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:bobine/player/player_service.dart';
 
@@ -26,6 +31,18 @@ void main() {
     // "Play" on a finished film starts it again from zero.
     expect(PlayerService.resumesOnReopen(playing: false, completed: true), isFalse);
     expect(PlayerService.resumesOnReopen(playing: true, completed: false), isFalse);
+  });
+
+  test('a screen replaced by another one is told so, whatever both play', () {
+    final repo = Repository(openMemoryDatabase());
+    final ps = PlayerService(AppSettings(repo), Directory.systemTemp.path);
+    // What each playback screen notes when it opens.
+    final film = ps.takeovers;
+    // A reminder's "Regarder" opens the channel in its place.
+    ps.takeOver();
+    final channel = ps.takeovers;
+    expect(ps.takeovers != film, isTrue, reason: 'the film screen was replaced: it must not stop the engine');
+    expect(ps.takeovers != channel, isFalse, reason: 'the new screen owns the engine, and stops it when it closes');
   });
 
   group('what is shown to the user', () {

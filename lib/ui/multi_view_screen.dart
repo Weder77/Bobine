@@ -62,10 +62,14 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
   /// Slot whose channel is being chosen, or null.
   int? _picking;
 
+  /// [PlayerService.takeovers] when this screen opened.
+  int _takeovers = 0;
+
   @override
   void initState() {
     super.initState();
     _s = AppScope.of(context);
+    _takeovers = _s.player.takeovers;
     // The main player and the mini-player stop: their connection is free.
     if (_s.pip.active) {
       unawaited(_s.pip.close());
@@ -92,7 +96,9 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
     _c.removeListener(_changed);
     _c.dispose();
     _focus.dispose();
-    if (_fullscreen) scheduleMicrotask(() => AppWindow.setFullscreen(false));
+    // Replaced by a player (a reminder's "Regarder"): the window is its own.
+    final replaced = _s.player.takeovers != _takeovers;
+    if (_fullscreen && !replaced) scheduleMicrotask(() => AppWindow.setFullscreen(false));
     super.dispose();
   }
 

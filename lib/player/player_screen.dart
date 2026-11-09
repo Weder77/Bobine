@@ -40,6 +40,8 @@ class PlayerScreen extends StatefulWidget {
   static Future<void> open(BuildContext context, PlayerSession session, {bool replacing = false}) {
     final nav = Navigator.of(context);
     if (!replacing) return nav.push(route(session));
+    // Told before the new screen is built: it must not count itself replaced.
+    AppScope.of(context).player.takeOver();
     return nav.pushAndRemoveUntil(route(session), (r) => r.settings.name != playbackRoute);
   }
 
@@ -111,6 +113,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// Where playback was when [_error] was raised.
   Duration _errorAt = Duration.zero;
+
+  /// [PlayerService.takeovers] when this screen opened.
+  int _takeovers = 0;
   String _digits = '';
   _Aspect _aspect = _Aspect.auto;
   double _volumeBeforeMute = 100;
@@ -147,6 +152,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     super.initState();
     _s = AppScope.of(context);
     _ps = _s.player;
+    _takeovers = _ps.takeovers;
     _cast = _s.cast;
     _castEnded = _cast.endedCount;
     _item = widget.session.item;
@@ -228,12 +234,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final ps = _ps;
     final keepAlive = widget.session.keepAlive || _minimized || _casting;
     final wasFullscreen = _fullscreen;
-    final mine = _item.url;
+    // Another player took this one's place: the engine and the window are
+    // its own now, whatever it plays (the same channel, for a reminder
+    // about the channel being watched).
+    final replaced = ps.takeovers != _takeovers;
     scheduleMicrotask(() {
-      // Another player took this one's place and plays something else: the
-      // engine and the window are its own now.
-      final playing = ps.current.value;
-      final replaced = playing != null && playing.url != mine;
       if (wasFullscreen && !replaced) AppWindow.setFullscreen(false);
       if (!keepAlive && !replaced) ps.stop();
     });

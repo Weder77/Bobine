@@ -96,6 +96,17 @@ class PlayerService {
   /// Human readable status ("Reconnexion…") or null.
   final ValueNotifier<String?> status = ValueNotifier(null);
 
+  /// How many times a playback screen took the place of another one (a
+  /// reminder's "Regarder" over a film or over the multi-view). A screen
+  /// that closes after that was replaced: the engine and the window belong
+  /// to its successor. Comparing what they play is not enough: the reminder
+  /// may be for the very channel being watched.
+  int get takeovers => _takeovers;
+  int _takeovers = 0;
+
+  /// The playback screen about to open replaces the ones on screen.
+  void takeOver() => _takeovers++;
+
   /// Completes once libmpv is configured. The UI does not wait for it (the
   /// video texture needs a visible window on some platforms), only [play].
   late final Future<void> ready;
