@@ -204,6 +204,7 @@ class _RailArrow extends StatelessWidget {
       color: AppColors.bg.withAlpha(0xCC),
       shape: CircleBorder(side: BorderSide(color: AppColors.ink.withAlpha(0x40))),
       child: InkWell(
+        mouseCursor: SystemMouseCursors.click,
         canRequestFocus: false,
         customBorder: const CircleBorder(),
         onTap: onTap,
@@ -456,17 +457,20 @@ class CircleAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Tooltip(
     message: tooltip,
-    child: GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: filled ? AppColors.action : null,
-          border: filled ? null : Border.all(color: AppColors.ink.withAlpha(0x8C), width: 1.5),
+    child: MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: filled ? AppColors.action : null,
+            border: filled ? null : Border.all(color: AppColors.ink.withAlpha(0x8C), width: 1.5),
+          ),
+          child: Icon(icon, size: size * 0.5, color: filled ? AppColors.onAction : AppColors.text),
         ),
-        child: Icon(icon, size: size * 0.5, color: filled ? AppColors.onAction : AppColors.text),
       ),
     ),
   );

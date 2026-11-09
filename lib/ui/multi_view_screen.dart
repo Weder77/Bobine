@@ -557,6 +557,8 @@ class _SlotViewState extends State<_SlotView> {
     final now = widget.s.epg.now(slot.channel);
     final name = widget.s.channelName(slot.channel);
     return MouseRegion(
+      // The hand while the cursor shows (it hides with the controls).
+      cursor: widget.chrome ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
@@ -898,16 +900,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
       if (mounted) setState(() => _shown = base);
       return;
     }
-    final onAir = {
-      for (final h in widget.s.repo.searchPrograms(
-        widget.source.id,
-        _query.text,
-        back: Duration.zero,
-        ahead: Duration.zero,
-        limit: 2000,
-      ))
-        h.channel.extId,
-    };
+    final onAir = widget.s.repo.channelsOnAir(widget.source.id, _query.text);
     final list = _onlyFavorites ? _favorites : _all;
     if (mounted) {
       setState(

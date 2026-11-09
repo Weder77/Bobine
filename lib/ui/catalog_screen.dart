@@ -899,6 +899,7 @@ class _GridPosterState extends State<GridPoster> {
                     targetAnchor: Alignment.center,
                     followerAnchor: Alignment.center,
                     child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
                       onEnter: (_) => setState(() => _update(over: true)),
                       onExit: (_) => setState(() => _update(over: false)),
                       child: SizedBox(

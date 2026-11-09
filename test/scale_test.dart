@@ -6,6 +6,7 @@ import 'package:bobine/data/epg_cache.dart';
 import 'package:bobine/data/import/importers.dart';
 import 'package:bobine/data/models.dart';
 import 'package:bobine/data/repository.dart';
+import 'package:bobine/data/search_worker.dart';
 
 /// Load test: 100 000 playlist entries and a guide of ~250 000 programmes.
 /// Thresholds are deliberately generous (CI machines vary); the printed
@@ -120,6 +121,32 @@ void main() {
     lap('Recherche globale');
     expect(res.channels.first.name, contains('1234'));
 
+    // Typing in the search: the catalogue and the whole guide are read for
+    // each query. "pro" matches every programme of the guide.
+    var slowest = 0;
+    for (final q in ['pro', 'prog', 'programme 12', 'cha', 'film']) {
+      final one = Stopwatch()..start();
+      repo.search(id, q);
+      final hits = repo.searchPrograms(id, q);
+      repo.channelsOnAir(id, q);
+      if (one.elapsedMilliseconds > slowest) slowest = one.elapsedMilliseconds;
+      if (q.startsWith('pro')) expect(hits, hasLength(40));
+    }
+    lap('Recherche en tapant (5 requêtes, guide compris)');
+    timings['Recherche la plus lente'] = slowest;
+    expect(repo.channelsOnAir(id, 'programme'), hasLength(greaterThanOrEqualTo(epgChannels)));
+
+    final background = await searchInBackground(
+      path,
+      sourceId: id,
+      query: 'programme 12',
+      profileId: 1,
+      hideLocked: false,
+    );
+    lap('Recherche sur un autre fil');
+    expect(background.programs, hasLength(40));
+    expect(background.results!.channels, isEmpty);
+
     final epg = EpgCache(repo);
     var withNow = 0;
     for (final c in channels) {
@@ -139,6 +166,8 @@ void main() {
     expect(timings['Import M3U (100 000 entrées)']!, lessThan(60000));
     expect(timings['Tous les films (60 000)']!, lessThan(3000));
     expect(timings['Recherche globale']!, lessThan(2000));
+    // Minutes before the guide search read programmes first.
+    expect(timings['Recherche la plus lente']!, lessThan(3000));
     expect(timings['Programme en cours (${channels.length} chaînes)']!, lessThan(2000));
     repo.db.close();
   }, timeout: const Timeout(Duration(minutes: 5)));

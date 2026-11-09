@@ -164,6 +164,7 @@ class _StripArrow extends StatelessWidget {
       color: AppColors.surface,
       shape: CircleBorder(side: BorderSide(color: AppColors.borderStrong)),
       child: InkWell(
+        mouseCursor: SystemMouseCursors.click,
         canRequestFocus: false,
         customBorder: const CircleBorder(),
         onTap: onTap,
