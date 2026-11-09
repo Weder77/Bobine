@@ -125,11 +125,37 @@ Future<int> _run(List<String> args, List<String> log) async {
     stdout.writeln('RÉSULTAT : la télé refuse toutes les façons de présenter la vidéo.');
   }
   final report = castTestReport(session: session, target: target, results: results, requests: requests, log: log);
-  final file = File('${Directory.current.path}${Platform.pathSeparator}bobine-test-cast.txt');
-  await file.writeAsString(report);
-  stdout.writeln('Rapport (sans mot de passe) : ${file.path}');
-  stdout.writeln('Envoie-le pour que Bobine utilise la bonne façon.');
+  final file = await _writeReport(report);
+  if (file != null) {
+    stdout.writeln('Rapport (sans mot de passe) : ${file.path}');
+    stdout.writeln('Envoie-le pour que Bobine utilise la bonne façon.');
+  } else {
+    stdout.writeln('Le rapport n’a pas pu être écrit sur le disque.');
+  }
   await relay.close();
   await session.close();
   return played.isNotEmpty ? 0 : 4;
+}
+
+/// Writes the report next to the program, else in the folder it was started
+/// from, the user's folder or the temporary folder (a console opened from
+/// the Start menu starts in C:\Windows\System32, which is read-only).
+Future<File?> _writeReport(String report) async {
+  final home = Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'];
+  final folders = [
+    File(Platform.resolvedExecutable).parent.path,
+    Directory.current.path,
+    ?home,
+    Directory.systemTemp.path,
+  ];
+  for (final dir in folders) {
+    final file = File('$dir${Platform.pathSeparator}bobine-test-cast.txt');
+    try {
+      await file.writeAsString(report);
+      return file;
+    } on FileSystemException {
+      // Next folder.
+    }
+  }
+  return null;
 }
