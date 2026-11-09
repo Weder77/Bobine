@@ -199,19 +199,20 @@ class CastService extends ChangeNotifier {
     notifyListeners();
 
     final address = castUrl(it.url, d.protocol);
+    final contentType = session.contentTypeFor(address, live: it.isLive);
     var url = address;
     _viaRelay = isLocalMedia(address) || preferRelay;
     if (_viaRelay) {
       final host = session.localAddress;
       if (host == null) throw CastException('Adresse de cet ordinateur introuvable sur le réseau de la télé.');
       _relay.clear();
-      url = await _relay.publish(address, host: host, userAgent: it.userAgent);
+      url = await _relay.publish(address, host: host, userAgent: it.userAgent, contentType: contentType);
     }
     if (gen != _generation || seq != _loadSeq) return;
     final (title, subtitle) = describe?.call(it) ?? (it.title, it.subtitle);
     final media = CastMedia(
       url: url,
-      contentType: castContentType(address, live: it.isLive, protocol: d.protocol),
+      contentType: contentType,
       live: it.isLive,
       title: title,
       subtitle: subtitle,

@@ -4,7 +4,11 @@ import 'dart:io';
 
 import '../core/version.dart';
 import '../data/import/xmltv_parser.dart' show decodeEntities;
+
+import 'package:flutter/foundation.dart';
+
 import 'cast_device.dart';
+import 'cast_media.dart';
 import 'cast_session.dart';
 
 /// Drives a DLNA / UPnP media renderer (SOAP on its AVTransport and
@@ -35,6 +39,9 @@ class DlnaSession implements CastSession {
   Duration _lastPosition = Duration.zero;
   Duration? _duration;
 
+  /// Formats the renderer says it accepts ("http-get:*:video/x-mkv:*"…).
+  List<String> sink = const [];
+
   String get _avType => device.avTransportType ?? 'urn:schemas-upnp-org:service:AVTransport:1';
 
   @override
@@ -49,7 +56,21 @@ class DlnaSession implements CastSession {
     } on TimeoutException {
       throw CastException("L'appareil ne répond pas. Vérifie qu'il est allumé et sur le même réseau.");
     }
+    final cm = device.connectionManager;
+    if (cm != null) {
+      try {
+        final body = await soap(cm, device.connectionManagerType!, 'GetProtocolInfo', const []);
+        sink = parseSinkProtocols(soapValue(body, 'Sink') ?? '');
+        debugPrint('Cast DLNA : « ${device.name} » accepte ${sink.length} formats');
+      } catch (e) {
+        debugPrint('Cast DLNA : formats de « ${device.name} » inconnus ($e)');
+      }
+    }
   }
+
+  @override
+  String contentTypeFor(String url, {required bool live}) =>
+      rendererMime(castContentType(url, live: live, protocol: CastProtocol.dlna), sink);
 
   @override
   Future<void> load(CastMedia media, {Duration? start}) async {
@@ -59,6 +80,7 @@ class DlnaSession implements CastSession {
     _duration = null;
     _lastPosition = Duration.zero;
     final args = [('InstanceID', '0'), ('CurrentURI', media.url), ('CurrentURIMetaData', didlLite(media))];
+    debugPrint('Cast DLNA : « ${device.name} » ← ${media.contentType}${_listed(media.contentType)}');
     try {
       await _av('SetAVTransportURI', args);
     } on CastException {
@@ -74,6 +96,16 @@ class DlnaSession implements CastSession {
       // Some start by themselves and answer an error to Play: check below.
     }
     if (start != null && start.inSeconds > 5 && !media.live) unawaited(_seekWhenPlaying(start));
+  }
+
+  /// " (listé par la télé)" or the formats of the same family it lists, for the log.
+  String _listed(String mime) {
+    if (sink.isEmpty) return '';
+    final m = mime.toLowerCase();
+    if (sink.any((p) => p.toLowerCase().contains(':$m:'))) return ' (listé par la télé)';
+    final video = sink.map((p) => p.split(':')).where((p) => p.length >= 3 && p[2].startsWith('video/'));
+    final names = {for (final p in video) p[2]}.take(12).join(', ');
+    return ' (pas dans sa liste : $names)';
   }
 
   /// Renderers only accept a seek once the stream has started.
@@ -310,4 +342,20 @@ String upnpErrorMessage(String action, int? code, String? description, int statu
   }
   final detail = (description == null || description.isEmpty) ? 'erreur ${code ?? status}' : description;
   return "La télé a refusé l'action ($detail).";
+}
+
+/// Entries of a GetProtocolInfo "Sink" list (comma separated, commas inside
+/// the fourth field are not separators).
+List<String> parseSinkProtocols(String csv) {
+  final out = <String>[];
+  for (final raw in csv.split(',')) {
+    final v = raw.trim();
+    if (v.isEmpty) continue;
+    if (v.split(':').length < 4 && out.isNotEmpty) {
+      out[out.length - 1] = '${out.last},$v';
+    } else {
+      out.add(v);
+    }
+  }
+  return out;
 }

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bobine/cast/cast_device.dart';
+import 'package:bobine/cast/cast_media.dart';
 import 'package:bobine/cast/cast_service.dart';
 import 'package:bobine/cast/cast_session.dart';
 import 'package:bobine/cast/relay.dart';
@@ -33,6 +34,10 @@ class FakeSession implements CastSession {
 
   @override
   Future<void> connect() async => actions.add('connect');
+
+  @override
+  String contentTypeFor(String url, {required bool live}) =>
+      castContentType(url, live: live, protocol: device.protocol);
 
   @override
   Future<void> load(CastMedia media, {Duration? start}) async {
@@ -136,6 +141,23 @@ void main() {
           case '/hls/seg1.ts':
             res.add(utf8.encode('SEGMENT-1'));
             return res.close();
+          case '/nohead.mkv':
+            // A provider that refuses HEAD and calls everything "video/mp4".
+            if (req.method == 'HEAD') {
+              res.statusCode = 405;
+              return res.close();
+            }
+            final data = List.generate(5000, (i) => i % 256);
+            final range = parseByteRange(req.headers.value(HttpHeaders.rangeHeader), data.length);
+            res.headers.contentType = ContentType('video', 'mp4');
+            if (range != null) {
+              res.statusCode = 206;
+              res.headers.set(HttpHeaders.contentRangeHeader, 'bytes ${range.$1}-${range.$2}/5000');
+              res.add(data.sublist(range.$1, range.$2 + 1));
+            } else {
+              res.add(data);
+            }
+            return res.close();
           case '/movie.mp4':
             final data = List.generate(1000, (i) => i % 256);
             final range = parseByteRange(req.headers.value(HttpHeaders.rangeHeader), data.length);
@@ -195,6 +217,27 @@ void main() {
       final seg = await _get(segments.first);
       expect(utf8.decode(seg.$3), 'SEGMENT-1');
       expect(seenAgents.where((a) => a == 'VLC/3.0').length, greaterThanOrEqualTo(2));
+    });
+
+    test('HEAD refused by the provider; the TV gets the type it was told', () async {
+      final link = await relay.publish(
+        up('/nohead.mkv'),
+        host: InternetAddress.loopbackIPv4,
+        contentType: 'video/x-mkv',
+      );
+      final c = HttpClient();
+      final head = await (await c.headUrl(Uri.parse(link))).close();
+      await head.drain<void>();
+      expect(head.statusCode, 200);
+      expect(head.headers.contentLength, 5000);
+      expect(head.headers.value('accept-ranges'), 'bytes');
+      expect(head.headers.value('content-type'), 'video/x-mkv');
+      c.close(force: true);
+      final (status, headers, body) = await _get(link, headers: {'Range': 'bytes=0-'});
+      expect(status, 206);
+      expect(headers['content-type'], 'video/x-mkv');
+      expect(headers['content-range'], 'bytes 0-4999/5000');
+      expect(body.length, 5000);
     });
 
     test('byte ranges reach the provider (seeking in films)', () async {

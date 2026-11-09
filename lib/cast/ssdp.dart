@@ -153,6 +153,7 @@ CastDevice? parseUpnpDescription(String xml, Uri location) {
 
   (Uri, String)? avTransport;
   (Uri, String)? rendering;
+  (Uri, String)? connections;
   final services = RegExp(
     r'<(?:[\w-]+:)?service(?:\s[^>]*)?>(.*?)</(?:[\w-]+:)?service\s*>',
     dotAll: true,
@@ -165,6 +166,7 @@ CastDevice? parseUpnpDescription(String xml, Uri location) {
     if (type == null || control == null) continue;
     if (avTransport == null && type.contains(':service:AVTransport:')) avTransport = (control, type);
     if (rendering == null && type.contains(':service:RenderingControl:')) rendering = (control, type);
+    if (connections == null && type.contains(':service:ConnectionManager:')) connections = (control, type);
   }
   if (avTransport == null) return null;
   final name = tag(xml, 'friendlyName') ?? location.host;
@@ -180,5 +182,7 @@ CastDevice? parseUpnpDescription(String xml, Uri location) {
     avTransportType: avTransport.$2,
     renderingControl: rendering?.$1,
     renderingControlType: rendering?.$2,
+    connectionManager: connections?.$1,
+    connectionManagerType: connections?.$2,
   );
 }

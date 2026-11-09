@@ -24,6 +24,8 @@ class CastDevice {
     this.avTransportType,
     this.renderingControl,
     this.renderingControlType,
+    this.connectionManager,
+    this.connectionManagerType,
   });
 
   /// Stable identity (Chromecast id, UPnP UDN, else the address).
@@ -42,6 +44,10 @@ class CastDevice {
   /// DLNA: volume control (optional on renderers).
   final Uri? renderingControl;
   final String? renderingControlType;
+
+  /// DLNA: the formats the renderer accepts (GetProtocolInfo).
+  final Uri? connectionManager;
+  final String? connectionManagerType;
 
   String get key => '${protocol.name}:$id';
 

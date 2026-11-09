@@ -41,7 +41,10 @@ class CastRelay {
   /// Address the device at the other end of [host] (this computer's address
   /// on the TV's network) can open to get [target]: an http(s) address,
   /// fetched with [userAgent], or a local file.
-  Future<String> publish(String target, {required InternetAddress host, String? userAgent}) async {
+  ///
+  /// [contentType] is the type announced to the TV; the main address is
+  /// served with it.
+  Future<String> publish(String target, {required InternetAddress host, String? userAgent, String? contentType}) async {
     final server = _server ??= await _start();
     final token = List.generate(16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
     final origin = 'http://${host.address}:${server.port}';
@@ -51,6 +54,7 @@ class CastRelay {
       file: file,
       origin: origin,
       userAgent: (userAgent == null || userAgent.isEmpty) ? 'libmpv' : userAgent,
+      contentType: contentType,
     );
     return '$origin/c/$token/m/${linkName(target)}';
   }
@@ -100,31 +104,44 @@ class CastRelay {
       }
     }
     if (route == null || target == null || (req.method != 'GET' && req.method != 'HEAD')) {
+      if (seg.length >= 3 && seg[2] == 'm') debugPrint('Relais : télé ${req.method} sur une adresse expirée → 404');
       res.statusCode = HttpStatus.notFound;
       return res.close();
     }
-    if (route.file && seg[2] == 'm') return _serveFile(req, target);
+    if (route.file && seg[2] == 'm') return _serveFile(req, route);
     final uri = Uri.tryParse(target);
     if (uri == null || !(uri.scheme == 'http' || uri.scheme == 'https')) {
       res.statusCode = HttpStatus.notFound;
       return res.close();
     }
-    return _proxy(req, route, uri, token: seg[1]);
+    return _proxy(req, route, uri, token: seg[1], main: seg[2] == 'm');
   }
 
-  Future<void> _proxy(HttpRequest req, _Route route, Uri uri, {required String token}) async {
-    final res = req.response;
-    final head = req.method == 'HEAD';
-    final up = await _client.openUrl(head ? 'HEAD' : 'GET', uri).timeout(const Duration(seconds: 20));
+  Future<HttpClientResponse> _open(Uri uri, _Route route, String method, String? range) async {
+    final up = await _client.openUrl(method, uri).timeout(const Duration(seconds: 20));
     up.followRedirects = true;
     up.maxRedirects = 8;
     up.headers
       ..set(HttpHeaders.userAgentHeader, route.userAgent)
       ..set(HttpHeaders.acceptEncodingHeader, 'identity')
       ..set(HttpHeaders.acceptHeader, '*/*');
-    final range = req.headers.value(HttpHeaders.rangeHeader);
     if (range != null) up.headers.set(HttpHeaders.rangeHeader, range);
-    final upRes = await up.close().timeout(const Duration(seconds: 25));
+    return up.close().timeout(const Duration(seconds: 25));
+  }
+
+  Future<void> _proxy(HttpRequest req, _Route route, Uri uri, {required String token, required bool main}) async {
+    final res = req.response;
+    final head = req.method == 'HEAD';
+    final range = req.headers.value(HttpHeaders.rangeHeader);
+    var upRes = await _open(uri, route, head ? 'HEAD' : 'GET', range);
+    // Many IPTV servers answer HEAD badly (error, empty length): the first
+    // byte asked with GET gives the same headers and the total length.
+    var headByGet = false;
+    if (head && (upRes.statusCode >= 400 || upRes.contentLength == 0)) {
+      unawaited(upRes.drain<void>().catchError((_) {}));
+      upRes = await _open(uri, route, 'GET', 'bytes=0-0');
+      headByGet = true;
+    }
     var finalUri = uri;
     for (final r in upRes.redirects) {
       finalUri = finalUri.resolveUri(r.location);
@@ -132,7 +149,8 @@ class CastRelay {
     final type = upRes.headers.contentType?.mimeType.toLowerCase() ?? '';
     if (upRes.statusCode >= 400) {
       res.statusCode = upRes.statusCode;
-      unawaited(upRes.drain<void>().catchError((_) {}));
+      unawaited(upRes.listen(null).cancel().catchError((_) {}));
+      if (main) _log(req, 'le fournisseur a répondu ${upRes.statusCode}');
       return res.close();
     }
     final playlist = type.contains('mpegurl') || isHlsUrl(finalUri.toString());
@@ -152,6 +170,7 @@ class CastRelay {
           ..set(HttpHeaders.cacheControlHeader, 'no-cache');
         res.contentLength = body.length;
         res.add(body);
+        if (main) _log(req, '200 playlist HLS');
         return res.close();
       }
       // Not a playlist after all: send it as it came.
@@ -161,28 +180,57 @@ class CastRelay {
       res.add(bytes);
       return res.close();
     }
-    res.statusCode = upRes.statusCode;
-    final mime = (type.isEmpty || type == 'application/octet-stream' || type == 'text/plain')
-        ? castContentType(finalUri.toString(), live: upRes.contentLength < 0, protocol: _relayProtocol)
-        : upRes.headers.value(HttpHeaders.contentTypeHeader)!;
+    // The main address is sent with the type announced to the TV: some
+    // refuse a file whose HTTP type differs from the one they were given.
+    final announced = main && !playlist ? route.contentType : null;
+    final mime =
+        announced ??
+        ((type.isEmpty || type == 'application/octet-stream' || type == 'text/plain')
+            ? castContentType(finalUri.toString(), live: upRes.contentLength < 0, protocol: _relayProtocol)
+            : upRes.headers.value(HttpHeaders.contentTypeHeader)!);
     res.headers.set(HttpHeaders.contentTypeHeader, mime);
-    for (final h in const [
-      HttpHeaders.contentRangeHeader,
-      HttpHeaders.acceptRangesHeader,
-      HttpHeaders.lastModifiedHeader,
-    ]) {
-      final v = upRes.headers.value(h);
-      if (v != null) res.headers.set(h, v);
+    var length = upRes.contentLength;
+    if (headByGet) {
+      // "bytes 0-0/1234567": the whole length.
+      final total = RegExp(r'/(\d+)\s*$').firstMatch(upRes.headers.value(HttpHeaders.contentRangeHeader) ?? '');
+      length = upRes.statusCode == HttpStatus.partialContent ? int.tryParse(total?.group(1) ?? '') ?? -1 : length;
+      if (upRes.statusCode == HttpStatus.partialContent) res.headers.set(HttpHeaders.acceptRangesHeader, 'bytes');
+      res.statusCode = HttpStatus.ok;
+    } else {
+      res.statusCode = upRes.statusCode;
+      for (final h in const [HttpHeaders.contentRangeHeader, HttpHeaders.acceptRangesHeader]) {
+        final v = upRes.headers.value(h);
+        if (v != null) res.headers.set(h, v);
+      }
     }
+    final modified = upRes.headers.value(HttpHeaders.lastModifiedHeader);
+    if (modified != null) res.headers.set(HttpHeaders.lastModifiedHeader, modified);
     final encoding = upRes.headers.value(HttpHeaders.contentEncodingHeader);
     if (encoding != null) res.headers.set(HttpHeaders.contentEncodingHeader, encoding);
-    _dlna(res.headers, seekable: upRes.contentLength >= 0);
-    if (upRes.contentLength >= 0) res.contentLength = upRes.contentLength;
+    _dlna(res.headers, seekable: length >= 0);
+    if (length >= 0) res.contentLength = length;
+    if (main) _log(req, '${res.statusCode} $mime${length >= 0 ? ', ${_size(length)}' : ''}');
     if (head) {
-      unawaited(upRes.drain<void>().catchError((_) {}));
+      // Lets go of the provider (a GET of the first byte may still be open).
+      unawaited(upRes.listen(null).cancel().catchError((_) {}));
       return res.close();
     }
     await _pipe(upRes, res);
+  }
+
+  /// One line per request of the TV on the main address, for the diagnostic
+  /// page: what it asked and what it got.
+  static void _log(HttpRequest req, String result) {
+    final range = req.headers.value(HttpHeaders.rangeHeader);
+    final agent = req.headers.value(HttpHeaders.userAgentHeader) ?? '';
+    final who = agent.isEmpty ? '' : ' [${agent.length > 48 ? agent.substring(0, 48) : agent}]';
+    debugPrint('Relais : télé ${req.method}${range == null ? '' : ' $range'}$who → $result');
+  }
+
+  static String _size(int bytes) {
+    if (bytes >= 1 << 30) return '${(bytes / (1 << 30)).toStringAsFixed(2).replaceAll('.', ',')} Go';
+    if (bytes >= 1 << 20) return '${(bytes / (1 << 20)).toStringAsFixed(1).replaceAll('.', ',')} Mo';
+    return '$bytes o';
   }
 
   /// Sends the headers set on [res], then copies [from] to the TV at the
@@ -234,8 +282,9 @@ class CastRelay {
     socket.destroy();
   }
 
-  Future<void> _serveFile(HttpRequest req, String path) async {
+  Future<void> _serveFile(HttpRequest req, _Route route) async {
     final res = req.response;
+    final path = route.target;
     final file = File(path);
     if (!await file.exists()) {
       res.statusCode = HttpStatus.notFound;
@@ -243,7 +292,10 @@ class CastRelay {
     }
     final length = await file.length();
     res.headers
-      ..set(HttpHeaders.contentTypeHeader, castContentType(path, live: false, protocol: _relayProtocol))
+      ..set(
+        HttpHeaders.contentTypeHeader,
+        route.contentType ?? castContentType(path, live: false, protocol: _relayProtocol),
+      )
       ..set(HttpHeaders.acceptRangesHeader, 'bytes');
     _dlna(res.headers, seekable: true);
     final range = parseByteRange(req.headers.value(HttpHeaders.rangeHeader), length);
@@ -259,6 +311,7 @@ class CastRelay {
       res.headers.set(HttpHeaders.contentRangeHeader, 'bytes $start-$end/$length');
     }
     res.contentLength = length == 0 ? 0 : end - start + 1;
+    _log(req, '${res.statusCode} fichier local, ${_size(length)}');
     if (req.method == 'HEAD' || length == 0) return res.close();
     await _pipe(file.openRead(start, end + 1), res);
   }
@@ -295,11 +348,12 @@ class CastRelay {
 const _relayProtocol = CastProtocol.dlna;
 
 class _Route {
-  _Route({required this.target, required this.file, required this.origin, required this.userAgent});
+  _Route({required this.target, required this.file, required this.origin, required this.userAgent, this.contentType});
   final String target;
   final bool file;
   final String origin;
   final String userAgent;
+  final String? contentType;
 }
 
 /// Rewrites the addresses of an HLS playlist with [link] (absolute address

@@ -195,7 +195,15 @@ void main() {
     </serviceList>
   </device>
 </root>''';
-      final d = parseUpnpDescription(xml, Uri.parse('http://192.168.1.20:9197/dmr/desc.xml'))!;
+      final d = parseUpnpDescription(
+        xml.replaceFirst(
+          '</serviceList>',
+          '<service><serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>'
+              '<controlURL>/upnp/control/ConnectionManager1</controlURL></service></serviceList>',
+        ),
+        Uri.parse('http://192.168.1.20:9197/dmr/desc.xml'),
+      )!;
+      expect(d.connectionManager, Uri.parse('http://192.168.1.20:9197/upnp/control/ConnectionManager1'));
       expect(d.name, '[TV] Samsung Q60 & co');
       expect(d.id, 'uuid:abcd-1234');
       expect(d.protocol, CastProtocol.dlna);
@@ -242,6 +250,7 @@ void main() {
 <serviceList>
 <service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType><controlURL>/av</controlURL></service>
 <service><serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType><controlURL>/rc</controlURL></service>
+<service><serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType><controlURL>/cm</controlURL></service>
 </serviceList></device></root>''',
           );
           return req.response.close();
@@ -256,6 +265,10 @@ void main() {
               '<CurrentTransportStatus>OK</CurrentTransportStatus><CurrentSpeed>1</CurrentSpeed>';
         } else if (name == 'GetPositionInfo') {
           inner = '<Track>1</Track><TrackDuration>1:30:00</TrackDuration><RelTime>${formatUpnpTime(relTime)}</RelTime>';
+        } else if (name == 'GetProtocolInfo') {
+          inner =
+              '<Source></Source><Sink>http-get:*:video/mp4:*,http-get:*:video/x-mkv:*,'
+              'http-get:*:video/vnd.dlna.mpeg-tts:DLNA.ORG_PN=AVC_TS_HD_EU_ISO</Sink>';
         } else if (name == 'GetVolume') {
           inner = '<CurrentVolume>30</CurrentVolume>';
         } else if (name == 'Seek' && failSeek) {
@@ -294,6 +307,13 @@ void main() {
       final s = DlnaSession(d);
       await s.connect();
       expect(s.localAddress!.isLoopback, isTrue);
+      // The TV's own spellings of the formats it accepts.
+      expect(calls.single.$1, '"urn:schemas-upnp-org:service:ConnectionManager:1#GetProtocolInfo"');
+      expect(s.sink, hasLength(3));
+      expect(s.contentTypeFor('http://h/movie/u/p/1.mkv', live: false), 'video/x-mkv');
+      expect(s.contentTypeFor('http://h/live/u/p/1.ts', live: true), 'video/vnd.dlna.mpeg-tts');
+      expect(s.contentTypeFor('http://h/movie/u/p/1.mp4', live: false), 'video/mp4');
+      calls.clear();
       await s.load(
         const CastMedia(
           url: 'http://192.168.1.10:5000/c/tok/m/film.mkv?a=1&b=2',
@@ -461,6 +481,34 @@ void main() {
       expect(st.error, contains('arrêtée'));
       await s.close();
       await fake.close();
+    });
+  });
+
+  group('renderer formats', () {
+    test('sink list keeps DLNA parameters whole', () {
+      expect(
+        parseSinkProtocols(
+          ' http-get:*:video/mp4:*, http-get:*:video/mpeg:DLNA.ORG_PN=MPEG_TS_SD_EU,x ,,http-get:*:image/jpeg:*',
+        ),
+        ['http-get:*:video/mp4:*', 'http-get:*:video/mpeg:DLNA.ORG_PN=MPEG_TS_SD_EU,x', 'http-get:*:image/jpeg:*'],
+      );
+    });
+
+    test('the TV spelling of the same format is announced', () {
+      const philips = [
+        'http-get:*:video/x-matroska:*',
+        'http-get:*:video/MP2T:*',
+        'http-get:*:video/avi:*',
+        'rtsp-rtp-udp:*:video/x-mkv:*',
+      ];
+      expect(rendererMime('video/x-matroska', philips), 'video/x-matroska');
+      expect(rendererMime('video/mp2t', philips), 'video/MP2T');
+      expect(rendererMime('video/x-msvideo', philips), 'video/avi');
+      expect(rendererMime('video/mp4', philips), 'video/mp4');
+      expect(rendererMime('video/x-matroska', const ['http-get:*:video/x-mkv:*']), 'video/x-mkv');
+      expect(rendererMime('video/quicktime', const ['http-get:*:video/mp4:*']), 'video/mp4');
+      expect(rendererMime('video/x-matroska', const ['http-get:*:*:*']), 'video/x-matroska');
+      expect(rendererMime('video/x-matroska', const []), 'video/x-matroska');
     });
   });
 
