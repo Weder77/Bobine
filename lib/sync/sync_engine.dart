@@ -70,7 +70,19 @@ class SyncChanges {
   int received = 0;
   int sent = 0;
 
+  /// Items left aside: unreadable on the account, or impossible to apply or
+  /// to send. The others went through.
+  int skipped = 0;
+
   bool get any => sources || profiles || userData || settings;
+}
+
+/// The run was abandoned: the account it served is not this device's any
+/// more (signed out, or another account, while it was on the network).
+class SyncCancelled implements Exception {
+  const SyncCancelled();
+  @override
+  String toString() => 'Synchronisation abandonnée.';
 }
 
 /// Synchronises the user's data with the account.
@@ -82,17 +94,29 @@ class SyncChanges {
 /// and finds the sources and profiles that already exist on the account
 /// (same server and login, same profile name) instead of duplicating them.
 class SyncEngine {
-  SyncEngine({required this.repo, required this.codec, required this.remote, required this.settings});
+  SyncEngine({required this.repo, required this.codec, required this.remote, required this.settings, this.cancelled});
 
   final Repository repo;
   final SyncCodec codec;
   final SyncRemote remote;
   final SyncedSettings settings;
 
+  /// Asked after each wait on the network, before anything is written: true
+  /// stops the run with [SyncCancelled].
+  final bool Function()? cancelled;
+
   static const cursorKey = 'sync.cursor';
   static const pageSize = 1000;
   static const batchSize = 500;
   static const _version = 1;
+
+  /// Largest payload the account accepts (`sync_items.payload`). A larger
+  /// one makes the server refuse the whole batch it travels in.
+  static const maxPayload = 16384;
+
+  void _alive() {
+    if (cancelled?.call() ?? false) throw const SyncCancelled();
+  }
 
   Database get _db => repo.db;
 
@@ -112,34 +136,69 @@ class SyncEngine {
     final received = <RemoteItem>[];
     while (true) {
       final page = await remote.pull(after, limit: pageSize);
+      _alive();
       received.addAll(page);
       for (final i in page) {
         after = math.max(after, i.rev);
       }
       if (page.length < pageSize) break;
     }
-    _apply(await _open(received), changes, linking: linking, cursor: after);
+    final opened = await _open(received, changes);
+    _alive();
+    _apply(opened, changes, linking: linking, cursor: after);
     changes.received = received.length;
 
     // Send.
     for (var round = 0; round < 200; round++) {
       final (selected, batch) = _collect();
+      var again = false;
       if (batch.isNotEmpty) {
-        final items = [
-          for (final b in batch)
-            RemoteItem(
-              id: b.id,
-              modifiedAt: b.changedAt,
-              deleted: b.record['d'] == null,
-              payload: await codec.seal(b.id, b.record),
-            ),
-        ];
-        final newer = await remote.push(items);
-        _acknowledge(batch);
-        changes.sent += batch.length;
-        if (newer.isNotEmpty) _apply(await _open(newer), changes, linking: false);
+        final items = <RemoteItem>[];
+        final sent = <_Outgoing>[];
+        for (final b in batch) {
+          final payload = await codec.seal(b.id, b.record);
+          if (payload.length > maxPayload) {
+            // Alone it would make the server refuse everything sent with it,
+            // at every synchronisation: it stays on this device.
+            _acknowledge([b]);
+            changes.skipped++;
+            continue;
+          }
+          items.add(RemoteItem(id: b.id, modifiedAt: b.changedAt, deleted: b.record['d'] == null, payload: payload));
+          sent.add(b);
+        }
+        _alive();
+        final newer = items.isEmpty ? const <RemoteItem>[] : await remote.push(items);
+        _alive();
+        _acknowledge(sent);
+        changes.sent += sent.length;
+        if (newer.isNotEmpty) {
+          // The account kept its version of these: its time is later.
+          final mine = {for (final b in sent) b.id: b};
+          final unseen = <RemoteItem>[];
+          for (final theirs in newer) {
+            final b = mine[theirs.id];
+            if (b != null && theirs.rev > 0 && theirs.rev <= after) {
+              // A version this device had already received: the change sent
+              // was made after it, on top of it. Its time says otherwise
+              // only because a clock is wrong (this one late, or the one of
+              // the device that wrote the other version ahead: until real
+              // time caught up, that device won against every later
+              // change). Sent again, dated after the version it replaces.
+              _noteAfter(b.table, b.key, theirs);
+              again = true;
+            } else {
+              unseen.add(theirs);
+            }
+          }
+          if (unseen.isNotEmpty) {
+            final others = await _open(unseen, changes);
+            _alive();
+            _apply(others, changes, linking: false);
+          }
+        }
       }
-      if (selected < batchSize) break;
+      if (selected < batchSize && !again) break;
     }
     return changes;
   }
@@ -315,23 +374,58 @@ class SyncEngine {
 
   // --------------------------------------------------------------- incoming
 
-  Future<List<_Incoming>> _open(List<RemoteItem> items) async {
+  /// Decrypts [items]. One that cannot be read (damaged on the account) is
+  /// left aside and counted in [SyncChanges.skipped]: it used to stop every
+  /// synchronisation, for good, and sign the device out. When none can be
+  /// read, the keys of this device are the ones in doubt: [SyncKeyException].
+  Future<List<_Incoming>> _open(List<RemoteItem> items, SyncChanges changes) async {
     final out = <_Incoming>[];
+    var read = 0, unreadable = 0;
     for (final i in items) {
-      final record = await codec.open(i.id, i.payload);
-      if ((record['v'] as int? ?? 0) > _version) continue; // made by a newer Bobine
-      final key = record['k'];
-      if (record['t'] is! String || key is! List) continue;
-      // A record is only accepted under the id it belongs to.
-      if (codec.itemId(_naturalKey(record['t'] as String, key)) != i.id) continue;
-      final data = record['d'];
-      out.add(
-        _Incoming(record['t'] as String, key, i.deleted || data is! Map ? null : data.cast<String, Object?>(), i),
-      );
+      final Map<String, Object?> record;
+      try {
+        record = await codec.open(i.id, i.payload);
+      } on SyncKeyException {
+        unreadable++;
+        continue;
+      }
+      read++;
+      try {
+        if ((record['v'] as int? ?? 0) > _version) continue; // made by a newer Bobine
+        final key = record['k'];
+        if (record['t'] is! String || key is! List) continue;
+        // A record is only accepted under the id it belongs to.
+        if (codec.itemId(_naturalKey(record['t'] as String, key)) != i.id) continue;
+        final data = record['d'];
+        out.add(
+          _Incoming(record['t'] as String, key, i.deleted || data is! Map ? null : data.cast<String, Object?>(), i),
+        );
+      } catch (_) {
+        changes.skipped++; // readable, but not a record
+      }
+    }
+    if (unreadable > 0) {
+      if (read == 0 && !await _keysReadTheAccount()) throw SyncKeyException();
+      changes.skipped += unreadable;
     }
     const order = {'profiles': 0, 'sources': 1};
     out.sort((a, b) => (order[a.table] ?? 2).compareTo(order[b.table] ?? 2));
     return out;
+  }
+
+  /// Whether these keys read anything of what the account holds: yes means
+  /// that what they cannot read is damaged, no that the account is encrypted
+  /// with other keys (its password changed on another device).
+  Future<bool> _keysReadTheAccount() async {
+    for (final i in await remote.pull(0, limit: 40)) {
+      try {
+        await codec.open(i.id, i.payload);
+        return true;
+      } on SyncKeyException {
+        continue;
+      }
+    }
+    return false;
   }
 
   /// When the device holds a change of its own newer than [modifiedAt].
@@ -372,38 +466,54 @@ class SyncEngine {
       final ownData = linking ? _profilesWithData() : const <int>{};
       Map<String, Object?>? localSettings;
       final deletedProfiles = <_Incoming>[];
-      for (final i in items) {
-        switch (i.table) {
-          case 'profiles':
-            if (i.data == null) {
-              deletedProfiles.add(i);
-            } else {
-              _applyProfile(i, changes, linking, adopted, remoteUids, ownData);
-            }
-          case 'sources':
-            _applySource(i, changes, linking, adopted, remoteUids);
-          case 'settings':
-            final name = '${i.key.first}';
-            if (!_localIsNewer('settings', name, i.item.modifiedAt) && i.data != null) {
-              final value = i.data!['value'];
-              if (linking && value == null && (localSettings ??= settings.syncedValues())[name] != null) {
-                // First sync: an account without this value (parental code,
-                // TMDB key) does not erase the one set on this device, which
-                // is sent to the account instead.
-                _noteAfter('settings', name, i.item);
-              } else {
-                settingValues[name] = value;
-                _forget('settings', name);
-              }
-            }
-          default:
-            _applyRow(i, changes);
+      // Each item on its own: one that cannot be applied (a shape this
+      // version does not expect) is undone and left aside, instead of
+      // failing the whole synchronisation, this time and every next one.
+      void each(_Incoming i, void Function() apply) {
+        _db.execute('SAVEPOINT sync_item');
+        try {
+          apply();
+        } catch (_) {
+          _db.execute('ROLLBACK TO sync_item');
+          changes.skipped++;
         }
+        _db.execute('RELEASE sync_item');
+      }
+
+      for (final i in items) {
+        each(i, () {
+          switch (i.table) {
+            case 'profiles':
+              if (i.data == null) {
+                deletedProfiles.add(i);
+              } else {
+                _applyProfile(i, changes, linking, adopted, remoteUids, ownData);
+              }
+            case 'sources':
+              _applySource(i, changes, linking, adopted, remoteUids);
+            case 'settings':
+              final name = '${i.key.first}';
+              if (!_localIsNewer('settings', name, i.item.modifiedAt) && i.data != null) {
+                final value = i.data!['value'];
+                if (linking && value == null && (localSettings ??= settings.syncedValues())[name] != null) {
+                  // First sync: an account without this value (parental code,
+                  // TMDB key) does not erase the one set on this device, which
+                  // is sent to the account instead.
+                  _noteAfter('settings', name, i.item);
+                } else {
+                  settingValues[name] = value;
+                  _forget('settings', name);
+                }
+              }
+            default:
+              _applyRow(i, changes);
+          }
+        });
       }
       // Deleted profiles last: whether one is the only profile left here is
       // known once the others are in.
       for (final i in deletedProfiles) {
-        _applyProfile(i, changes, linking, adopted, remoteUids, ownData);
+        each(i, () => _applyProfile(i, changes, linking, adopted, remoteUids, ownData));
       }
       if (cursor != null) {
         _db.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', [cursorKey, '$cursor']);

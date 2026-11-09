@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -134,5 +135,92 @@ void main() {
     expect(await remote.pull(0), isEmpty);
     expect(kept?.accessToken, 't2');
     expect(fake.requests, contains('POST /auth/v1/token?grant_type=refresh_token'));
+  });
+
+  group('signing out', () {
+    (int, Object?) account(HttpRequest r, Object? body) => switch (r.uri.path) {
+      '/auth/v1/token' => (200, _session(r.uri.queryParameters['grant_type'] == 'password' ? 't1' : 't2')),
+      '/auth/v1/logout' => (204, null),
+      '/rest/v1/sync_items' => (200, <Object?>[]),
+      '/rest/v1/rpc/sync_push' => (200, <Object?>[]),
+      _ => (404, null),
+    };
+
+    test('ends this session, not those of the other devices, and keeps nothing here', () async {
+      fake.handler = account;
+      final repo = Repository(openMemoryDatabase());
+      final sync = SyncService(repo, AppSettings(repo), api: fake.api(), onChanges: (_) {});
+      addTearDown(sync.dispose);
+      await sync.signIn('moi@example.com', 'mot de passe secret');
+      await sync.syncNow();
+      expect(repo.kvGet(SyncEngine.cursorKey), isNotNull);
+
+      await sync.signOut();
+      expect(fake.requests.last, 'POST /auth/v1/logout?scope=local');
+      expect(sync.signedIn, isFalse);
+      expect(sync.status, SyncStatus.signedOut);
+      for (final key in ['sync.session', 'sync.keys', 'sync.last', SyncEngine.cursorKey]) {
+        expect(repo.kvGet(key), isNull, reason: key);
+      }
+    });
+
+    test('a token that expired is renewed first, or the session stayed open on the server', () async {
+      final seen = <String?>[];
+      fake.handler = (r, body) {
+        if (r.uri.path != '/auth/v1/logout') return account(r, body);
+        seen.add(r.headers.value('authorization'));
+        return r.headers.value('authorization') == 'Bearer t2' ? (204, null) : (401, {'msg': 'JWT expired'});
+      };
+      final expired = SupabaseSession(
+        accessToken: 't1',
+        refreshToken: 'r-t1',
+        expiresAt: DateTime.now().subtract(const Duration(hours: 3)),
+        userId: 'u1',
+        email: 'moi@example.com',
+      );
+      await SupabaseRemote(fake.api(), expired, onSession: (_) {}).signOut();
+      expect(seen, ['Bearer t2']);
+
+      // The device's clock says "still valid" but the server disagrees.
+      seen.clear();
+      final stale = SupabaseSession(
+        accessToken: 't1',
+        refreshToken: 'r-t1',
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
+        userId: 'u1',
+        email: 'moi@example.com',
+      );
+      await SupabaseRemote(fake.api(), stale, onSession: (_) {}).signOut();
+      expect(seen, ['Bearer t1', 'Bearer t2']);
+    });
+
+    test('while a synchronisation is on the network: nothing of it is written back', () async {
+      final repo = Repository(openMemoryDatabase());
+      late SyncService sync;
+      var leaveDuringPull = false;
+      fake.handler = (r, body) {
+        if (r.uri.path == '/rest/v1/sync_items' && leaveDuringPull) {
+          leaveDuringPull = false;
+          unawaited(sync.signOut());
+        }
+        return account(r, body);
+      };
+      sync = SyncService(repo, AppSettings(repo), api: fake.api(), onChanges: (_) {});
+      addTearDown(sync.dispose);
+      await sync.signIn('moi@example.com', 'mot de passe secret');
+      await sync.syncNow();
+      expect(repo.kvGet(SyncEngine.cursorKey), isNotNull);
+
+      leaveDuringPull = true;
+      await sync.syncNow();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(sync.signedIn, isFalse);
+      expect(sync.status, SyncStatus.signedOut);
+      // The next account must be read from its beginning.
+      expect(repo.kvGet(SyncEngine.cursorKey), isNull);
+      expect(repo.kvGet('sync.last'), isNull);
+      expect(sync.lastSync, isNull);
+      expect(sync.message, isNull);
+    });
   });
 }

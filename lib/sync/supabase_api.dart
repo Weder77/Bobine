@@ -242,7 +242,11 @@ class SupabaseApi {
     }
   }
 
-  Future<void> signOut(SupabaseSession s) => _call('POST', '/auth/v1/logout', token: s.accessToken);
+  /// Ends this device's session. `scope=local`: without it the service ends
+  /// every session of the account, and signing out here signed the user's
+  /// other devices out too.
+  Future<void> signOut(SupabaseSession s) =>
+      _call('POST', '/auth/v1/logout', token: s.accessToken, query: {'scope': 'local'});
 
   /// Sends a code to choose a new password.
   Future<void> recover(String email) => _call('POST', '/auth/v1/recover', body: {'email': email});
@@ -316,6 +320,10 @@ class SupabaseRemote implements SyncRemote {
 
   /// A valid session (refreshed if needed).
   Future<SupabaseSession> current() => _authed((s) async => s);
+
+  /// Ends the session on the server. An access token that expired cannot
+  /// sign itself out: it is renewed first, or the session stayed open there.
+  Future<void> signOut() => _authed(api.signOut);
 
   @override
   Future<List<RemoteItem>> pull(int afterRev, {int limit = SyncEngine.pageSize}) =>
