@@ -69,8 +69,12 @@ class CastMedia {
 }
 
 class CastException implements Exception {
-  CastException(this.message);
+  CastException(this.message, {this.code, this.detail});
   final String message;
+
+  /// UPnP error code and description, when the TV gave them.
+  final int? code;
+  final String? detail;
   @override
   String toString() => message;
 }
@@ -87,8 +91,9 @@ abstract class CastSession {
 
   Future<void> connect();
 
-  /// MIME type to announce for [url], as this device expects it.
-  String contentTypeFor(String url, {required bool live});
+  /// MIME types to announce for [url], the most likely first (DLNA TVs
+  /// spell some formats their own way).
+  List<String> contentTypesFor(String url, {required bool live});
 
   Future<void> load(CastMedia media, {Duration? start});
   Future<void> play();

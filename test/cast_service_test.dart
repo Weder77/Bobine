@@ -36,12 +36,20 @@ class FakeSession implements CastSession {
   Future<void> connect() async => actions.add('connect');
 
   @override
-  String contentTypeFor(String url, {required bool live}) =>
-      castContentType(url, live: live, protocol: device.protocol);
+  List<String> contentTypesFor(String url, {required bool live}) =>
+      types ?? [castContentType(url, live: live, protocol: device.protocol)];
+
+  /// Types to offer instead of Bobine's guess, and those the TV refuses (714).
+  List<String>? types;
+  Set<String> refused = {};
 
   @override
   Future<void> load(CastMedia media, {Duration? start}) async {
     if (failLoad != null) throw failLoad!;
+    if (refused.contains(media.contentType)) {
+      loaded.add((media, start));
+      throw CastException('La télé ne lit pas ce type de flux.', code: 714, detail: 'Illegal MIME-type');
+    }
     loaded.add((media, start));
   }
 
@@ -377,6 +385,29 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 2200));
       expect(stuck.error, "La télé n'arrive pas à lire ce flux.");
       await stuck.stop();
+    });
+
+    test('a type refused with 714 is offered again under its other spellings', () async {
+      final picky = CastService(
+        sessionFactory: (d) => session = FakeSession(d)
+          ..types = ['video/x-matroska', 'video/x-mkv']
+          ..refused = {'video/x-matroska'},
+      );
+      await picky.start(_dlna, _movie());
+      expect(session.loaded.map((l) => l.$1.contentType), ['video/x-matroska', 'video/x-mkv']);
+      // Each try gets its own relay address served with its type.
+      expect(session.loaded.first.$1.url, isNot(session.loaded.last.$1.url));
+      expect(picky.error, isNull);
+      await picky.stop();
+
+      final none = CastService(
+        sessionFactory: (d) => session = FakeSession(d)
+          ..types = ['video/x-matroska', 'video/x-mkv']
+          ..refused = {'video/x-matroska', 'video/x-mkv'},
+      );
+      await none.start(_dlna, _movie());
+      expect(none.error, 'La télé ne lit pas ce type de flux.');
+      await none.stop();
     });
 
     test('search lists the devices by name', () async {

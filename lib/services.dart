@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'cast/cast_log.dart';
 import 'cast/cast_service.dart';
 import 'core/app_log.dart';
 import 'core/legacy.dart';
@@ -129,6 +130,7 @@ class AppServices {
     // Moves Lumen's data here the first time (former name of the app).
     final dbPath = await resolveDatabase(support.path);
     AppLog.install(logPath: p.join(support.path, 'bobine.log'));
+    castLog = (line) => debugPrint(line);
     if (!dbPath.startsWith(support.path)) AppLog.add('Données de Lumen ouvertes sur place : $dbPath');
     final repo = Repository(openAppDatabase(dbPath));
     final settings = AppSettings(repo);

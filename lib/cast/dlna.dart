@@ -5,9 +5,8 @@ import 'dart:io';
 import '../core/version.dart';
 import '../data/import/xmltv_parser.dart' show decodeEntities;
 
-import 'package:flutter/foundation.dart';
-
 import 'cast_device.dart';
+import 'cast_log.dart';
 import 'cast_media.dart';
 import 'cast_session.dart';
 
@@ -57,22 +56,35 @@ class DlnaSession implements CastSession {
     }
     // Not `s.address`: for an outgoing connection it is the TV's own address.
     localAddress = await localAddressFor(device.host, device.port);
-    debugPrint('Cast DLNA : cet ordinateur vu de la télé : ${localAddress?.address ?? 'introuvable'}');
+    castLog('Cast DLNA : cet ordinateur vu de la télé : ${localAddress?.address ?? 'introuvable'}');
     final cm = device.connectionManager;
     if (cm != null) {
       try {
         final body = await soap(cm, device.connectionManagerType!, 'GetProtocolInfo', const []);
         sink = parseSinkProtocols(soapValue(body, 'Sink') ?? '');
-        debugPrint('Cast DLNA : « ${device.name} » accepte ${sink.length} formats');
+        castLog('Cast DLNA : « ${device.name} » accepte ${sink.length} formats');
       } catch (e) {
-        debugPrint('Cast DLNA : formats de « ${device.name} » inconnus ($e)');
+        castLog('Cast DLNA : formats de « ${device.name} » inconnus ($e)');
       }
     }
   }
 
   @override
-  String contentTypeFor(String url, {required bool live}) =>
-      rendererMime(castContentType(url, live: live, protocol: CastProtocol.dlna), sink);
+  List<String> contentTypesFor(String url, {required bool live}) {
+    // The usual name first: a Philips lists "video/x-mkv" but refuses it
+    // (714) once it has seen the file; then the TV's own spellings.
+    final base = castContentType(url, live: live, protocol: CastProtocol.dlna);
+    final out = [base];
+    void add(String m) {
+      if (!out.any((o) => o.toLowerCase() == m.toLowerCase())) out.add(m);
+    }
+
+    add(rendererMime(base, sink));
+    for (final (m, _) in rendererMimes(base, sink)) {
+      add(m);
+    }
+    return out;
+  }
 
   @override
   Future<void> load(CastMedia media, {Duration? start}) async {
@@ -82,7 +94,7 @@ class DlnaSession implements CastSession {
     _duration = null;
     _lastPosition = Duration.zero;
     final args = [('InstanceID', '0'), ('CurrentURI', media.url), ('CurrentURIMetaData', didlLite(media))];
-    debugPrint('Cast DLNA : « ${device.name} » ← ${media.contentType}${_listed(media.contentType)}');
+    castLog('Cast DLNA : « ${device.name} » ← ${media.contentType}${_listed(media.contentType)}');
     try {
       await _av('SetAVTransportURI', args);
     } on CastException catch (first) {
@@ -232,12 +244,12 @@ class DlnaSession implements CastSession {
     } on _Dropped catch (first) {
       // The renderer closed the connection without answering: once more,
       // on a new connection.
-      debugPrint('Cast DLNA : $action, connexion coupée par la télé ($first), nouvel essai');
+      castLog('Cast DLNA : $action, connexion coupée par la télé ($first), nouvel essai');
       await Future<void>.delayed(const Duration(milliseconds: 300));
       try {
         return await _soapOnce(control, type, action, args);
       } on _Dropped catch (e) {
-        debugPrint('Cast DLNA : $action, connexion coupée encore ($e)');
+        castLog('Cast DLNA : $action, connexion coupée encore ($e)');
         throw CastException('Connexion perdue avec la télé.');
       }
     }
@@ -263,8 +275,12 @@ class DlnaSession implements CastSession {
       if (res.statusCode >= 300) {
         final code = soapValue(text, 'errorCode');
         final description = soapValue(text, 'errorDescription');
-        debugPrint('Cast DLNA : $action refusé (HTTP ${res.statusCode}, erreur ${code ?? '?'} ${description ?? ''})');
-        throw CastException(upnpErrorMessage(action, int.tryParse(code ?? ''), description, res.statusCode));
+        castLog('Cast DLNA : $action refusé (HTTP ${res.statusCode}, erreur ${code ?? '?'} ${description ?? ''})');
+        throw CastException(
+          upnpErrorMessage(action, int.tryParse(code ?? ''), description, res.statusCode),
+          code: int.tryParse(code ?? '') ?? res.statusCode,
+          detail: description,
+        );
       }
       return text;
     } on TimeoutException {
@@ -317,12 +333,12 @@ String xmlEscape(String s) => s
 
 /// Description of [media] that renderers show (title, picture) and use to
 /// pick a player (protocolInfo).
-String didlLite(CastMedia media) {
+///
+/// [features] replaces the fourth field of protocolInfo (DLNA flags).
+String didlLite(CastMedia media, {String? features}) {
   // DLNA flags: streaming transfer, background, stalling, DLNA 1.5.
   // OP=01: seeking by byte range (films); 00 for live streams.
-  final op = media.live ? '00' : '01';
-  final info =
-      'http-get:*:${media.contentType}:DLNA.ORG_OP=$op;DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000';
+  final info = 'http-get:*:${media.contentType}:${features ?? dlnaFeatures(live: media.live)}';
   final b = StringBuffer()
     ..write(
       '<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" '
@@ -396,3 +412,7 @@ List<String> parseSinkProtocols(String csv) {
   }
   return out;
 }
+
+/// Fourth field of protocolInfo / contentFeatures.dlna.org that Bobine sends.
+String dlnaFeatures({required bool live}) =>
+    'DLNA.ORG_OP=${live ? '00' : '01'};DLNA.ORG_CI=0;DLNA.ORG_FLAGS=01700000000000000000000000000000';

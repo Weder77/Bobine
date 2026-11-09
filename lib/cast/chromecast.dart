@@ -396,8 +396,9 @@ class ChromecastSession implements CastSession {
   }
 
   @override
-  String contentTypeFor(String url, {required bool live}) =>
-      castContentType(url, live: live, protocol: CastProtocol.chromecast);
+  List<String> contentTypesFor(String url, {required bool live}) => [
+    castContentType(url, live: live, protocol: CastProtocol.chromecast),
+  ];
 
   @override
   Future<void> load(CastMedia media, {Duration? start}) async {

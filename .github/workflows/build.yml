@@ -44,6 +44,10 @@ jobs:
       - name: Compilation Windows (release)
         run: flutter build windows --release
 
+      # Petit programme autonome pour tester le cast sur une télé DLNA.
+      - name: Outil de test du cast
+        run: dart compile exe tool/cast_test.dart -o bobine-test-cast.exe
+
       - name: Version
         id: version
         shell: pwsh
@@ -94,6 +98,12 @@ jobs:
         with:
           name: Bobine-Setup
           path: dist/Bobine-Setup-*.exe
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: Bobine-test-cast
+          path: bobine-test-cast.exe
           retention-days: 30
 
       # Tag v* pushed, or new version merged into main (the tag is then created here).
