@@ -228,6 +228,63 @@ void main() {
     });
   });
 
+  test('renderer answering one request per connection (Philips): every action gets through', () async {
+    final actions = <String>[];
+    var dropFirstSet = true;
+    final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+    server.listen((sock) {
+      final buf = <int>[];
+      var answered = false;
+      sock.listen((chunk) {
+        if (answered) return sock.destroy(); // a second request on this connection: dropped
+        buf.addAll(chunk);
+        final text = latin1.decode(buf);
+        final end = text.indexOf('\r\n\r\n');
+        if (end < 0) return;
+        final length = int.parse(RegExp(r'content-length: *(\d+)', caseSensitive: false).firstMatch(text)![1]!);
+        if (buf.length < end + 4 + length) return;
+        final action = RegExp(r'#(\w+)"').firstMatch(text)![1]!;
+        if (action == 'SetAVTransportURI' && dropFirstSet) {
+          dropFirstSet = false;
+          return sock.destroy();
+        }
+        actions.add(action);
+        answered = true;
+        final inner = action == 'GetProtocolInfo' ? '<Sink>http-get:*:video/x-mkv:*</Sink>' : '';
+        final body = utf8.encode(
+          '<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>'
+          '<u:${action}Response xmlns:u="x">$inner</u:${action}Response></s:Body></s:Envelope>',
+        );
+        // HTTP/1.1 without "Connection: close", then the socket stays open.
+        sock.add(latin1.encode('HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nContent-Length: ${body.length}\r\n\r\n'));
+        sock.add(body);
+      }, onError: (Object _) {});
+    });
+    final base = 'http://127.0.0.1:${server.port}';
+    final s = DlnaSession(
+      CastDevice(
+        id: 'philips',
+        name: '50PUS8108/12',
+        protocol: CastProtocol.dlna,
+        host: '127.0.0.1',
+        port: server.port,
+        avTransport: Uri.parse('$base/av'),
+        avTransportType: 'urn:schemas-upnp-org:service:AVTransport:1',
+        connectionManager: Uri.parse('$base/cm'),
+        connectionManagerType: 'urn:schemas-upnp-org:service:ConnectionManager:1',
+      ),
+    );
+    await s.connect();
+    expect(s.contentTypeFor('http://h/series/u/p/1.mkv', live: false), 'video/x-mkv');
+    await s.load(
+      const CastMedia(url: 'http://192.168.1.10:5000/c/t/m/1.mkv', contentType: 'video/x-mkv', live: false, title: 'É'),
+    );
+    await s.pause();
+    expect(actions, ['GetProtocolInfo', 'SetAVTransportURI', 'Play', 'Pause']);
+    await s.close();
+    await server.close();
+  });
+
   group('DLNA renderer', () {
     late HttpServer server;
     late List<(String, String)> calls;

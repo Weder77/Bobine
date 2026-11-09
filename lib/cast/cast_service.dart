@@ -20,7 +20,16 @@ import 'ssdp.dart';
 /// IPTV account often allows a single connection) and the TV reads the
 /// stream, through this computer by default (see [CastRelay]).
 class CastService extends ChangeNotifier {
-  CastService({this.describe, CastRelay? relay, this.sessionFactory, this.browsers}) : _relay = relay ?? CastRelay();
+  CastService({
+    this.describe,
+    CastRelay? relay,
+    this.sessionFactory,
+    this.browsers,
+    this.loadTimeout = const Duration(seconds: 45),
+  }) : _relay = relay ?? CastRelay();
+
+  /// A stream the TV has not started after this long is an error.
+  final Duration loadTimeout;
 
   /// Title and subtitle the TV shows for an item (clean channel name, programme).
   final (String, String?) Function(PlayItem item)? describe;
@@ -98,6 +107,10 @@ class CastService extends ChangeNotifier {
   int _generation = 0;
   int _loadSeq = 0;
   DateTime _loadedAt = DateTime.now();
+
+  /// Requests the relay had received when the last stream was sent.
+  int _hitsAtLoad = 0;
+  bool _unreachedLogged = false;
   Duration? _lastStart;
   DateTime _holdUntil = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _volumeTimer;
@@ -207,6 +220,8 @@ class CastService extends ChangeNotifier {
       if (host == null) throw CastException('Adresse de cet ordinateur introuvable sur le réseau de la télé.');
       _relay.clear();
       url = await _relay.publish(address, host: host, userAgent: it.userAgent, contentType: contentType);
+      _hitsAtLoad = _relay.hits;
+      _unreachedLogged = false;
     }
     if (gen != _generation || seq != _loadSeq) return;
     final (title, subtitle) = describe?.call(it) ?? (it.title, it.subtitle);
@@ -218,7 +233,8 @@ class CastService extends ChangeNotifier {
       subtitle: subtitle,
       image: it.image,
     );
-    debugPrint('Cast : ${d.kindLabel} « ${d.name} » ← ${redactCredentials(address)}${_viaRelay ? ' (relais)' : ''}');
+    final via = _viaRelay ? ' (relais ${Uri.parse(url).authority})' : '';
+    debugPrint('Cast : ${d.kindLabel} « ${d.name} » ← ${redactCredentials(address)}$via');
     await session.load(media, start: it.isLive ? null : start);
   }
 
@@ -280,8 +296,8 @@ class CastService extends ChangeNotifier {
       final session = _session;
       if (_polling || gen != _generation || session == null) return;
       // A stream the TV never starts.
-      if (_status.state == RemoteState.loading && DateTime.now().difference(_loadedAt).inSeconds > 45) {
-        _fail(CastException("La télé n'arrive pas à lire ce flux."));
+      if (_status.state == RemoteState.loading && DateTime.now().difference(_loadedAt) > loadTimeout) {
+        _fail(CastException(_unreached ?? "La télé n'arrive pas à lire ce flux."));
         return;
       }
       _polling = true;
@@ -299,7 +315,25 @@ class CastService extends ChangeNotifier {
     });
   }
 
+  /// Why the TV may have failed when it never asked the relay for the
+  /// stream: it cannot reach this computer (firewall, other network).
+  String? get _unreached {
+    if (!_viaRelay || _relay.hits != _hitsAtLoad) return null;
+    if (!_unreachedLogged) debugPrint('Cast : la télé n’a rien demandé au relais');
+    _unreachedLogged = true;
+    return "La télé n'a pas pu joindre cet ordinateur. Sous Windows, autorise Bobine dans le pare-feu "
+        '(réseaux privés et publics), puis réessaie.';
+  }
+
   void _setStatus(RemoteStatus s) {
+    // The TV gave up opening the stream without ever asking for it.
+    if (s.state == RemoteState.error &&
+        _error == null &&
+        _status.state == RemoteState.loading &&
+        !(s.error ?? '').startsWith('Connexion perdue')) {
+      final why = _unreached;
+      if (why != null) s = s.copyWith(error: why);
+    }
     if (_error != null && s.state != RemoteState.playing) return;
     // Just after a seek, the TV may still report the old position.
     if (DateTime.now().isBefore(_holdUntil) && s.state != RemoteState.error) s = s.copyWith(position: position);
