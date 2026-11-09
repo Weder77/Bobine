@@ -103,6 +103,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   List<(String, String)> _stats = const [];
   String? _osd;
   String? _error;
+
+  /// Where playback was when [_error] was raised.
+  Duration _errorAt = Duration.zero;
   String _digits = '';
   _Aspect _aspect = _Aspect.auto;
   double _volumeBeforeMute = 100;
@@ -171,8 +174,13 @@ class _PlayerScreenState extends State<PlayerScreen> {
     );
     _subs.add(
       _ps.player.stream.error.listen((e) {
-        if (!mounted || !PlayerService.isFatalError(e)) return;
-        if (!_ps.player.state.playing) setState(() => _error = redactCredentials(e));
+        if (!mounted) return;
+        final state = _ps.player.state;
+        if (!PlayerService.stopsPlayback(e, live: _isLive, playing: state.playing, duration: state.duration)) return;
+        setState(() {
+          _error = redactCredentials(e);
+          _errorAt = state.position;
+        });
       }),
     );
     _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
@@ -232,6 +240,16 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _onTick() async {
     if (!mounted) return;
     _tickCount++;
+    // It plays after all (the engine got through on a later attempt): an
+    // error that stayed on top of a running film would be a lie.
+    final engine = _ps.player.state;
+    if (_error != null &&
+        !_casting &&
+        engine.playing &&
+        !engine.buffering &&
+        engine.position > _errorAt + const Duration(seconds: 1)) {
+      setState(() => _error = null);
+    }
     if (_controls || _showStats || _casting || _item.kind == ContentKind.episode) _position.value = _pos;
     if (_tickCount % 4 == 0 && !_casting) {
       if (_controls || _showStats) _cache.value = await _ps.cacheState();
@@ -779,7 +797,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 ),
                 if (!_playing && _panel == _Panel.none && _error == null && !_casting)
                   _isLive ? const LivePausedBadge() : _pauseInfo(),
-                if (!_casting) _buildBuffering(),
+                if (!_casting && _error == null) _buildBuffering(),
                 if (_osd != null) _buildOsd(),
                 if (_digits.isNotEmpty) _buildDigits(),
                 if (!_casting) _buildError(),
@@ -909,7 +927,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     onPressed: () {
                       setState(() => _error = null);
                       _ps.status.value = null;
-                      _ps.play(_item, force: true, start: _isLive ? null : _ps.player.state.position);
+                      // Nothing was read: back to where this film was to
+                      // resume, not to its beginning.
+                      final here = _ps.player.state.position;
+                      final resume = _item.url == widget.session.item.url ? widget.session.start : null;
+                      _ps.play(_item, force: true, start: _isLive ? null : (here > Duration.zero ? here : resume));
                     },
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Réessayer'),

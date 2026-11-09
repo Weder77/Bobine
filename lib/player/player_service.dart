@@ -227,6 +227,27 @@ class PlayerService {
   /// Whether an mpv error message means the stream could not be read.
   static bool isFatalError(String message) => _fatal.hasMatch(message);
 
+  static final RegExp _gaveUp = RegExp(
+    r'failed to open|failed to recognize|could not open (the )?(stream|file)',
+    caseSensitive: false,
+  );
+
+  /// Whether a fatal error [message] leaves nothing to watch, and so must be
+  /// shown to the user.
+  ///
+  /// "Not playing" alone missed the commonest case: when the link of a film
+  /// is dead the engine still reports "playing" (nothing was paused), and the
+  /// screen stayed on "Chargement…" for ever. A film or an episode of which
+  /// nothing was read (no duration yet) has failed too, once the engine says
+  /// it gave up on the file; a failed first connection that the engine
+  /// retries by itself is not that. A live stream is reopened by this
+  /// service, which reports it through [status].
+  static bool stopsPlayback(String message, {required bool live, required bool playing, required Duration duration}) {
+    if (!isFatalError(message)) return false;
+    if (!playing) return true;
+    return !live && duration == Duration.zero && _gaveUp.hasMatch(message);
+  }
+
   NativePlayer? get _native {
     final p = player.platform;
     return p is NativePlayer ? p : null;
