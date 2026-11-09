@@ -1,6 +1,6 @@
 /// Version shown in the app and compared with GitHub releases for updates.
 /// Keep in sync with `version:` in pubspec.yaml (a test checks it).
-const String kAppVersion = '1.6.1';
+const String kAppVersion = '1.6.2';
 
 /// Repository the updates are published to.
 const String kReleaseRepo = 'Weder77/Bobine';

@@ -83,12 +83,17 @@ class DlnaSession implements CastSession {
     debugPrint('Cast DLNA : « ${device.name} » ← ${media.contentType}${_listed(media.contentType)}');
     try {
       await _av('SetAVTransportURI', args);
-    } on CastException {
+    } on CastException catch (first) {
       // Some renderers refuse a new address while something plays.
       try {
         await _av('Stop', const [('InstanceID', '0')]);
       } catch (_) {}
-      await _av('SetAVTransportURI', args);
+      try {
+        await _av('SetAVTransportURI', args);
+      } on CastException {
+        // The first refusal says more than the one after Stop.
+        throw first;
+      }
     }
     try {
       await _av('Play', const [('InstanceID', '0'), ('Speed', '1')]);
@@ -220,9 +225,30 @@ class DlnaSession implements CastSession {
 
   /// Calls [action] of the service [type] at [control]; returns the answer.
   Future<String> soap(Uri control, String type, String action, List<(String, String)> args) async {
+    try {
+      return await _soapOnce(control, type, action, args);
+    } on _Dropped catch (first) {
+      // The renderer closed the connection without answering: once more,
+      // on a new connection.
+      debugPrint('Cast DLNA : $action, connexion coupée par la télé ($first), nouvel essai');
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      try {
+        return await _soapOnce(control, type, action, args);
+      } on _Dropped catch (e) {
+        debugPrint('Cast DLNA : $action, connexion coupée encore ($e)');
+        throw CastException('Connexion perdue avec la télé.');
+      }
+    }
+  }
+
+  Future<String> _soapOnce(Uri control, String type, String action, List<(String, String)> args) async {
     const timeout = Duration(seconds: 8);
     try {
       final req = await _http.postUrl(control).timeout(timeout);
+      // One connection per action: some renderers (Philips…) close a
+      // connection after one answer without saying so, and the next action
+      // sent on it is lost.
+      req.persistentConnection = false;
       final body = utf8.encode(soapEnvelope(type, action, args));
       req.headers
         ..set(HttpHeaders.contentTypeHeader, 'text/xml; charset="utf-8"')
@@ -235,17 +261,26 @@ class DlnaSession implements CastSession {
       if (res.statusCode >= 300) {
         final code = soapValue(text, 'errorCode');
         final description = soapValue(text, 'errorDescription');
+        debugPrint('Cast DLNA : $action refusé (HTTP ${res.statusCode}, erreur ${code ?? '?'} ${description ?? ''})');
         throw CastException(upnpErrorMessage(action, int.tryParse(code ?? ''), description, res.statusCode));
       }
       return text;
     } on TimeoutException {
       throw CastException('La télé ne répond plus.');
-    } on SocketException {
-      throw CastException('Connexion perdue avec la télé.');
-    } on HttpException {
-      throw CastException('Connexion perdue avec la télé.');
+    } on SocketException catch (e) {
+      throw _Dropped(e.osError?.message ?? e.message);
+    } on HttpException catch (e) {
+      throw _Dropped(e.message);
     }
   }
+}
+
+/// The renderer closed the connection without an answer.
+class _Dropped implements Exception {
+  _Dropped(this.reason);
+  final String reason;
+  @override
+  String toString() => reason;
 }
 
 /// SOAP request body.

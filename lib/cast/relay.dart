@@ -38,6 +38,10 @@ class CastRelay {
 
   int? get port => _server?.port;
 
+  /// Requests received on published addresses (to tell whether the TV
+  /// reaches this computer at all).
+  int hits = 0;
+
   /// Address the device at the other end of [host] (this computer's address
   /// on the TV's network) can open to get [target]: an http(s) address,
   /// fetched with [userAgent], or a local file.
@@ -103,6 +107,7 @@ class CastRelay {
         target = null;
       }
     }
+    if (route != null) hits++;
     if (route == null || target == null || (req.method != 'GET' && req.method != 'HEAD')) {
       if (seg.length >= 3 && seg[2] == 'm') debugPrint('Relais : télé ${req.method} sur une adresse expirée → 404');
       res.statusCode = HttpStatus.notFound;

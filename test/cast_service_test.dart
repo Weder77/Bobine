@@ -362,6 +362,23 @@ void main() {
       );
     });
 
+    test('a TV that never asks the relay for the stream: firewall hint', () async {
+      final stuck = CastService(
+        loadTimeout: const Duration(milliseconds: 600),
+        sessionFactory: (d) => session = FakeSession(d)..next = RemoteStatus(state: RemoteState.loading),
+      );
+      await stuck.start(_dlna, _movie(url: 'http://127.0.0.1:9/series/u/p/1.mkv'));
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      expect(stuck.error, contains('pare-feu'));
+      // Once the TV reached the relay, the failure is about the stream itself.
+      await stuck.retry();
+      final link = session.loaded.single.$1.url;
+      expect((await _get(link)).$1, greaterThanOrEqualTo(400));
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      expect(stuck.error, "La télé n'arrive pas à lire ce flux.");
+      await stuck.stop();
+    });
+
     test('search lists the devices by name', () async {
       await cast.scan();
       expect(cast.devices.value.map((d) => d.name), ['Chambre', 'Salon']);
