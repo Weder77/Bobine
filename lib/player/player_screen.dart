@@ -28,9 +28,22 @@ class PlayerScreen extends StatefulWidget {
   const PlayerScreen({super.key, required this.session});
   final PlayerSession session;
 
-  static Future<void> open(BuildContext context, PlayerSession session) => Navigator.of(context).push(route(session));
+  /// Name of the routes that play something (this screen and the
+  /// multi-view): at most one of them is on screen.
+  static const playbackRoute = 'playback';
+
+  /// Opens the player. With [replacing], it takes the place of a player or
+  /// multi-view already open (a reminder's "Regarder" over a film): stacked,
+  /// they would share one video engine, and leaving the top one would stop
+  /// it under the other.
+  static Future<void> open(BuildContext context, PlayerSession session, {bool replacing = false}) {
+    final nav = Navigator.of(context);
+    if (!replacing) return nav.push(route(session));
+    return nav.pushAndRemoveUntil(route(session), (r) => r.settings.name != playbackRoute);
+  }
 
   static Route<void> route(PlayerSession session) => PageRouteBuilder(
+    settings: const RouteSettings(name: playbackRoute),
     opaque: true,
     transitionDuration: const Duration(milliseconds: 180),
     reverseTransitionDuration: const Duration(milliseconds: 150),
@@ -199,9 +212,14 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final ps = _ps;
     final keepAlive = widget.session.keepAlive || _minimized || _casting;
     final wasFullscreen = _fullscreen;
+    final mine = _item.url;
     scheduleMicrotask(() {
-      if (wasFullscreen) AppWindow.setFullscreen(false);
-      if (!keepAlive) ps.stop();
+      // Another player took this one's place and plays something else: the
+      // engine and the window are its own now.
+      final playing = ps.current.value;
+      final replaced = playing != null && playing.url != mine;
+      if (wasFullscreen && !replaced) AppWindow.setFullscreen(false);
+      if (!keepAlive && !replaced) ps.stop();
     });
     _focus.dispose();
     _position.dispose();

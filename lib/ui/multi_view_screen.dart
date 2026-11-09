@@ -33,6 +33,7 @@ class MultiViewScreen extends StatefulWidget {
   final TileEngine Function()? engine;
 
   static Route<void> route({Channel? add}) => PageRouteBuilder(
+    settings: const RouteSettings(name: PlayerScreen.playbackRoute),
     opaque: true,
     transitionDuration: const Duration(milliseconds: 180),
     reverseTransitionDuration: const Duration(milliseconds: 150),

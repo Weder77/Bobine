@@ -22,7 +22,15 @@ class Launch {
     return true;
   }
 
-  static Future<void> channel(BuildContext context, Channel c, List<Channel> list, {bool keepAlive = false}) async {
+  /// [replacing]: takes the place of a player or multi-view already open
+  /// (see [PlayerScreen.open]).
+  static Future<void> channel(
+    BuildContext context,
+    Channel c,
+    List<Channel> list, {
+    bool keepAlive = false,
+    bool replacing = false,
+  }) async {
     final s = AppScope.of(context);
     final source = s.repo.source(c.sourceId);
     if (source == null) return;
@@ -33,6 +41,7 @@ class Launch {
     await PlayerScreen.open(
       context,
       PlayerSession(item: channelItem(source, c), channels: channels, channelIndex: index, keepAlive: keepAlive),
+      replacing: replacing,
     );
   }
 
