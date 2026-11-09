@@ -4,10 +4,9 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
-
 import '../core/text.dart';
 import 'cast_device.dart';
+import 'cast_log.dart';
 import 'cast_media.dart';
 
 /// Small HTTP server that hands streams to the TV through this computer.
@@ -21,7 +20,7 @@ import 'cast_media.dart';
 ///
 /// Only addresses published with [publish] are served, under a random token.
 class CastRelay {
-  CastRelay({HttpClient? client})
+  CastRelay({HttpClient? client, this.onRequest})
     : _client =
           client ??
           (HttpClient()
@@ -41,6 +40,12 @@ class CastRelay {
   /// Requests received on published addresses (to tell whether the TV
   /// reaches this computer at all).
   int hits = 0;
+
+  /// Bytes sent to the TV so far.
+  int sent = 0;
+
+  /// Each request of the TV on a main address, with its headers (test tool).
+  final void Function(RelayRequest request)? onRequest;
 
   /// Address the device at the other end of [host] (this computer's address
   /// on the TV's network) can open to get [target]: an http(s) address,
@@ -71,7 +76,7 @@ class CastRelay {
     server.idleTimeout = const Duration(seconds: 30);
     server.listen((req) {
       _handle(req).catchError((Object e) {
-        debugPrint('Relais cast : ${redactCredentials('$e')}');
+        castLog('Relais cast : ${redactCredentials('$e')}');
         try {
           req.response.statusCode = HttpStatus.badGateway;
           req.response.close();
@@ -109,7 +114,7 @@ class CastRelay {
     }
     if (route != null) hits++;
     if (route == null || target == null || (req.method != 'GET' && req.method != 'HEAD')) {
-      if (seg.length >= 3 && seg[2] == 'm') debugPrint('Relais : télé ${req.method} sur une adresse expirée → 404');
+      if (seg.length >= 3 && seg[2] == 'm') castLog('Relais : télé ${req.method} sur une adresse expirée → 404');
       res.statusCode = HttpStatus.notFound;
       return res.close();
     }
@@ -225,11 +230,16 @@ class CastRelay {
 
   /// One line per request of the TV on the main address, for the diagnostic
   /// page: what it asked and what it got.
-  static void _log(HttpRequest req, String result) {
+  void _log(HttpRequest req, String result) {
     final range = req.headers.value(HttpHeaders.rangeHeader);
     final agent = req.headers.value(HttpHeaders.userAgentHeader) ?? '';
     final who = agent.isEmpty ? '' : ' [${agent.length > 48 ? agent.substring(0, 48) : agent}]';
-    debugPrint('Relais : télé ${req.method}${range == null ? '' : ' $range'}$who → $result');
+    castLog('Relais : télé ${req.method}${range == null ? '' : ' $range'}$who → $result');
+    if (onRequest != null) {
+      final headers = <String, String>{};
+      req.headers.forEach((k, v) => headers[k] = v.join(', '));
+      onRequest!(RelayRequest(req.method, req.uri.pathSegments.last, headers, result));
+    }
   }
 
   static String _size(int bytes) {
@@ -241,7 +251,7 @@ class CastRelay {
   /// Sends the headers set on [res], then copies [from] to the TV at the
   /// pace the TV reads it. The provider is let go as soon as the TV hangs up
   /// (zapping, stop): the raw socket tells it, the HTTP response does not.
-  static Future<void> _pipe(Stream<List<int>> from, HttpResponse res) async {
+  Future<void> _pipe(Stream<List<int>> from, HttpResponse res) async {
     final sub = from.listen(null)..pause();
     res.headers
       ..chunkedTransferEncoding = false
@@ -269,6 +279,7 @@ class CastRelay {
     sub
       ..onData((chunk) {
         if (gone) return;
+        sent += chunk.length;
         socket.add(chunk);
         // Waits until the TV took it: no memory build-up on fast providers.
         sub.pause(socket.flush().then((_) {}, onError: (_) => hangUp()));
@@ -351,6 +362,15 @@ class CastRelay {
 // Content types the relay announces are those of DLNA renderers (the real
 // types); a Chromecast gets its own in the LOAD message anyway.
 const _relayProtocol = CastProtocol.dlna;
+
+/// A request of the TV to the relay, for the test tool's report.
+class RelayRequest {
+  RelayRequest(this.method, this.name, this.headers, this.result);
+  final String method;
+  final String name;
+  final Map<String, String> headers;
+  final String result;
+}
 
 class _Route {
   _Route({required this.target, required this.file, required this.origin, required this.userAgent, this.contentType});

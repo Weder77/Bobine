@@ -275,7 +275,7 @@ void main() {
       ),
     );
     await s.connect();
-    expect(s.contentTypeFor('http://h/series/u/p/1.mkv', live: false), 'video/x-mkv');
+    expect(s.contentTypesFor('http://h/series/u/p/1.mkv', live: false), ['video/x-matroska', 'video/x-mkv']);
     await s.load(
       const CastMedia(url: 'http://192.168.1.10:5000/c/t/m/1.mkv', contentType: 'video/x-mkv', live: false, title: 'É'),
     );
@@ -367,9 +367,9 @@ void main() {
       // The TV's own spellings of the formats it accepts.
       expect(calls.single.$1, '"urn:schemas-upnp-org:service:ConnectionManager:1#GetProtocolInfo"');
       expect(s.sink, hasLength(3));
-      expect(s.contentTypeFor('http://h/movie/u/p/1.mkv', live: false), 'video/x-mkv');
-      expect(s.contentTypeFor('http://h/live/u/p/1.ts', live: true), 'video/vnd.dlna.mpeg-tts');
-      expect(s.contentTypeFor('http://h/movie/u/p/1.mp4', live: false), 'video/mp4');
+      expect(s.contentTypesFor('http://h/movie/u/p/1.mkv', live: false), ['video/x-matroska', 'video/x-mkv']);
+      expect(s.contentTypesFor('http://h/live/u/p/1.ts', live: true), ['video/mp2t', 'video/vnd.dlna.mpeg-tts']);
+      expect(s.contentTypesFor('http://h/movie/u/p/1.mp4', live: false), ['video/mp4']);
       calls.clear();
       await s.load(
         const CastMedia(

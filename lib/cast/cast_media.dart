@@ -93,3 +93,20 @@ String rendererMime(String mime, List<String> sink) {
   }
   return mime;
 }
+
+/// The renderer's spellings of [mime]'s format with their fourth field, as
+/// listed in [sink] (http-get entries), e.g. ("video/x-mkv", "*").
+List<(String, String)> rendererMimes(String mime, List<String> sink) {
+  final key = mime.toLowerCase();
+  final family = _mimeFamilies.firstWhere((f) => f.contains(key), orElse: () => [key]);
+  final out = <(String, String)>[];
+  for (final p in sink) {
+    final parts = p.split(':');
+    if (parts.length < 4 || parts[0].trim().toLowerCase() != 'http-get') continue;
+    final m = parts[2].trim();
+    if (!family.contains(m.toLowerCase())) continue;
+    final entry = (m, parts.sublist(3).join(':').trim());
+    if (!out.contains(entry)) out.add(entry);
+  }
+  return out;
+}

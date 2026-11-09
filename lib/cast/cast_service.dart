@@ -212,30 +212,42 @@ class CastService extends ChangeNotifier {
     notifyListeners();
 
     final address = castUrl(it.url, d.protocol);
-    final contentType = session.contentTypeFor(address, live: it.isLive);
-    var url = address;
     _viaRelay = isLocalMedia(address) || preferRelay;
-    if (_viaRelay) {
-      final host = session.localAddress;
-      if (host == null) throw CastException('Adresse de cet ordinateur introuvable sur le réseau de la télé.');
-      _relay.clear();
-      url = await _relay.publish(address, host: host, userAgent: it.userAgent, contentType: contentType);
-      _hitsAtLoad = _relay.hits;
-      _unreachedLogged = false;
+    final host = session.localAddress;
+    if (_viaRelay && host == null) {
+      throw CastException('Adresse de cet ordinateur introuvable sur le réseau de la télé.');
     }
-    if (gen != _generation || seq != _loadSeq) return;
     final (title, subtitle) = describe?.call(it) ?? (it.title, it.subtitle);
-    final media = CastMedia(
-      url: url,
-      contentType: contentType,
-      live: it.isLive,
-      title: title,
-      subtitle: subtitle,
-      image: it.image,
-    );
-    final via = _viaRelay ? ' (relais ${Uri.parse(url).authority})' : '';
-    debugPrint('Cast : ${d.kindLabel} « ${d.name} » ← ${redactCredentials(address)}$via');
-    await session.load(media, start: it.isLive ? null : start);
+    // A TV that answers "Illegal MIME-type" (714) gets the other spellings
+    // of the same format it may know.
+    final types = session.contentTypesFor(address, live: it.isLive);
+    for (final (i, contentType) in types.indexed) {
+      var url = address;
+      if (_viaRelay) {
+        _relay.clear();
+        url = await _relay.publish(address, host: host!, userAgent: it.userAgent, contentType: contentType);
+        _hitsAtLoad = _relay.hits;
+        _unreachedLogged = false;
+      }
+      if (gen != _generation || seq != _loadSeq) return;
+      final media = CastMedia(
+        url: url,
+        contentType: contentType,
+        live: it.isLive,
+        title: title,
+        subtitle: subtitle,
+        image: it.image,
+      );
+      final via = _viaRelay ? ' (relais ${Uri.parse(url).authority})' : '';
+      debugPrint('Cast : ${d.kindLabel} « ${d.name} » ← ${redactCredentials(address)}$via');
+      try {
+        await session.load(media, start: it.isLive ? null : start);
+        return;
+      } on CastException catch (e) {
+        if (e.code != 714 || i == types.length - 1) rethrow;
+        debugPrint('Cast : type $contentType refusé, essai avec ${types[i + 1]}');
+      }
+    }
   }
 
   /// Tries again after an error; [viaRelay] switches the way the TV gets the stream.
