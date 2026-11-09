@@ -327,18 +327,25 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
     // Films or series whose list (or categories) could not be downloaded:
     // what the source already has is kept instead of being emptied.
     final failed = <ContentKind>{};
+    // The names of the TV categories could not be downloaded.
+    var liveNamesMissing = false;
     Future<List<Map<String, Object?>>> safe(
       Future<List<Map<String, Object?>>> f,
       String what, {
-      ContentKind? optional,
+      bool required = false,
+      ContentKind? keeps,
     }) async {
       try {
         return await f;
       } catch (e) {
         // Channels are the heart of a source: without them the import fails
         // and nothing is touched.
-        if (optional == null) rethrow;
-        failed.add(optional);
+        if (required) rethrow;
+        if (keeps != null) {
+          failed.add(keeps);
+        } else {
+          liveNamesMissing = true;
+        }
         warnings.add('$what : ${redactCredentials('$e')}');
         return const [];
       }
@@ -346,15 +353,27 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
 
     final results = await Future.wait([
       safe(api.liveCategories(), 'Catégories TV'),
-      safe(api.liveStreams(), 'Chaînes'),
-      safe(api.vodCategories(), 'Catégories films', optional: ContentKind.movie),
-      safe(api.vodStreams(), 'Films', optional: ContentKind.movie),
-      safe(api.seriesCategories(), 'Catégories séries', optional: ContentKind.series),
-      safe(api.seriesList(), 'Séries', optional: ContentKind.series),
+      safe(api.liveStreams(), 'Chaînes', required: true),
+      safe(api.vodCategories(), 'Catégories films', keeps: ContentKind.movie),
+      safe(api.vodStreams(), 'Films', keeps: ContentKind.movie),
+      safe(api.seriesCategories(), 'Catégories séries', keeps: ContentKind.series),
+      safe(api.seriesList(), 'Séries', keeps: ContentKind.series),
     ]);
     // Half a kind is not written: its old content stays whole.
     if (failed.contains(ContentKind.movie)) results[2] = results[3] = const [];
     if (failed.contains(ContentKind.series)) results[4] = results[5] = const [];
+    // The channels came without the names of their categories: they are
+    // imported all the same, under the names (and in the order) the source
+    // already had. A category never seen before is called "Autres".
+    if (liveNamesMissing) {
+      results[0] = [
+        for (final r in db.select(
+          'SELECT ext_id, name FROM categories WHERE source_id = ? AND kind = ? ORDER BY position',
+          [sourceId, ContentKind.live.db],
+        ))
+          {'category_id': r['ext_id'], 'category_name': r['name']},
+      ];
+    }
     final total = results[1].length + results[3].length + results[5].length;
     progress('Analyse', total);
 

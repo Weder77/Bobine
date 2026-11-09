@@ -290,6 +290,36 @@ void main() {
     expect(repo.movies(id), hasLength(2));
   });
 
+  test('channels are imported even when the names of their categories cannot be', () async {
+    final path = '${tmp.path}/livecats.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
+    addTearDown(broken.clear);
+
+    // Known from a first import: the names and their order are kept.
+    await importXtream(path, id, null);
+    final names = repo.categories(id, ContentKind.live).map((c) => c.name).toList();
+    expect(names, ['France', 'Sport']);
+    repo.setCategoryHidden(id, ContentKind.live, '2', true);
+    final visible = repo.channels(id).length;
+    expect(visible, lessThan(300));
+
+    broken.add('get_live_categories');
+    final r = await importXtream(path, id, null);
+    expect(r.live, 300);
+    expect(repo.categories(id, ContentKind.live, includeHidden: true).map((c) => c.name).toList(), names);
+    expect(repo.channels(id), hasLength(visible), reason: 'the hidden category is still hidden');
+    expect(repo.movies(id), hasLength(2));
+    expect(repo.source(id)!.lastError, allOf(contains('incomplète'), contains('Catégories TV')));
+
+    // Never imported before: the channels are there, under "Autres".
+    final fresh = repo.insertSource(name: 'XT2', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
+    expect((await importXtream(path, fresh, null)).live, 300);
+    expect(repo.channels(fresh), hasLength(300));
+    expect(repo.categories(fresh, ContentKind.live).map((c) => c.name).toSet(), {'Autres'});
+    expect(repo.channels(fresh).every((c) => c.categoryId != null), isTrue);
+  });
+
   test('a web page served instead of the playlist does not replace the channels', () async {
     final path = '${tmp.path}/portal.db';
     final repo = track(Repository(openAppDatabase(path)));
