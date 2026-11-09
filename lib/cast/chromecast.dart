@@ -185,8 +185,9 @@ class ChromecastSession implements CastSession {
   /// Broadcasts of RECEIVER_STATUS (to wait for the app to start).
   final _receiverStatus = StreamController<Map<String, Object?>>.broadcast();
 
+  /// Not `_socket.address`: for an outgoing connection it is the TV's own.
   @override
-  InternetAddress? get localAddress => _socket?.address;
+  InternetAddress? localAddress;
 
   @override
   Stream<RemoteStatus> get updates => _updates.stream;
@@ -195,6 +196,7 @@ class ChromecastSession implements CastSession {
   Future<void> connect() async {
     try {
       _socket = await _connector(device.host, device.port, connectTimeout);
+      localAddress = await localAddressFor(device.host, device.port);
     } on SocketException {
       throw CastException("L'appareil ne répond pas. Vérifie qu'il est allumé et sur le même réseau.");
     } on TimeoutException {
