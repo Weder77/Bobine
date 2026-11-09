@@ -248,6 +248,13 @@ class PlayerService {
     return !live && duration == Duration.zero && isLoadFailure(message);
   }
 
+  /// Whether what is already loaded is set playing again when its screen
+  /// reopens (the mini-player grows back): yes when it was paused, not when
+  /// it reached its end. For the engine, "play" on a finished film means
+  /// "again from the beginning": growing the mini-player back restarted a
+  /// film that had just ended in it.
+  static bool resumesOnReopen({required bool playing, required bool completed}) => !playing && !completed;
+
   /// Whether [message] says the engine gave up on opening the file (after
   /// its own retries), not that one attempt failed.
   static bool isLoadFailure(String message) => _gaveUp.hasMatch(message);
@@ -344,7 +351,7 @@ class PlayerService {
     }
     if (!force && current.value?.url == item.url && player.state.playlist.medias.isNotEmpty) {
       current.value = item;
-      if (!player.state.playing) await player.play();
+      if (resumesOnReopen(playing: player.state.playing, completed: player.state.completed)) await player.play();
       return;
     }
     current.value = item;

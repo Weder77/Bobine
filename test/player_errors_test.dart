@@ -21,6 +21,13 @@ void main() {
     }
   });
 
+  test('growing the mini-player back resumes a paused film, not a finished one', () {
+    expect(PlayerService.resumesOnReopen(playing: false, completed: false), isTrue);
+    // "Play" on a finished film starts it again from zero.
+    expect(PlayerService.resumesOnReopen(playing: false, completed: true), isFalse);
+    expect(PlayerService.resumesOnReopen(playing: true, completed: false), isFalse);
+  });
+
   group('what is shown to the user', () {
     const loading = Duration.zero;
     const film = Duration(minutes: 95);

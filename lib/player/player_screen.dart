@@ -198,8 +198,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
         });
       }),
     );
-    // Playback is starting: no pause screen while it loads.
-    _playing = true;
+    // Playback is starting: no pause screen while it loads. Unless this is
+    // the mini-player growing back on a film that ended in it: it stays on
+    // its last picture, controls shown, as when it ends here.
+    final ended = !_casting && !_isLive && _ps.current.value?.url == _item.url && _ps.player.state.completed;
+    _playing = !ended;
     unawaited(_ps.setProp('sub-scale', '${_s.settings.subtitleScale}'));
 
     // Light-weight UI clock: position 4×/s, cache ranges 1×/s, stats 1×/s.
@@ -207,7 +210,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
     _fullscreen = AppWindow.fullscreen.value;
     if (!_fullscreen && _s.settings.autoFullscreen) _setFullscreen(true);
-    _showControls();
+    _showControls(sticky: ended);
   }
 
   @override
