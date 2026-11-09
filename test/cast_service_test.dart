@@ -509,6 +509,30 @@ void main() {
       expect(session.actions.first, 'connect');
     });
 
+    test('stopping before the TV started gives back where the film was, not zero', () async {
+      final slow = CastService(
+        sessionFactory: (d) => session = FakeSession(d)..next = RemoteStatus(state: RemoteState.loading),
+      );
+      await slow.start(_tv, _movie(), start: const Duration(minutes: 45));
+      // The TV reports position 0 while it loads (or after refusing the stream).
+      session.push(RemoteStatus(state: RemoteState.loading));
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+      expect(slow.position, Duration.zero);
+      expect(await slow.stop(), const Duration(minutes: 45));
+
+      // Once it played, the TV's own position counts, even an earlier one.
+      await slow.start(_tv, _movie(), start: const Duration(minutes: 45));
+      session.push(RemoteStatus(state: RemoteState.paused, position: const Duration(minutes: 45)));
+      session.push(RemoteStatus(state: RemoteState.playing, position: const Duration(minutes: 45)));
+      session.push(RemoteStatus(state: RemoteState.paused, position: const Duration(minutes: 12)));
+      await Future<void>.delayed(Duration.zero);
+      expect(await slow.stop(), const Duration(minutes: 12));
+
+      // A film sent from its beginning to a TV that never started: no position.
+      await slow.start(_tv, _movie());
+      expect(await slow.stop(), isNull);
+    });
+
     test('zapping loads the new channel on the same connection', () async {
       await cast.start(_tv, _channel());
       final first = session;

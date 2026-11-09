@@ -112,6 +112,9 @@ class CastService extends ChangeNotifier {
   int _hitsAtLoad = 0;
   bool _unreachedLogged = false;
   Duration? _lastStart;
+
+  /// The TV has played what was last sent (its position can be trusted).
+  bool _started = false;
   DateTime _holdUntil = DateTime.fromMillisecondsSinceEpoch(0);
   Timer? _volumeTimer;
   int _ended = 0;
@@ -206,6 +209,7 @@ class CastService extends ChangeNotifier {
     final d = _device!;
     item.value = it;
     _lastStart = start;
+    _started = false;
     _error = null;
     _loadedAt = DateTime.now();
     _status = RemoteStatus(state: RemoteState.loading, volume: _status.volume, position: start ?? Duration.zero);
@@ -266,7 +270,14 @@ class CastService extends ChangeNotifier {
   Future<Duration?> stop() async {
     if (_device == null) return null;
     final it = item.value;
-    final pos = (it != null && !it.isLive && position > Duration.zero) ? position : null;
+    Duration? pos;
+    if (it != null && !it.isLive) {
+      // A TV that never started (still loading, or refused the stream)
+      // reports 0: the film goes on from where it was sent, not from the
+      // beginning (which would also overwrite its "Reprendre" position).
+      pos = _started ? position : _lastStart;
+      if (pos == Duration.zero) pos = null;
+    }
     await _disconnect(stopRemote: true);
     return pos;
   }
@@ -351,7 +362,10 @@ class CastService extends ChangeNotifier {
     if (DateTime.now().isBefore(_holdUntil) && s.state != RemoteState.error) s = s.copyWith(position: position);
     final before = _status.state;
     _status = s;
-    if (s.state == RemoteState.playing) _error = null;
+    if (s.state == RemoteState.playing) {
+      _error = null;
+      _started = true;
+    }
     if (s.state == RemoteState.ended && before != RemoteState.ended) _ended++;
     notifyListeners();
   }
