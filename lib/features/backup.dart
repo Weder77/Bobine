@@ -95,6 +95,7 @@ class BackupService {
             'fingerprint': sourceFingerprint(s),
             'liveFormat': s.liveFormat,
             'epgOffset': s.epgOffsetMinutes,
+            if (s.acceptInvalidCertificate) 'acceptInvalidCertificate': true,
             'userAgent': s.userAgent,
             if (credentials) ...{'url': s.url, 'username': s.username, 'password': s.password, 'epgUrl': s.epgUrl},
           },
@@ -238,6 +239,7 @@ class BackupService {
             userAgent: b['userAgent'] as String?,
             liveFormat: (b['liveFormat'] as String?) ?? 'ts',
             epgOffset: (b['epgOffset'] as int?) ?? 0,
+            acceptInvalidCertificate: b['acceptInvalidCertificate'] == true,
           );
           report.sourcesCreated++;
         } else {

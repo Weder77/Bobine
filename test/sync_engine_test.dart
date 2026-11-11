@@ -264,6 +264,28 @@ void main() {
     expect(b.repo.sources(), isEmpty);
   });
 
+  test('accepting an invalid certificate follows the source to the other devices', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote), b = Device(remote);
+    a.repo.insertSource(
+      name: 'Panel',
+      type: SourceType.xtream,
+      url: 'https://tv.example',
+      username: 'bob',
+      password: 'p',
+      acceptInvalidCertificate: true,
+    );
+    await a.sync();
+    await b.sync();
+    expect(b.source('Panel').acceptInvalidCertificate, isTrue);
+    final src = a.source('Panel');
+    a.repo.updateSource(src.id, name: 'Panel', url: src.url, username: 'bob', password: 'p');
+    await _tick();
+    await a.sync();
+    await b.sync();
+    expect(b.source('Panel').acceptInvalidCertificate, isFalse);
+  });
+
   test('the newer of two conflicting changes wins on both devices', () async {
     final remote = MemoryRemote();
     final a = Device(remote), b = Device(remote);

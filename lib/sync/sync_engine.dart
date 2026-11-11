@@ -347,6 +347,7 @@ class SyncEngine {
           'user_agent': s.userAgent,
           'live_format': s.liveFormat,
           'epg_offset': s.epgOffsetMinutes,
+          if (s.acceptInvalidCertificate) 'bad_cert_ok': true,
         },
     };
   }
@@ -690,6 +691,7 @@ class SyncEngine {
       userAgent: d['user_agent'] as String?,
       liveFormat: (d['live_format'] as String?) ?? 'ts',
       epgOffsetMinutes: (d['epg_offset'] as int?) ?? 0,
+      acceptInvalidCertificate: d['bad_cert_ok'] == true,
     );
   }
 
@@ -730,17 +732,18 @@ class SyncEngine {
       s.userAgent,
       s.liveFormat,
       s.epgOffsetMinutes,
+      s.acceptInvalidCertificate ? 1 : 0,
     ];
     if (id != null) {
       _db.execute(
         'UPDATE sources SET name = ?, url = ?, username = ?, password = ?, epg_url = ?, user_agent = ?, '
-        'live_format = ?, epg_offset = ?, type = ? WHERE id = ?',
+        'live_format = ?, epg_offset = ?, bad_cert_ok = ?, type = ? WHERE id = ?',
         [...values, s.type.name, id],
       );
     } else {
       _db.execute(
-        'INSERT INTO sources (name, url, username, password, epg_url, user_agent, live_format, epg_offset, type, '
-        'created_at, uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sources (name, url, username, password, epg_url, user_agent, live_format, epg_offset, '
+        'bad_cert_ok, type, created_at, uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [...values, s.type.name, DateTime.now().millisecondsSinceEpoch ~/ 1000, uid],
       );
       changes.sourcesAdded.add(_db.lastInsertRowId);

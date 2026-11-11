@@ -34,6 +34,7 @@ class _SourceFormState extends State<SourceForm> {
   final _ua = TextEditingController();
   String _liveFormat = 'ts';
   int _epgOffset = 0; // minutes
+  bool _badCert = false;
   bool _obscure = true;
   bool _busy = false;
   String? _error;
@@ -59,6 +60,7 @@ class _SourceFormState extends State<SourceForm> {
       _ua.text = s.userAgent ?? '';
       _liveFormat = s.liveFormat;
       _epgOffset = s.epgOffsetMinutes;
+      _badCert = s.acceptInvalidCertificate;
     }
   }
 
@@ -127,6 +129,7 @@ class _SourceFormState extends State<SourceForm> {
           username: _user.text.trim(),
           password: _pass.text,
           userAgent: _ua.text.trim(),
+          acceptInvalidCertificate: _badCert,
         );
         try {
           final info = await api.authenticate();
@@ -149,7 +152,7 @@ class _SourceFormState extends State<SourceForm> {
         if (!loc.startsWith('http')) {
           setState(() => _info = '✓ Fichier local : il sera lu à l\'enregistrement.');
         } else {
-          final client = createHttpClient();
+          final client = createHttpClient(acceptInvalidCertificate: _badCert);
           try {
             final res = await openGet(client, Uri.parse(loc), userAgent: _ua.text.trim());
             // Counted as it arrives: a playlist can weigh hundreds of MB.
@@ -205,6 +208,7 @@ class _SourceFormState extends State<SourceForm> {
         userAgent: _ua.text,
         liveFormat: _liveFormat,
         epgOffset: _epgOffset,
+        acceptInvalidCertificate: _badCert,
       );
       s.library.contentChanged();
     } else {
@@ -218,6 +222,7 @@ class _SourceFormState extends State<SourceForm> {
         userAgent: _ua.text,
         liveFormat: _liveFormat,
         epgOffset: _epgOffset,
+        acceptInvalidCertificate: _badCert,
       );
       s.selectSource(id);
     }
@@ -394,6 +399,20 @@ class _SourceFormState extends State<SourceForm> {
                     onPressed: _epgOffset >= 720 ? null : () => setState(() => _epgOffset += 30),
                     icon: const Icon(Icons.add, size: 18),
                   ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Accepter un certificat invalide\n'
+                      "Seulement si le serveur https du fournisseur a un certificat expiré ou auto-signé : "
+                      "quelqu'un sur le réseau pourrait alors lire l'identifiant et le mot de passe.",
+                      style: TextStyle(color: AppColors.muted, fontSize: 13),
+                    ),
+                  ),
+                  Switch(value: _badCert, onChanged: (v) => setState(() => _badCert = v)),
                 ],
               ),
               if (isX) ...[

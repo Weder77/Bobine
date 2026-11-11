@@ -79,7 +79,7 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   Future<void> _test(Source src) async {
     setState(() => _testing.add(src.id));
     final sw = Stopwatch()..start();
-    final client = createHttpClient();
+    final client = createHttpClient(acceptInvalidCertificate: src.acceptInvalidCertificate);
     _SourceTest result;
     try {
       if (src.isXtream) {

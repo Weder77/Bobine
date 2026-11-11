@@ -26,7 +26,13 @@ class ImageFetcher {
     unawaited(_instance!._trim());
   }
 
-  final HttpClient _client = createHttpClient()..maxConnectionsPerHost = 4;
+  /// Hosts of the sources that accept an invalid certificate: their logos
+  /// and posters too. Every other image is fetched with its certificate
+  /// checked (TMDB's included).
+  static Set<String> acceptInvalidFor = const {};
+
+  final HttpClient _client = createHttpClient(acceptFor: (host) => acceptInvalidFor.contains(host))
+    ..maxConnectionsPerHost = 4;
   final Map<String, Future<Uint8List>> _inflight = {};
   final Map<String, DateTime> _failed = {};
   final Queue<Completer<void>> _waiting = Queue();

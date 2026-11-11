@@ -171,11 +171,12 @@ class Repository {
     String? userAgent,
     String liveFormat = 'ts',
     int epgOffset = 0,
+    bool acceptInvalidCertificate = false,
   }) {
     return writeNow(() {
       db.execute(
-        'INSERT INTO sources (name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, created_at) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sources (name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, '
+        'bad_cert_ok, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
           name,
           type.name,
@@ -186,6 +187,7 @@ class Repository {
           _nz(userAgent),
           liveFormat,
           epgOffset,
+          acceptInvalidCertificate ? 1 : 0,
           _nowSec,
         ],
       );
@@ -203,11 +205,12 @@ class Repository {
     String? userAgent,
     String liveFormat = 'ts',
     int epgOffset = 0,
+    bool acceptInvalidCertificate = false,
   }) {
     writeNow(() {
       db.execute(
         'UPDATE sources SET name = ?, url = ?, username = ?, password = ?, epg_url = ?, '
-        'user_agent = ?, live_format = ?, epg_offset = ? WHERE id = ?',
+        'user_agent = ?, live_format = ?, epg_offset = ?, bad_cert_ok = ? WHERE id = ?',
         [
           name,
           Secrets.protect(url),
@@ -217,6 +220,7 @@ class Repository {
           _nz(userAgent),
           liveFormat,
           epgOffset,
+          acceptInvalidCertificate ? 1 : 0,
           id,
         ],
       );

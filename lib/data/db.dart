@@ -7,7 +7,7 @@ import '../core/secrets.dart';
 import '../core/text.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 9;
+const int kSchemaVersion = 10;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -79,6 +79,7 @@ void _migrate(Database db) {
     if (version < 7) _migrateV7(db);
     if (version < 8) _migrateV8(db);
     if (version < 9) _migrateV9(db);
+    if (version < 10) _migrateV10(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -298,6 +299,7 @@ void _migrateV5(Database db) {
   // Sources and profiles: a uid is given to new rows, and logged under it.
   const syncedColumns = {
     'sources': 'name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, uid',
+    // bad_cert_ok (v10) is added to the sources trigger by its migration.
     'profiles': 'name, color, kids, uid',
   };
   // Where the source / profile id sits in the log keys of the other tables.
@@ -401,6 +403,19 @@ void _migrateV9(Database db) {
   );
   db.execute('DROP TABLE recordings');
   db.execute('ALTER TABLE recordings_v9 RENAME TO recordings');
+}
+
+/// v10: certificates of https providers are checked; a source can accept
+/// an invalid one (`bad_cert_ok`). It follows the account like the rest of
+/// the source.
+void _migrateV10(Database db) {
+  db.execute('ALTER TABLE sources ADD COLUMN bad_cert_ok INTEGER NOT NULL DEFAULT 0');
+  db.execute('DROP TRIGGER sync_sources_upd');
+  db.execute(
+    'CREATE TRIGGER sync_sources_upd AFTER UPDATE OF name, type, url, username, password, epg_url, user_agent, '
+    'live_format, epg_offset, bad_cert_ok, uid ON sources '
+    'WHEN NEW.uid IS NOT NULL AND $_syncLive BEGIN ${_syncLogSql('sources', 'NEW.uid')} END',
+  );
 }
 
 /// The first schema, as created by Bobine 1.0 (to test migrations).

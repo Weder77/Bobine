@@ -185,12 +185,26 @@ class AppServices {
     }
 
     library.addListener(changed);
+    library.addListener(services._trustImageHosts);
+    services._trustImageHosts();
     settings.addListener(changed);
     services._ensureActiveSource();
     services._applyProfile();
     // "Qui regarde ?" is asked once, at start.
     services.profileChosen = !(settings.askProfileAtStart && repo.profiles().length > 1);
     return services;
+  }
+
+  /// Logos and posters of the sources that accept an invalid certificate
+  /// are fetched like their lists.
+  void _trustImageHosts() {
+    ImageFetcher.acceptInvalidFor = {
+      for (final s in repo.sources())
+        if (s.acceptInvalidCertificate) ...[
+          Uri.tryParse(s.isXtream ? s.baseUrl : s.url)?.host ?? '',
+          Uri.tryParse(s.epgUrl ?? '')?.host ?? '',
+        ],
+    }..remove('');
   }
 
   /// The source currently browsed, or null when none is configured.

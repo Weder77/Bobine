@@ -184,7 +184,7 @@ void _commit(
 Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? port) async {
   final progress = sinkFor(port);
   final db = openWorkerDatabase(dbPath);
-  final client = createHttpClient();
+  final client = createHttpClient(acceptInvalidCertificate: _acceptsInvalidCertificate(db, sourceId));
   try {
     final source = _loadSource(db, sourceId);
     final batch = _Batch();
@@ -352,7 +352,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
 Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? port) async {
   final progress = sinkFor(port);
   final db = openWorkerDatabase(dbPath);
-  final client = createHttpClient();
+  final client = createHttpClient(acceptInvalidCertificate: _acceptsInvalidCertificate(db, sourceId));
   try {
     final source = _loadSource(db, sourceId);
     final api = XtreamApi.forSource(source, client: client);
@@ -549,7 +549,7 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
 Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) async {
   final progress = sinkFor(port);
   final db = openWorkerDatabase(dbPath);
-  final client = createHttpClient();
+  final client = createHttpClient(acceptInvalidCertificate: _acceptsInvalidCertificate(db, sourceId));
   try {
     final source = _loadSource(db, sourceId);
     final url = source.effectiveEpgUrl;
@@ -685,3 +685,7 @@ const int kMaxPlaylistEntries = 1500000;
 
 /// Programmes kept from one guide at most (held in memory the same way).
 const int kMaxGuideProgrammes = 3000000;
+
+/// The source accepts an invalid certificate from its server (its setting).
+bool _acceptsInvalidCertificate(Database db, int sourceId) =>
+    db.select('SELECT bad_cert_ok FROM sources WHERE id = ?', [sourceId]).firstOrNull?['bad_cert_ok'] == 1;

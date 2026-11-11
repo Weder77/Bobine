@@ -27,16 +27,25 @@ class NetException implements Exception {
   String toString() => message;
 }
 
-HttpClient createHttpClient() {
+/// A client for the provider's servers. Their certificates are checked:
+/// accepting any let anyone on the network read the account of an https
+/// source. A source whose server has an invalid one (self-signed,
+/// expired: frequent with IPTV panels) can accept it
+/// ([acceptInvalidCertificate]), and [acceptFor] the hosts that may.
+HttpClient createHttpClient({bool acceptInvalidCertificate = false, bool Function(String host)? acceptFor}) {
   final client = HttpClient()
     ..connectionTimeout = const Duration(seconds: 15)
     ..idleTimeout = const Duration(seconds: 20)
     ..autoUncompress = true
     ..maxConnectionsPerHost = 6;
-  // IPTV panels frequently use self-signed / expired certificates.
-  client.badCertificateCallback = (cert, host, port) => true;
+  client.badCertificateCallback = (cert, host, port) => acceptInvalidCertificate || (acceptFor?.call(host) ?? false);
   return client;
 }
+
+/// Said when a certificate is refused.
+const kBadCertificateMessage =
+    "Certificat du serveur invalide (connexion sécurisée refusée). Si tu fais confiance à ce fournisseur, active "
+    "« Accepter un certificat invalide » dans les réglages de la source.";
 
 Future<HttpClientResponse> openGet(
   HttpClient client,
@@ -66,8 +75,12 @@ Future<HttpClientResponse> openGet(
     throw NetException('Le serveur ne répond pas (délai dépassé).');
   } on SocketException catch (e) {
     throw NetException('Connexion impossible : ${e.osError?.message ?? e.message}');
-  } on HandshakeException {
-    throw NetException('Erreur de connexion sécurisée (TLS).');
+  } on HandshakeException catch (e) {
+    throw NetException(
+      (e.osError?.message ?? e.message).toUpperCase().contains('CERTIFICATE')
+          ? kBadCertificateMessage
+          : 'Erreur de connexion sécurisée (TLS).',
+    );
   } on HttpException catch (e) {
     throw NetException('Erreur HTTP : ${redactCredentials(e.message)}');
   } on ArgumentError {

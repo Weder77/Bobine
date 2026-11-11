@@ -104,8 +104,9 @@ class XtreamApi {
     required this.password,
     this.userAgent,
     HttpClient? client,
+    bool acceptInvalidCertificate = false,
   }) : baseUrl = _normalize(baseUrl),
-       _client = client ?? createHttpClient(),
+       _client = client ?? createHttpClient(acceptInvalidCertificate: acceptInvalidCertificate),
        _ownsClient = client == null;
 
   final String baseUrl;
@@ -121,6 +122,7 @@ class XtreamApi {
     password: s.password ?? '',
     userAgent: s.userAgent,
     client: client,
+    acceptInvalidCertificate: s.acceptInvalidCertificate,
   );
 
   static String _normalize(String u) {
