@@ -110,10 +110,10 @@ final RegExp _secretPath = RegExp(
   caseSensitive: false,
 );
 
-/// "/hlsr/<token>/<user>/<password>/…".
+/// `/hlsr/<token>/<user>/<password>/…`.
 final RegExp _secretHlsr = RegExp(r'(/hlsr/)[^/\s]+/[^/\s]+/[^/\s]+/', caseSensitive: false);
 
-/// A token alone in the path: "/play/<token>/ts", "/hls/<token>/123_45.ts".
+/// A token alone in the path: `/play/<token>/ts`, `/hls/<token>/123_45.ts`.
 final RegExp _secretToken = RegExp(r'(/(?:play|hls|token|auth)/)[A-Za-z0-9_\-.~%]{8,}(?=/)', caseSensitive: false);
 
 /// "http://user:password@host".
