@@ -236,6 +236,34 @@ void main() {
     expect(a.pending, 0);
   });
 
+  test('what a device deleted while signed out is not deleted from the account when it signs in again', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote), b = Device(remote);
+    final srcA = a.xtream();
+    a.repo.toggleFavorite(srcA, ContentKind.movie, '1');
+    await a.sync();
+    await b.sync();
+
+    // A signs out, cleans this computer, signs in again.
+    a.repo.kvSet(SyncEngine.cursorKey, null);
+    a.repo.deleteSource(srcA);
+    await _tick();
+    await a.sync();
+    await b.sync();
+    final srcB = b.source('Mon IPTV').id;
+    expect(b.repo.isFavorite(srcB, ContentKind.movie, '1'), isTrue);
+    expect(a.pending, 0);
+    // The account's source comes back here, as on any device linked.
+    expect(a.repo.sources().map((s) => s.name), ['Mon IPTV']);
+
+    // Once linked, a deletion is sent as before.
+    a.repo.deleteSource(a.source('Mon IPTV').id);
+    await _tick();
+    await a.sync();
+    await b.sync();
+    expect(b.repo.sources(), isEmpty);
+  });
+
   test('the newer of two conflicting changes wins on both devices', () async {
     final remote = MemoryRemote();
     final a = Device(remote), b = Device(remote);

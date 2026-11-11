@@ -1017,7 +1017,7 @@ class _SignedIn extends StatelessWidget {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        'Connecté sur cet ordinateur · chiffrement actif',
+                        'Connecté sur cet ordinateur · synchro chiffrée de bout en bout',
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(fontSize: 13, color: AppColors.textSoft),
                       ),

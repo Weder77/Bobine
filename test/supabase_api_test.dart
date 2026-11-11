@@ -137,6 +137,33 @@ void main() {
     expect(fake.requests, contains('POST /auth/v1/token?grant_type=refresh_token'));
   });
 
+  test('only a refresh token the service no longer knows ends the session', () async {
+    final api = fake.api();
+    final s = SupabaseSession.fromAuth(_session('t1'));
+    // Too many tries behind a shared address, a proxy in the way: later.
+    for (final (status, body) in [
+      (429, {'error_code': 'over_request_rate_limit', 'msg': 'Too many requests'}),
+      (403, null),
+      (401, {'msg': 'Unauthorized'}),
+    ]) {
+      fake.handler = (r, _) => (status, body);
+      await expectLater(
+        api.refresh(s),
+        throwsA(
+          isA<SyncApiException>()
+              .having((e) => e.sessionLost, 'sessionLost', isFalse)
+              .having((e) => e.network, 'network', isTrue),
+        ),
+        reason: '$status',
+      );
+    }
+    fake.handler = (r, _) => (400, {'error_code': 'refresh_token_not_found', 'msg': 'Invalid Refresh Token'});
+    await expectLater(
+      api.refresh(s),
+      throwsA(isA<SyncApiException>().having((e) => e.sessionLost, 'sessionLost', isTrue)),
+    );
+  });
+
   group('signing out', () {
     (int, Object?) account(HttpRequest r, Object? body) => switch (r.uri.path) {
       '/auth/v1/token' => (200, _session(r.uri.queryParameters['grant_type'] == 'password' ? 't1' : 't2')),

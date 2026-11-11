@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
 
@@ -13,10 +15,21 @@ const int kSchemaVersion = 7;
 /// asynchronously by the repository instead.
 Database openAppDatabase(String path) {
   final db = sqlite3.open(path);
+  _ownerOnly(path);
   _configure(db, busyTimeoutMs: 150);
   _migrate(db);
   _protectLegacySecrets(db);
   return db;
+}
+
+/// Outside Windows the secrets are not encrypted in the file (see
+/// [Secrets]): it is made readable by this user account only. SQLite gives
+/// its -wal and -shm files the same rights.
+void _ownerOnly(String path) {
+  if (Platform.isWindows || !File(path).existsSync()) return;
+  try {
+    Process.runSync('chmod', ['600', path]);
+  } catch (_) {}
 }
 
 /// Opens a connection for a background isolate (imports).

@@ -2,6 +2,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../core/open_url.dart';
+import '../core/text.dart';
 import '../core/theme.dart';
 import '../core/version.dart';
 import '../features/backup.dart';
@@ -123,6 +124,12 @@ class BackupSection extends StatelessWidget {
       }
     } on BackupException catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      // Whatever else a damaged file causes, it is said.
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Restauration impossible : ${redactCredentials('$e')}')));
+      }
     }
   }
 }

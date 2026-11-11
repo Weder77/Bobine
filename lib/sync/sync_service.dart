@@ -96,8 +96,15 @@ class SyncService extends ChangeNotifier {
 
   DateTime _lastFetch = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Failures in a row (the account refuses, the service is down): the
+  /// automatic tries wait longer each time, up to half an hour.
+  int _failures = 0;
+  DateTime? _retryAt;
+
   void _tick() {
     if (!signedIn || _running != null) return;
+    final retry = _retryAt;
+    if (retry != null && DateTime.now().isBefore(retry)) return;
     final pending = _repo.db.select('SELECT 1 FROM sync_log LIMIT 1').isNotEmpty;
     if (pending || DateTime.now().difference(_lastFetch) >= fetchEvery) syncSoon(pending ? changeDelay : Duration.zero);
   }
@@ -155,6 +162,8 @@ class SyncService extends ChangeNotifier {
       _repo.kvSet(_lastKey, lastSync!.toIso8601String());
       message = null;
       status = SyncStatus.idle;
+      _failures = 0;
+      _retryAt = null;
       if (changes.received + changes.sent > 0) {
         AppLog.add('Synchro : ${changes.received} reçu(s), ${changes.sent} envoyé(s)');
       }
@@ -177,6 +186,7 @@ class SyncService extends ChangeNotifier {
       } else {
         message = e.message;
         status = SyncStatus.error;
+        _backOff();
       }
     } else if (e is SqliteException) {
       // Busy with an import: next time.
@@ -187,8 +197,15 @@ class SyncService extends ChangeNotifier {
     } else {
       message = 'Synchro impossible : ${redactCredentials('$e')}';
       status = SyncStatus.error;
+      _backOff();
       AppLog.add('Synchro : $e');
     }
+  }
+
+  void _backOff() {
+    _failures++;
+    final seconds = 20 * (1 << (_failures - 1).clamp(0, 7));
+    _retryAt = DateTime.now().add(Duration(seconds: seconds.clamp(20, 1800)));
   }
 
   void _keepSession(SupabaseSession s) {
@@ -218,9 +235,16 @@ class SyncService extends ChangeNotifier {
     _keys = null;
     pendingEmail = null;
     _pendingKeys = null;
-    for (final k in [_sessionKey, _keysKey, _lastKey, SyncEngine.cursorKey]) {
-      _repo.db.execute('DELETE FROM kv WHERE key = ?', [k]);
-    }
+    // Retried when an import holds the database: a sign-out that stayed on
+    // disk signed the device in again at the next start.
+    _repo.write(() {
+      _repo.db.execute('DELETE FROM kv WHERE key IN (?, ?, ?, ?)', [
+        _sessionKey,
+        _keysKey,
+        _lastKey,
+        SyncEngine.cursorKey,
+      ]);
+    });
     lastSync = null;
     this.message = message;
     status = SyncStatus.signedOut;

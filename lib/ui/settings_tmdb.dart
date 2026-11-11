@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/open_url.dart';
+import '../core/secrets.dart';
 import '../core/theme.dart';
 import '../services.dart';
 import 'settings_screen.dart';
@@ -64,7 +65,8 @@ class _TmdbSectionState extends State<TmdbSection> {
           subtitle:
               'Ajoute grandes images, résumé en français, distribution et bande-annonce aux films et séries. '
               'Clé gratuite : crée un compte sur themoviedb.org → Paramètres → API. '
-              'La clé (ou le jeton de lecture) reste sur cet ordinateur, chiffrée.',
+              'La clé (ou le jeton de lecture) reste sur cet ordinateur'
+              '${Secrets.supported ? ', chiffrée.' : ', lisible seulement par ta session.'}',
           child: SizedBox(
             width: 320,
             child: TextField(

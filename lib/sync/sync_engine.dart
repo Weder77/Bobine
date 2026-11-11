@@ -132,6 +132,7 @@ class SyncEngine {
     if (linking) {
       // Another account, or the same one read again from the start.
       _db.execute('DELETE FROM sync_seen');
+      _dropOfflineDeletions();
       _seed();
     }
 
@@ -243,6 +244,26 @@ class SyncEngine {
     } catch (_) {
       _db.execute('ROLLBACK');
       rethrow;
+    }
+  }
+
+  /// A first sync does not delete from the account what this device removed
+  /// while it was not connected (or before it ever was): other devices may
+  /// still use it, and it comes back here from the account. Dropped before
+  /// receiving, so that the deletion does not win over the account's copy.
+  void _dropOfflineDeletions() {
+    final rows = _db.select('SELECT tbl, key, changed_at FROM sync_log');
+    for (final r in rows) {
+      final table = r['tbl'] as String, key = r['key'] as String;
+      final record = switch (table) {
+        'settings' => null,
+        'sources' => _sourceRecord(key),
+        'profiles' => _profileRecord(key),
+        _ => _rowRecord(table, key),
+      };
+      if (record != null && record['d'] == null) {
+        _db.execute('DELETE FROM sync_log WHERE tbl = ? AND key = ? AND changed_at = ?', [table, key, r['changed_at']]);
+      }
     }
   }
 
