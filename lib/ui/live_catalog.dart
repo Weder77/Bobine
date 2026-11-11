@@ -30,6 +30,7 @@ class LiveCatalog extends ChangeNotifier {
   Source? source;
   List<CategoryEntry> entries = const [];
   String cat = 'all';
+  final _catIds = <String, int>{};
   Set<String> favs = const {};
   List<ChannelTile> tiles = const [];
 
@@ -86,9 +87,20 @@ class LiveCatalog extends ChangeNotifier {
       CategoryEntry(id: 'all', label: 'Toutes', count: total),
       CategoryEntry(id: 'fav', label: 'Favoris', count: favs.length),
       if (recent) const CategoryEntry(id: 'recent', label: 'Récentes'),
-      for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count, locked: c.locked),
+      for (final c in cats) CategoryEntry(id: 'x:${c.extId}', label: c.name, count: c.count, locked: c.locked),
     ];
-    final saved = _s.repo.kvGet('live.cat.${src.id}');
+    // Groups are known by the provider's id: the row numbers change at
+    // every import, and the remembered group became its neighbour.
+    _catIds
+      ..clear()
+      ..addAll({for (final c in cats) 'x:${c.extId}': c.id});
+    var saved = _s.repo.kvGet('live.cat.${src.id}');
+    if (saved != null && saved.startsWith('c:')) {
+      // Saved by an earlier version, by row number.
+      final old = int.tryParse(saved.substring(2));
+      final c = cats.where((c) => c.id == old).firstOrNull;
+      saved = c == null ? null : 'x:${c.extId}';
+    }
     cat = saved != null && entries.any((e) => e.id == saved) ? saved : 'all';
     _loadChannels();
     notifyListeners();
@@ -109,7 +121,7 @@ class LiveCatalog extends ChangeNotifier {
       'fav' => _s.repo.favoriteChannels(src.id),
       'recent' => _s.repo.recentChannels(src.id),
       'all' => _s.repo.channels(src.id),
-      _ => _s.repo.channels(src.id, categoryId: int.tryParse(cat.substring(2))),
+      _ => _catIds[cat] == null ? const <Channel>[] : _s.repo.channels(src.id, categoryId: _catIds[cat]),
     };
     streamCount = list.length;
     _clean = _s.settings.cleanNames;

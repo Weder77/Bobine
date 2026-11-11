@@ -14,7 +14,7 @@ Future<void> main() async {
     final services = await AppServices.create();
     runApp(BobineApp(services: services));
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      services.refreshStaleSources();
+      services.startRefreshing();
       services.sync.start();
       // A little later: the update check must not slow the first screens.
       Future.delayed(const Duration(seconds: 8), services.updates.checkInBackground);

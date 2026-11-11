@@ -28,6 +28,10 @@ class CatalogController extends ChangeNotifier {
   List<CategoryEntry> entries = const [];
   CatalogMode mode = CatalogMode.rows;
   String cat = 'all';
+  final _catIds = <String, int>{};
+
+  /// Row of the chosen category, null for "all" and "fav".
+  int? get categoryId => _catIds[cat];
   late CatalogSort sort;
   String query = '';
 
@@ -69,8 +73,12 @@ class CatalogController extends ChangeNotifier {
           count: _s.repo.count(src.id, kind),
         ),
         CategoryEntry(id: 'fav', label: 'Mes favoris', count: _s.repo.favoriteKeys(src.id, kind).length),
-        for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count, locked: c.locked),
+        for (final c in cats) CategoryEntry(id: 'x:${c.extId}', label: c.name, count: c.count, locked: c.locked),
       ];
+      // By the provider's id, which an import keeps (see the live list).
+      _catIds
+        ..clear()
+        ..addAll({for (final c in cats) 'x:${c.extId}': c.id});
       if (!entries.any((e) => e.id == cat)) cat = 'all';
     }
     version++;

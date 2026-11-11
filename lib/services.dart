@@ -214,6 +214,18 @@ class AppServices {
     epg.clear();
     settings.update((s) => s.activeSourceId = id);
     library.contentChanged();
+    // Its content is refreshed when chosen, if it is old.
+    refreshStaleSources();
+  }
+
+  Timer? _refreshTimer;
+
+  /// Applies the refresh intervals while the app stays open (days on end:
+  /// the guide emptied, nothing being imported again after the start).
+  void startRefreshing() {
+    refreshStaleSources();
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) => refreshStaleSources());
   }
 
   /// The app is closing: the position of what plays is saved, recordings
@@ -243,6 +255,7 @@ class AppServices {
   void refreshStaleSources() {
     final now = DateTime.now();
     for (final s in repo.sources()) {
+      if (imports.isBusy(s.id)) continue;
       final contentStale =
           s.contentUpdatedAt == null || now.difference(s.contentUpdatedAt!).inHours >= settings.contentRefreshHours;
       final epgStale =

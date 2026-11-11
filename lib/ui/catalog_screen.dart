@@ -157,7 +157,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           sub: series ? 'sur ta source' : null,
         ),
       if (favorites.isNotEmpty) _RowData('Mes favoris', favorites, onMore: () => _c.openGrid('fav')),
-      for (final cat in cats) _RowData(cat.name, list(categoryId: cat.id), onMore: () => _c.openGrid('c:${cat.id}')),
+      for (final cat in cats) _RowData(cat.name, list(categoryId: cat.id), onMore: () => _c.openGrid('x:${cat.extId}')),
       if (best.isNotEmpty &&
           (best.first is Movie ? (best.first as Movie).rating : (best.first as Series).rating) != null)
         _RowData('Les mieux notés', best, onMore: () => _c.openGrid('all', CatalogSort.rating)),
@@ -258,7 +258,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (_gridKey != key) {
       _gridKey = key;
       final r = _s.repo;
-      final catId = _c.cat.startsWith('c:') ? int.tryParse(_c.cat.substring(2)) : null;
+      final catId = _c.categoryId;
       if (_c.series) {
         _items = _c.cat == 'fav' ? r.favoriteSeries(src.id) : r.series(src.id, categoryId: catId, sort: _c.sort);
         _progress = const {};

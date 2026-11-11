@@ -37,7 +37,12 @@ class PlayerScreen extends StatefulWidget {
   /// multi-view already open (a reminder's "Regarder" over a film): stacked,
   /// they would share one video engine, and leaving the top one would stop
   /// it under the other.
+  /// Players opened so far: a launch that waited for the network can tell
+  /// whether another one started meanwhile.
+  static int opened = 0;
+
   static Future<void> open(BuildContext context, PlayerSession session, {bool replacing = false}) {
+    opened++;
     final nav = Navigator.of(context);
     if (!replacing) return nav.push(route(session));
     // Told before the new screen is built: it must not count itself replaced.

@@ -20,6 +20,16 @@ import 'widgets/brand.dart';
 import 'widgets/common.dart';
 
 /// Pages of the main shell.
+
+/// Whether the keyboard focus is in a text field. The focused node belongs
+/// to a widget inside the field, not to the field itself: without looking
+/// up, "/" typed in a field opened the search and was lost ("AC/DC").
+bool focusIsInTextField() {
+  final context = FocusManager.instance.primaryFocus?.context;
+  if (context == null) return false;
+  return context.widget is EditableText || context.findAncestorWidgetOfExactType<EditableText>() != null;
+}
+
 class ShellTab {
   static const home = 0;
   static const live = 1;
@@ -134,7 +144,7 @@ class _AppShellState extends State<AppShell> {
   /// dialog, the keyboard focus is not always inside the shell's widget tree.
   bool _onKey(KeyEvent e) {
     if (e is! KeyDownEvent || !mounted || !(ModalRoute.of(context)?.isCurrent ?? true)) return false;
-    final typing = FocusManager.instance.primaryFocus?.context?.widget is EditableText;
+    final typing = focusIsInTextField();
     if (e.logicalKey == LogicalKeyboardKey.escape) {
       // Échap / gamepad B: closes the search, then goes back to Accueil.
       if (_searchOpen) {
@@ -147,7 +157,8 @@ class _AppShellState extends State<AppShell> {
     }
     final keys = HardwareKeyboard.instance;
     final ctrlK = e.logicalKey == LogicalKeyboardKey.keyK && (keys.isControlPressed || keys.isMetaPressed);
-    final slash = e.logicalKey == LogicalKeyboardKey.slash && !typing;
+    // The character typed: on an AZERTY keyboard "/" is Shift + ":".
+    final slash = (e.character == '/' || e.logicalKey == LogicalKeyboardKey.slash) && !typing;
     if (!ctrlK && !slash) return false;
     _openSearch();
     return true;
