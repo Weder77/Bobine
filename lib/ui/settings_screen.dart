@@ -426,11 +426,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 10),
                       Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
                       const SizedBox(height: 30),
-                      if (_protected.contains(page.id) &&
-                          s.profile.kids &&
-                          s.settings.parentalEnabled &&
-                          _unlockedFor != s.profile.id)
-                        _ProtectedPage(onUnlock: _unlock)
+                      // A kids profile with no code at all (made before the
+                      // editor asked for one): the page stays closed, it
+                      // showed the locked categories and let them be opened.
+                      if (_protected.contains(page.id) && s.profile.kids && _unlockedFor != s.profile.id)
+                        _ProtectedPage(onUnlock: s.settings.parentalEnabled ? _unlock : null)
                       else
                         ...page.build(context),
                     ],
@@ -909,7 +909,9 @@ String maskedHost(String url) {
 /// In place of a page a kids profile opens only with the parental code.
 class _ProtectedPage extends StatelessWidget {
   const _ProtectedPage({required this.onUnlock});
-  final VoidCallback onUnlock;
+
+  /// Null when no parental code is set: an adult profile is needed.
+  final VoidCallback? onUnlock;
 
   @override
   Widget build(BuildContext context) => Container(
@@ -927,16 +929,21 @@ class _ProtectedPage extends StatelessWidget {
         const Text('Page protégée', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         Text(
-          'Dans un profil enfant, cette page demande le code parental.',
+          onUnlock == null
+              ? "Dans un profil enfant, cette page n'est ouverte qu'avec le code parental, et aucun n'est choisi : "
+                    "passe à un profil adulte pour en choisir un."
+              : 'Dans un profil enfant, cette page demande le code parental.',
           style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.muted),
         ),
-        const SizedBox(height: 18),
-        FilledButton.icon(
-          autofocus: true,
-          onPressed: onUnlock,
-          icon: const Icon(Icons.pin_outlined, size: 18),
-          label: const Text('Taper le code'),
-        ),
+        if (onUnlock != null) ...[
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            autofocus: true,
+            onPressed: onUnlock,
+            icon: const Icon(Icons.pin_outlined, size: 18),
+            label: const Text('Taper le code'),
+          ),
+        ],
       ],
     ),
   );

@@ -156,7 +156,12 @@ class AppServices {
     final tracker = PlaybackTracker(player, repo, onSaved: library.userChanged, cast: cast);
     final pip = PipController(player, cast);
     CastKeepAwake(cast, localPlaying: () => player.isPlaying);
-    final reminders = ReminderService(repo, settings);
+    final reminders = ReminderService(
+      repo,
+      settings,
+      ready: () => services.profileChosen,
+      hidden: (r) => repo.isRecordingLocked(r.sourceId, r.channelExt),
+    );
     final recordings = RecordingService(repo, settings, onChanged: library.userChanged);
     final sync = SyncService(repo, settings, onChanges: (c) => services._afterSync(c));
 
@@ -311,6 +316,7 @@ class AppServices {
     repo.profileId = settings.activeProfileId;
     _activeIsKids = profile.kids;
     _applyVisibility();
+    reminders.profileChanged();
   }
 
   /// Locked categories are hidden while the parental code was not typed,

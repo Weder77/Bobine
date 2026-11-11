@@ -90,6 +90,8 @@ void main() {
         },
       ),
       '/auth/v1/verify' => (200, _session('t1')),
+      // Already this password (Supabase refuses to set the same one).
+      '/auth/v1/user' => (422, {'error_code': 'same_password', 'msg': 'New password should be different'}),
       '/rest/v1/sync_items' => (200, <Object?>[]),
       '/rest/v1/rpc/sync_push' => (200, <Object?>[]),
       _ => (404, null),
@@ -104,6 +106,9 @@ void main() {
 
     await sync.confirm('123456');
     expect((fake.bodies['/auth/v1/verify'] as Map)['token'], '123456');
+    // An address signed up before by someone else: the password becomes this one.
+    expect(fake.requests, contains('PUT /auth/v1/user'));
+    expect(jsonEncode(fake.bodies['/auth/v1/user']), isNot(contains('mot de passe secret')));
     await sync.syncNow();
     expect(sync.status, SyncStatus.idle);
     expect(sync.signedIn, isTrue);

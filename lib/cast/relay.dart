@@ -35,6 +35,10 @@ class CastRelay {
             ..badCertificateCallback = (_, _, _) => true);
 
   final HttpClient _client;
+
+  /// One server per local address it is reached at (the one facing the
+  /// TV), not on every interface of the computer.
+  final Map<String, HttpServer> _servers = {};
   HttpServer? _server;
   final _routes = <String, _Route>{};
   final _random = Random.secure();
@@ -58,7 +62,8 @@ class CastRelay {
   /// [contentType] is the type announced to the TV; the main address is
   /// served with it.
   Future<String> publish(String target, {required InternetAddress host, String? userAgent, String? contentType}) async {
-    final server = _server ??= await _start();
+    final server = _servers[host.address] ??= await _start(host);
+    _server = server;
     final token = List.generate(16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
     final origin = 'http://${host.address}:${server.port}';
     final file = isLocalMedia(target);
@@ -75,8 +80,20 @@ class CastRelay {
   /// Forgets every published address (requests already running finish).
   void clear() => _routes.clear();
 
-  Future<HttpServer> _start() async {
-    final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+  /// The cast ended: nothing is served any more until the next one (the
+  /// servers stayed open until the app closed).
+  Future<void> stopServing() async {
+    _routes.clear();
+    final servers = _servers.values.toList();
+    _servers.clear();
+    _server = null;
+    for (final s in servers) {
+      await s.close();
+    }
+  }
+
+  Future<HttpServer> _start(InternetAddress host) async {
+    final server = await HttpServer.bind(host, 0);
     server.idleTimeout = const Duration(seconds: 30);
     server.listen((req) {
       _handle(req).catchError((Object e) {
@@ -92,7 +109,10 @@ class CastRelay {
 
   Future<void> close() async {
     _routes.clear();
-    await _server?.close(force: true);
+    for (final s in _servers.values) {
+      await s.close(force: true);
+    }
+    _servers.clear();
     _server = null;
     _client.close(force: true);
   }

@@ -115,8 +115,12 @@ class DlnaSession implements CastSession {
     } on CastException {
       // Some start by themselves and answer an error to Play: check below.
     }
-    if (start != null && start.inSeconds > 5 && !media.live) unawaited(_seekWhenPlaying(start));
+    if (start != null && start.inSeconds > 5 && !media.live) unawaited(_seekWhenPlaying(start, ++_loads));
   }
+
+  /// Media loaded so far: a resume waiting for the stream to start belongs
+  /// to one of them, and is dropped once another is loaded (or stopped).
+  int _loads = 0;
 
   /// " (listé par la télé)" or the formats of the same family it lists, for the log.
   String _listed(String mime) {
@@ -129,9 +133,11 @@ class DlnaSession implements CastSession {
   }
 
   /// Renderers only accept a seek once the stream has started.
-  Future<void> _seekWhenPlaying(Duration to) async {
+  Future<void> _seekWhenPlaying(Duration to, int load) async {
     for (var i = 0; i < 20; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 700));
+      // Applied to the next media, it jumped into it at the first one's place.
+      if (load != _loads) return;
       try {
         final state = await _transportState();
         if (state == 'PLAYING' || state == 'PAUSED_PLAYBACK') {
@@ -168,6 +174,7 @@ class DlnaSession implements CastSession {
   @override
   Future<void> stop() async {
     _stopping = true;
+    _loads++; // a resume still waiting is dropped
     await _av('Stop', const [('InstanceID', '0')]);
   }
 

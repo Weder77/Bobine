@@ -136,6 +136,7 @@ class _RootGate extends StatelessWidget {
           return ProfilePickerScreen(
             onChosen: () {
               s.profileChosen = true;
+              s.reminders.profileChanged();
               s.library.userChanged();
             },
           );

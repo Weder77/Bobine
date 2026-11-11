@@ -287,7 +287,17 @@ class SyncService extends ChangeNotifier {
   Future<void> confirm(String code) async {
     final email = pendingEmail, keys = _pendingKeys;
     if (email == null || keys == null) return;
-    _begin(await _api.verify(email, code), keys);
+    final session = await _api.verify(email, code);
+    // The address may have been signed up before, by someone else with a
+    // password of their own: the code proves the address, and the password
+    // becomes the one chosen here, or theirs would still open the account.
+    try {
+      await _api.setPassword(session, keys.authSecret);
+    } on SyncApiException catch (e) {
+      // The usual case: it already was this one.
+      if (e.code != 'same_password') rethrow;
+    }
+    _begin(session, keys);
   }
 
   Future<void> resendCode() async {
@@ -321,8 +331,11 @@ class SyncService extends ChangeNotifier {
     email = normalizeEmail(email);
     final session = await _api.verify(email, code, type: 'recovery');
     final keys = await SyncKeys.derive(email, password);
-    await _api.setPassword(session, keys.authSecret);
+    // Emptied first: if it fails, the old password still opens what the
+    // old password encrypted. The other way round, a failure left the
+    // account under the new password with data it cannot read.
     await _api.wipe(session);
+    await _api.setPassword(session, keys.authSecret);
     _repo.db.execute('DELETE FROM kv WHERE key = ?', [SyncEngine.cursorKey]);
     _begin(session, keys);
   }

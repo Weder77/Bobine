@@ -7,7 +7,7 @@ import '../core/secrets.dart';
 import '../core/text.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 10;
+const int kSchemaVersion = 11;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -80,6 +80,7 @@ void _migrate(Database db) {
     if (version < 8) _migrateV8(db);
     if (version < 9) _migrateV9(db);
     if (version < 10) _migrateV10(db);
+    if (version < 11) _migrateV11(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -415,6 +416,24 @@ void _migrateV10(Database db) {
     'CREATE TRIGGER sync_sources_upd AFTER UPDATE OF name, type, url, username, password, epg_url, user_agent, '
     'live_format, epg_offset, bad_cert_ok, uid ON sources '
     'WHEN NEW.uid IS NOT NULL AND $_syncLive BEGIN ${_syncLogSql('sources', 'NEW.uid')} END',
+  );
+}
+
+/// v11: the id of a deleted profile or source is given again to the next
+/// one: what was kept under it goes with it, however it is deleted (here,
+/// by the account, by a restore). A new profile got the last searches of
+/// the one deleted, a new source its guide.
+void _migrateV11(Database db) {
+  db.execute(
+    "CREATE TRIGGER profiles_forget AFTER DELETE ON profiles BEGIN "
+    "DELETE FROM kv WHERE key = 'search_recent_' || OLD.id; END",
+  );
+  db.execute(
+    'CREATE TRIGGER sources_forget AFTER DELETE ON sources BEGIN '
+    'DELETE FROM epg_programs WHERE source_id = OLD.id; '
+    'DELETE FROM epg_channels WHERE source_id = OLD.id; '
+    'DELETE FROM tmdb_cache WHERE source_id = OLD.id; '
+    "DELETE FROM kv WHERE key = 'live.cat.' || OLD.id; END",
   );
 }
 

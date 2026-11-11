@@ -660,6 +660,12 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     progress('Enregistrement', 0);
     db.execute('BEGIN IMMEDIATE');
     try {
+      // Deleted while its guide was read: nothing is written under its id,
+      // which the next source may get.
+      if (db.select('SELECT 1 FROM sources WHERE id = ?', [sourceId]).isEmpty) {
+        db.execute('ROLLBACK');
+        return 0;
+      }
       db.execute('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
       db.execute('DELETE FROM epg_channels WHERE source_id = ?', [sourceId]);
       db.execute(

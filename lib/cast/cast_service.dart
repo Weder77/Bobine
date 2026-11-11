@@ -343,7 +343,7 @@ class CastService extends ChangeNotifier {
     _error = null;
     _status = RemoteStatus();
     item.value = null;
-    _relay.clear();
+    unawaited(_relay.stopServing());
     notifyListeners();
     if (s == null) return;
     final closing = () async {
