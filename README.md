@@ -88,7 +88,7 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - **Replay** des chaînes qui le proposent (Xtream `tv_archive`, M3U `catchup`) : « Depuis le début » sur le direct, « Revoir » sur un programme passé du guide.
 - **Rappels** (« Me le rappeler ») et **enregistrements** (maintenant ou programmés depuis le guide) dans `Vidéos\Bobine`.
 - **Recherche dans le guide TV** : les programmes à venir et en cours apparaissent dans la recherche.
-- **Profils** (« Qui regarde ? ») avec favoris, reprises et rappels séparés, profil enfant.
+- **Profils** (« Qui regarde ? »), jusqu'à 10, avec favoris, reprises et rappels séparés, profil enfant. Chaque profil a son avatar : l'initiale sur une couleur, une des 6 images fournies (pop-corn, clap, chat, renard, robot, panda) ou une photo importée (JPEG, PNG, WebP, GIF, BMP), recadrée au centre et réduite pour suivre le profil dans la synchro et les sauvegardes.
 - **Contrôle parental** : code à 4 chiffres, catégories adultes verrouillées automatiquement.
 - **Ranger les catégories** (masquer, verrouiller, réordonner) et masquer des chaînes (clic droit).
 - **Fiches enrichies TMDB** (clé gratuite à saisir dans *Paramètres → Fiches TMDB*) : grandes images, résumé en français, distribution, bande-annonce.
@@ -287,13 +287,13 @@ lib/
 │   └── cast_service.dart    Session en cours, position, commandes, reprise sur l'ordinateur
 └── ui/              Accueil, Direct + guide, Films/Séries, fiches, recherche, paramètres
 test/                Tests (analyseurs, import complet avec faux serveur, lecteur, images, synchro)
-tool/                Faux serveur Xtream + générateur de vidéos de test
+tool/                Faux serveur Xtream, générateur de vidéos de test, dessin de l'icône et des avatars
 supabase/migrations/ Table de synchro, règles d'accès et fonctions du serveur
 ```
 
 ### Synchronisation : comment ça marche
 
-Chaque changement des données utilisateur est noté dans la table `sync_log` par des triggers SQLite (base v5), suppressions comprises ; rien d'autre dans le code n'a à s'en soucier. Une synchro reçoit d'abord ce qui a changé sur le compte depuis la dernière fois (`rev` croissant), l'applique là où c'est plus récent que le changement local, puis envoie les changements locaux par `sync_push`, qui ne remplace une version que par une plus récente. Les sources et profils ont un `uid` commun à tous les appareils ; le profil de départ (« Moi ») est le même partout.
+Chaque changement des données utilisateur est noté dans la table `sync_log` par des triggers SQLite (depuis la base v5), suppressions comprises ; rien d'autre dans le code n'a à s'en soucier. Une synchro reçoit d'abord ce qui a changé sur le compte depuis la dernière fois (`rev` croissant), l'applique là où c'est plus récent que le changement local, puis envoie les changements locaux par `sync_push`, qui ne remplace une version que par une plus récente. Les sources et profils ont un `uid` commun à tous les appareils ; le profil de départ (« Moi ») est le même partout. L'avatar d'un profil (base v6) voyage avec lui : une photo est gardée sous 8 Ko pour que le profil tienne dans un élément du compte (16 Ko une fois chiffré). Une version plus ancienne, qui ne connaît pas les avatars, peut modifier le profil sans lui retirer son image.
 
 ### Tester sans abonnement
 

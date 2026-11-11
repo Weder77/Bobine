@@ -18,6 +18,10 @@ class RestoreReport {
   /// without credentials): their favourites and progress were skipped.
   final List<String> skippedSources = [];
 
+  /// Profiles of the file not created: there were already [Profile.max]
+  /// here. Their favourites and progress were skipped.
+  final List<String> skippedProfiles = [];
+
   @override
   String toString() => [
     if (sourcesCreated > 0) '$sourcesCreated source(s) ajoutée(s)',
@@ -28,6 +32,7 @@ class RestoreReport {
     if (favorites == 0 && progress == 0 && sourcesCreated == 0 && profilesCreated == 0)
       'rien de nouveau, tout était déjà là',
     if (skippedSources.isNotEmpty) 'ignoré : ${skippedSources.join(', ')} (source absente)',
+    if (skippedProfiles.isNotEmpty) 'ignoré : ${skippedProfiles.join(', ')} (${Profile.max} profils au maximum)',
   ].join(' · ');
 }
 
@@ -85,7 +90,7 @@ class BackupService {
             if (credentials) ...{'url': s.url, 'username': s.username, 'password': s.password, 'epgUrl': s.epgUrl},
           },
       ],
-      'profiles': rows('SELECT id, name, color, kids FROM profiles ORDER BY id'),
+      'profiles': rows('SELECT id, name, color, kids, avatar FROM profiles ORDER BY id'),
       'favorites': rows('SELECT * FROM favorites'),
       'progress': rows('SELECT * FROM progress'),
       'recent_channels': rows('SELECT * FROM recent_channels'),
@@ -159,27 +164,34 @@ class BackupService {
       }
     }
 
-    // Profiles: matched by name.
+    // Profiles: matched by name, created while there is room for them.
     final profiles = <int, int>{};
+    final skippedProfiles = <Object?>{};
     final localProfiles = _repo.profiles();
     for (final b in list('profiles')) {
       final name = '${b['name']}';
       final match = localProfiles.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
       if (match != null) {
         profiles[b['id'] as int] = match.id;
-      } else {
+      } else if (_repo.canAddProfile) {
         profiles[b['id'] as int] = _repo.createProfile(
           name: name,
           color: (b['color'] as int?) ?? 0xFFFFB547,
           kids: (b['kids'] as int?) == 1,
+          avatar: b['avatar'] is String ? b['avatar'] as String : null,
         );
         report.profilesCreated++;
+      } else {
+        skippedProfiles.add(b['id']);
+        report.skippedProfiles.add(name);
       }
     }
 
     final db = _repo.db;
     int? src(Map<String, Object?> r) => sources[r['source_id']];
-    int prof(Map<String, Object?> r) => profiles[r['profile_id']] ?? 1;
+    // Null for the rows of a profile left out.
+    int? prof(Map<String, Object?> r) =>
+        skippedProfiles.contains(r['profile_id']) ? null : profiles[r['profile_id']] ?? 1;
     try {
       db.execute('BEGIN IMMEDIATE');
     } catch (_) {
@@ -187,17 +199,17 @@ class BackupService {
     }
     try {
       for (final r in list('favorites')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT OR IGNORE INTO favorites (profile_id, source_id, kind, ext_id, added_at) VALUES (?, ?, ?, ?, ?)',
-          [prof(r), s, r['kind'], r['ext_id'], r['added_at']],
+          [p, s, r['kind'], r['ext_id'], r['added_at']],
         );
         report.favorites += db.updatedRows;
       }
       for (final r in list('progress')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT INTO progress (profile_id, source_id, kind, ext_id, position_ms, duration_ms, finished, updated_at, '
           'title, subtitle, image, series_ext) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
@@ -205,7 +217,7 @@ class BackupService {
           'duration_ms = excluded.duration_ms, finished = excluded.finished, updated_at = excluded.updated_at '
           'WHERE excluded.updated_at > progress.updated_at',
           [
-            prof(r),
+            p,
             s,
             r['kind'],
             r['ext_id'],
@@ -222,12 +234,12 @@ class BackupService {
         report.progress += db.updatedRows;
       }
       for (final r in list('recent_channels')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT INTO recent_channels (profile_id, source_id, ext_id, watched_at) VALUES (?, ?, ?, ?) '
           'ON CONFLICT (profile_id, source_id, ext_id) DO UPDATE SET watched_at = max(watched_at, excluded.watched_at)',
-          [prof(r), s, r['ext_id'], r['watched_at']],
+          [p, s, r['ext_id'], r['watched_at']],
         );
         report.other++;
       }
@@ -251,12 +263,12 @@ class BackupService {
         report.other++;
       }
       for (final r in list('reminders')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT OR IGNORE INTO reminders (profile_id, source_id, channel_ext, channel_name, title, start, stop) '
           'VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [prof(r), s, r['channel_ext'], r['channel_name'], r['title'], r['start'], r['stop']],
+          [p, s, r['channel_ext'], r['channel_name'], r['title'], r['start'], r['stop']],
         );
         report.other++;
       }

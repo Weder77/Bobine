@@ -321,7 +321,7 @@ class SyncEngine {
   }
 
   Map<String, Object?> _profileRecord(String uid) {
-    final rows = _db.select('SELECT name, color, kids FROM profiles WHERE uid = ?', [uid]);
+    final rows = _db.select('SELECT name, color, kids, avatar FROM profiles WHERE uid = ?', [uid]);
     return {
       't': 'profiles',
       'k': [uid],
@@ -592,11 +592,18 @@ class SyncEngine {
       return;
     }
     final values = [d['name'] ?? 'Profil', d['color'] ?? 0xFFFFB547, d['kids'] ?? 0];
+    // The picture is sent by the versions that have one. An older version
+    // leaves it out of what it sends: the picture held here stays.
+    final avatar = d.containsKey('avatar') ? [d['avatar'] is String ? d['avatar'] : null] : const [];
     if (id != null) {
-      _db.execute('UPDATE profiles SET name = ?, color = ?, kids = ? WHERE id = ?', [...values, id]);
+      _db.execute(
+        'UPDATE profiles SET name = ?, color = ?, kids = ?${avatar.isEmpty ? '' : ', avatar = ?'} WHERE id = ?',
+        [...values, ...avatar, id],
+      );
     } else {
-      _db.execute('INSERT INTO profiles (name, color, kids, created_at, uid) VALUES (?, ?, ?, ?, ?)', [
+      _db.execute('INSERT INTO profiles (name, color, kids, avatar, created_at, uid) VALUES (?, ?, ?, ?, ?, ?)', [
         ...values,
+        avatar.isEmpty ? null : avatar.first,
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
         uid,
       ]);
