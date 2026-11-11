@@ -30,8 +30,18 @@ class _GuideScreenState extends State<GuideScreen> {
   late final AppServices _s;
   final _grid = EpgGridController();
 
-  /// Selected programme: row and programme.
-  (int, Program)? _sel;
+  /// Selected programme: its channel (the id of the stream that plays) and
+  /// the programme. Not its row: another group, an import or a favourite
+  /// removed puts another channel there.
+  (String, Program)? _sel;
+
+  /// Row of the selected channel in the list shown, or null.
+  int? get _selRow {
+    final sel = _sel;
+    if (sel == null) return null;
+    final i = _tiles.indexWhere((t) => t.channel.extId == sel.$1);
+    return i < 0 ? null : i;
+  }
 
   @override
   void initState() {
@@ -66,9 +76,9 @@ class _GuideScreenState extends State<GuideScreen> {
 
   /// What plays now on the first channel that has a guide.
   void _defaultSelection() {
-    final sel = _sel;
-    if (sel != null && sel.$1 < _tiles.length) {
-      final t = _tiles[sel.$1];
+    final sel = _sel, row = _selRow;
+    if (sel != null && row != null) {
+      final t = _tiles[row];
       if (t.variants.any((c) => _s.epg.programs(c, sel.$2.start, sel.$2.stop).any((p) => p.start == sel.$2.start))) {
         return;
       }
@@ -77,7 +87,7 @@ class _GuideScreenState extends State<GuideScreen> {
     for (var i = 0; i < math.min(_tiles.length, 40); i++) {
       final p = _s.epg.now(_tiles[i].channel);
       if (p != null) {
-        _sel = (i, p);
+        _sel = (_tiles[i].channel.extId, p);
         return;
       }
     }
@@ -95,7 +105,7 @@ class _GuideScreenState extends State<GuideScreen> {
       i = _indexOf(channel);
     }
     if (i < 0) return;
-    setState(() => _sel = (i, program));
+    setState(() => _sel = (_tiles[i].channel.extId, program));
     WidgetsBinding.instance.addPostFrameCallback((_) => _grid.reveal(i, program));
   }
 
@@ -103,17 +113,19 @@ class _GuideScreenState extends State<GuideScreen> {
 
   List<Channel> get _playList => widget.catalog.playList;
 
-  void _play(int i) => Launch.channel(context, _tiles[i].channel, _playList);
+  void _play(int i) => _playTile(_tiles[i]);
+
+  void _playTile(ChannelTile t) => Launch.channel(context, t.channel, _playList);
 
   @override
   Widget build(BuildContext context) {
     final cat = widget.catalog;
     if (cat.source == null) return const SizedBox.shrink();
-    final sel = _sel;
+    final sel = _sel, row = _selRow;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (sel != null && sel.$1 < _tiles.length) _detail(_tiles[sel.$1], sel.$2) else const SizedBox(height: 40),
+        if (sel != null && row != null) _detail(_tiles[row], sel.$2) else const SizedBox(height: 40),
         _toolbar(cat),
         Expanded(
           child: _tiles.isEmpty
@@ -131,11 +143,9 @@ class _GuideScreenState extends State<GuideScreen> {
                   controller: _grid,
                   channels: _tiles,
                   epgVersion: _s.library.epg,
-                  selected: sel == null || sel.$1 >= _tiles.length
-                      ? null
-                      : (_tiles[sel.$1].channel.extId, sel.$2.start),
+                  selected: sel == null || row == null ? null : (sel.$1, sel.$2.start),
                   onPlay: _play,
-                  onSelect: (i, p) => setState(() => _sel = (i, p)),
+                  onSelect: (i, p) => setState(() => _sel = (_tiles[i].channel.extId, p)),
                   onMenu: (i, p, at) => showProgramActions(context, _tiles[i].channel, p, channels: _playList),
                 ),
         ),
@@ -170,7 +180,7 @@ class _GuideScreenState extends State<GuideScreen> {
 
     final buttons = <Widget>[
       if (live)
-        _GuideButton.primary(label: 'Regarder', icon: Icons.play_arrow_rounded, onTap: () => _play(_sel!.$1))
+        _GuideButton.primary(label: 'Regarder', icon: Icons.play_arrow_rounded, onTap: () => _playTile(t))
       else if (replay)
         _GuideButton.primary(label: 'Revoir', icon: Icons.replay_rounded, onTap: () => Launch.replay(context, c, p)),
       if (future)
@@ -186,7 +196,7 @@ class _GuideScreenState extends State<GuideScreen> {
                 onTap: () => _toggleReminder(c, p),
               ),
       if (live && replay) _GuideButton.secondary(label: 'Depuis le début', onTap: () => Launch.replay(context, c, p)),
-      if (!live) _GuideButton.secondary(label: 'Voir la chaîne', onTap: () => _play(_sel!.$1)),
+      if (!live) _GuideButton.secondary(label: 'Voir la chaîne', onTap: () => _playTile(t)),
       RoundOutlineButton(
         icon: Icons.more_horiz_rounded,
         tooltip: 'Plus d’actions',
