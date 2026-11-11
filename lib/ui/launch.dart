@@ -101,7 +101,11 @@ class Launch {
 
   /// Plays a finished recording.
   static Future<void> recording(BuildContext context, Recording r) async {
-    if (_locked(context, r.sourceId, ContentKind.live, r.channelExt)) return;
+    if (AppScope.of(context).repo.isRecordingLocked(r.sourceId, r.channelExt)) {
+      ScaffoldMessenger.maybeOf(context)
+          ?.showSnackBar(const SnackBar(content: Text('Contenu verrouillé par le contrôle parental.')));
+      return;
+    }
     if (r.path == null || !File(r.path!).existsSync()) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fichier introuvable.')));
       return;

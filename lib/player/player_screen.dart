@@ -531,14 +531,25 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return _s.repo.channelByExt(_item.sourceId, _item.extId);
   }
 
+  bool _channelLocked(Channel c) => _s.repo.isLocked(c.sourceId, ContentKind.live, c.extId);
+
+  /// Next or previous channel, over those locked since the list was made
+  /// (the code typed, then locked again while the mini-player kept it).
   void _zap(int delta) {
     if (_channels.isEmpty || _source == null) return;
-    _playChannel((_chIndex + delta) % _channels.length);
+    for (var step = 1; step <= _channels.length; step++) {
+      final i = (_chIndex + delta * step) % _channels.length;
+      if (!_channelLocked(_channels[i])) return _playChannel(i);
+    }
   }
 
   void _playChannel(int index) {
     if (_source == null || index < 0 || index >= _channels.length) return;
     final c = _channels[index];
+    if (_channelLocked(c)) {
+      _flash('Chaîne protégée par le contrôle parental');
+      return;
+    }
     setState(() {
       _chIndex = index;
       _item = channelItem(_source!, c);
@@ -628,6 +639,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _playEpisode(Episode e) {
     if (_source == null) return;
+    if (_s.repo.isLocked(_item.sourceId, ContentKind.episode, e.extId, seriesExt: e.seriesExt)) {
+      _flash('Série protégée par le contrôle parental');
+      return;
+    }
     _s.tracker.flush();
     final p = _s.repo.progress(_item.sourceId, ContentKind.episode, e.extId);
     // Another episode: the preview of the previous one is given back.

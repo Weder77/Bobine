@@ -20,8 +20,8 @@ Future<bool> confirmParent(BuildContext context, {required String title}) async 
   if (!parentalCodeNeeded(s)) return true;
   final pin = await askPin(context, title: title, message: 'Tape le code parental.');
   if (pin == null || !context.mounted) return false;
-  if (pin == s.settings.parentalPin) return true;
-  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+  if (s.checkParentalPin(pin)) return true;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.parentalRefusal)));
   return false;
 }
 

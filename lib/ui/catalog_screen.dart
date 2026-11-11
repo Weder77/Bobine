@@ -504,7 +504,7 @@ class _LockedState extends State<_Locked> {
           Text('CATÉGORIE VERROUILLÉE', style: posterStyle(36, height: 1).copyWith(letterSpacing: 36 * 0.04)),
           const SizedBox(height: 18),
           Text(
-            _wrong ? 'Code incorrect. Réessaie.' : "Saisis ton code parental à 4 chiffres pour l'afficher.",
+            _wrong ? AppScope.of(context).parentalRefusal : "Saisis ton code parental à 4 chiffres pour l'afficher.",
             style: TextStyle(fontSize: 16, height: 1.5, color: _wrong ? AppColors.accent : AppColors.faint),
           ),
           const SizedBox(height: 18),

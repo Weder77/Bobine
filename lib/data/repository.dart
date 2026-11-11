@@ -86,6 +86,18 @@ class Repository {
     ).isNotEmpty;
   }
 
+  /// [isLocked] for a recording. A channel that is no longer in the list
+  /// (its address, so its id, changed at the provider) cannot tell whether
+  /// it was locked: its recordings stay out too, until the code is typed.
+  bool isRecordingLocked(int sourceId, String channelExt) {
+    if (!hideLocked) return false;
+    final known = db.select('SELECT 1 FROM channels WHERE source_id = ? AND ext_id = ? LIMIT 1', [
+      sourceId,
+      channelExt,
+    ]).isNotEmpty;
+    return !known || isLocked(sourceId, ContentKind.live, channelExt);
+  }
+
   String? _seriesOfEpisode(int sourceId, String extId) {
     final rows = db.select('SELECT series_ext FROM episodes WHERE source_id = ? AND ext_id = ? LIMIT 1', [
       sourceId,
@@ -787,7 +799,20 @@ class Repository {
     () => db.execute('UPDATE category_prefs SET position = NULL WHERE source_id = ? AND kind = ?', [sourceId, kind.db]),
   );
 
-  static final _adult = RegExp(r'adult|xxx|porn|\b18\s*\+|\+\s*18\b|sexy|érotique|erotic|hot\b', caseSensitive: false);
+  /// Names of adult-only categories, read without accents nor case.
+  static final _adult = RegExp(
+    r'\b(?:adult[eo]?s?|xxx+|porno?s?|porn\w*|sexe?s?|sexy|erotique?s?|erotic\w*|eroti[ck]a|charme|hot)\b'
+    r'|\b18\s*\+|\+\s*18\b|(?:^|[\s(\[|])-\s*18\b|\b(?:for|pour)\s+adult',
+  );
+
+  /// Names that look adult but are not ("Adult Swim", young adult books).
+  static final _notAdult = RegExp(r'adult\s*swim|young\s+adults?|jeunes?\s+adultes?');
+
+  @visibleForTesting
+  static bool looksAdult(String name) {
+    final n = searchKey(name);
+    return _adult.hasMatch(n) && !_notAdult.hasMatch(n);
+  }
 
   /// Locks the categories that look adult-only, unless the user already
   /// decided for them. Returns how many were locked.
@@ -800,7 +825,7 @@ class Repository {
       [sourceId],
     );
     for (final r in rows) {
-      if (!_adult.hasMatch(r['name'] as String)) continue;
+      if (!looksAdult(r['name'] as String)) continue;
       write(
         () =>
             _upsertCategoryPref(sourceId, ContentKind.fromDb(r['kind'] as String), r['ext_id'] as String, 'locked', 1),

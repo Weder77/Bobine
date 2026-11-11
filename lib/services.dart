@@ -17,6 +17,7 @@ import 'data/models.dart';
 import 'data/repository.dart';
 import 'data/settings.dart';
 import 'features/backup.dart';
+import 'features/parental.dart';
 import 'features/recording_service.dart';
 import 'features/reminder_service.dart';
 import 'features/tmdb.dart';
@@ -247,16 +248,35 @@ class AppServices {
 
   Profile get profile => repo.profile(settings.activeProfileId) ?? repo.profiles().first;
 
+  /// The kids profile in use was deleted (from another device): leaving it
+  /// still asks the parental code, from "Qui regarde ?".
+  bool kidsProfileLost = false;
+  bool _activeIsKids = false;
+
   void _applyProfile() {
-    if (repo.profile(settings.activeProfileId) == null) settings.activeProfileId = repo.profiles().first.id;
+    if (repo.profile(settings.activeProfileId) == null) {
+      // Deleted (by the account): what played was this profile's, and the
+      // profile that takes over is chosen again.
+      if (profileChosen) {
+        unawaited(player.stop());
+        unawaited(pip.close());
+        parentalUnlocked = false;
+        kidsProfileLost = _activeIsKids;
+        profileChosen = false;
+      }
+      settings.update((s) => s.activeProfileId = repo.profiles().first.id);
+    }
     repo.profileId = settings.activeProfileId;
+    _activeIsKids = profile.kids;
     _applyVisibility();
   }
 
   /// Locked categories are hidden while the parental code was not typed,
   /// and always in a kids profile.
   void _applyVisibility() {
-    repo.hideLocked = settings.parentalEnabled && (!parentalUnlocked || profile.kids);
+    // A kids profile hides them even without a code (one made before the
+    // editor asked for it).
+    repo.hideLocked = profile.kids || (settings.parentalEnabled && !parentalUnlocked);
   }
 
   void switchProfile(int id) {
@@ -269,15 +289,25 @@ class AppServices {
     unawaited(pip.close());
     settings.update((s) => s.activeProfileId = id);
     parentalUnlocked = false;
+    kidsProfileLost = false;
     _applyProfile();
     epg.clear();
     library.contentChanged();
     library.userChanged();
   }
 
+  /// Checks the parental code, with a wait after too many wrong ones.
+  late final parental = ParentalGuard(repo, settings);
+
+  /// Whether [pin] is the parental code (see [ParentalGuard]).
+  bool checkParentalPin(String pin) => parental.check(pin);
+
+  /// What to tell when a code was refused.
+  String get parentalRefusal => parental.refusal;
+
   /// Checks the parental code and shows locked categories until [lockParental].
   bool unlockParental(String pin) {
-    if (!settings.parentalEnabled || pin != settings.parentalPin) return false;
+    if (!settings.parentalEnabled || !checkParentalPin(pin)) return false;
     parentalUnlocked = true;
     _applyVisibility();
     library.contentChanged();
@@ -294,13 +324,19 @@ class AppServices {
   /// Stops what plays (here or on the TV) when it is locked again.
   void _stopLockedPlayback() {
     final item = cast.item.value ?? player.current.value;
-    if (item != null && repo.isLocked(item.sourceId, item.kind, item.extId, seriesExt: item.seriesExt)) {
-      unawaited(pip.close());
-    }
+    if (item == null) return;
+    final rec = item.extId.startsWith('rec:')
+        ? repo.recordings().where((r) => 'rec:${r.id}' == item.extId).firstOrNull
+        : null;
+    final locked = rec != null
+        ? repo.isRecordingLocked(rec.sourceId, rec.channelExt)
+        : repo.isLocked(item.sourceId, item.kind, item.extId, seriesExt: item.seriesExt);
+    if (locked) unawaited(pip.close());
   }
 
   /// Sets (or with null removes) the parental code.
   void setParentalPin(String? pin) {
+    settings.forgetUnreadablePin();
     settings.update((s) => s.parentalPin = pin);
     parentalUnlocked = false;
     for (final src in repo.sources()) {
