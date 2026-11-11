@@ -207,9 +207,11 @@ class AboutSection extends StatelessWidget {
           children: [
             SettingsOption(
               title: 'Bobine $kAppVersion',
-              subtitle:
-                  'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Toutes les données (sources, favoris, '
-                  'progression) restent sur cet ordinateur.',
+              subtitle: s.sync.signedIn
+                  ? 'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Les données (sources, favoris, '
+                        'progression) sont sur cet ordinateur et, chiffrées, sur ton compte Bobine.'
+                  : 'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Toutes les données (sources, favoris, '
+                        'progression) restent sur cet ordinateur.',
               child: OutlinedButton(
                 onPressed: busy ? null : () => u.check(),
                 child: const Text('Rechercher une mise à jour'),
@@ -236,6 +238,8 @@ class AboutSection extends StatelessWidget {
                     if (u.stage == UpdateStage.downloading) ...[
                       const SizedBox(height: 10),
                       SizedBox(width: 360, child: LinearProgressIndicator(value: u.progress)),
+                      const SizedBox(height: 8),
+                      TextButton(onPressed: u.cancelDownload, child: const Text('Annuler')),
                     ],
                     if (info != null && info.notes != null && info.notes!.isNotEmpty) ...[
                       const SizedBox(height: 10),

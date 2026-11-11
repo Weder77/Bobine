@@ -509,4 +509,12 @@ void main() {
     final db = openMemoryDatabase();
     expect(Repository(db).sources(), isEmpty);
   });
+
+  test('data made by a newer Bobine is not opened by this one', () {
+    final path = '${tmp.path}/newer.db';
+    openAppDatabase(path)
+      ..execute('PRAGMA user_version = ${kSchemaVersion + 1}')
+      ..close();
+    expect(() => openAppDatabase(path), throwsA(isA<NewerDatabaseException>()));
+  });
 }

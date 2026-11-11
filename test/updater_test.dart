@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:bobine/data/db.dart';
 import 'package:bobine/data/repository.dart';
@@ -127,5 +128,22 @@ void main() {
     repo.kvSet('update_found', jsonEncode(release('v0.1.0')));
     final old = UpdateService(repo, settings)..restoreFound();
     expect(old.available, isNull);
+  });
+
+  test('a failed check keeps the version found, and is tried again soon', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((r) async {
+      r.response.statusCode = 503;
+      await r.response.close();
+    });
+    final repo = Repository(openMemoryDatabase());
+    final settings = AppSettings(repo);
+    repo.kvSet('update_found', jsonEncode(release('v99.0.0')));
+    final u = UpdateService(repo, settings, apiUrl: 'http://127.0.0.1:${server.port}/latest')..restoreFound();
+    expect(await u.check(quiet: true), isNotNull);
+    expect(u.available?.version, '99.0.0');
+    expect(u.stage, UpdateStage.available);
+    expect(repo.kvGet('update_checked_at'), isNull);
   });
 }

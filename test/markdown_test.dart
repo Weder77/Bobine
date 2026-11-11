@@ -59,4 +59,10 @@ void main() {
     expect(find.textContaining('**'), findsNothing);
     expect(find.textContaining("What's Changed"), findsOneWidget);
   });
+
+  test('a huge list number is plain text, not a failure', () {
+    expect(() => parseMarkdown('12345678901234567890. trop grand\n2. normal'), returnsNormally);
+    final b = parseMarkdown('12345678901234567890. trop grand');
+    expect(b.single.type, isNot(MdBlockType.numbered));
+  });
 }

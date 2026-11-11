@@ -58,8 +58,20 @@ void _configure(Database db, {required int busyTimeoutMs}) {
   db.execute('PRAGMA busy_timeout = $busyTimeoutMs');
 }
 
+/// The database was made by a newer Bobine: this one does not know its
+/// tables, and writing to it could break it for the newer one.
+class NewerDatabaseException implements Exception {
+  @override
+  String toString() =>
+      "Les données ont été créées par une version plus récente de Bobine : installe la dernière version.";
+}
+
 void _migrate(Database db) {
   final version = db.select('PRAGMA user_version').first.columnAt(0) as int;
+  if (version > kSchemaVersion) {
+    db.close();
+    throw NewerDatabaseException();
+  }
   if (version >= kSchemaVersion) return;
   db.execute('BEGIN');
   try {

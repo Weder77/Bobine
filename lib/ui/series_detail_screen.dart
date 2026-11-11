@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../core/format.dart';
@@ -32,6 +34,11 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
   bool _loading = false;
   String? _error;
   int? _season;
+
+  /// Episodes of the season built so far: a season of hundreds (a daily
+  /// show) built them all at once.
+  int _shown = _page;
+  static const _page = 30;
 
   Series get _sr => widget.series;
 
@@ -132,6 +139,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     final backdrop = t?.backdrop ?? d?.backdrop ?? _sr.backdrop;
     final trailer = trailerUrl(t?.trailer);
 
+    final season = _episodes.where((e) => e.season == _season).toList();
+    // The episode to resume is always shown, even far in the season.
+    final currentAt = target == null ? -1 : season.indexWhere((e) => e.extId == target.$1.extId);
     final category = _s.repo.categoryName(_sr.categoryId);
     final lastProgress = target != null && target.$2 ? _progress[target.$1.extId] : null;
     return DetailLayout(
@@ -196,13 +206,23 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (final e in _episodes.where((e) => e.season == _season))
+                      for (final e in season.take(math.max(_shown, currentAt + 1)))
                         _EpisodeTile(
                           episode: e,
                           progress: _progress[e.extId],
                           current: target != null && target.$1.extId == e.extId,
                           fallbackImage: backdrop ?? _sr.poster,
                           onTap: () => Launch.episode(context, _sr, e, _episodes),
+                        ),
+                      if (season.length > math.max(_shown, currentAt + 1))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Center(
+                            child: OutlinedButton(
+                              onPressed: () => setState(() => _shown = math.max(_shown, currentAt + 1) + _page),
+                              child: Text('Afficher la suite (${season.length - math.max(_shown, currentAt + 1)})'),
+                            ),
+                          ),
                         ),
                     ],
                   ),
@@ -224,7 +244,10 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     return PopupMenuButton<int>(
       tooltip: 'Choisir la saison',
       position: PopupMenuPosition.under,
-      onSelected: (s) => setState(() => _season = s),
+      onSelected: (s) => setState(() {
+        _season = s;
+        _shown = _page;
+      }),
       itemBuilder: (_) => [
         for (final s in seasons)
           PopupMenuItem(

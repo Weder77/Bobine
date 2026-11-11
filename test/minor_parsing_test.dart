@@ -50,4 +50,13 @@ void main() {
     expect(parseXmltvTime('202401312030+0100'), withSeconds);
     expect(parseXmltvTime('20240131203000+0100'), withSeconds);
   });
+
+  test('days are counted by date, whatever the clock change', () {
+    // 30 March 2025: 23 hours in Europe.
+    expect(daysBetween(DateTime(2025, 3, 30, 0, 30), DateTime(2025, 3, 31, 0, 10)), 1);
+    expect(daysBetween(DateTime(2025, 10, 26, 23, 0), DateTime(2025, 10, 27, 0, 1)), 1);
+    expect(daysBetween(DateTime(2025, 1, 2), DateTime(2025, 1, 1)), -1);
+    expect(formatSpan(const Duration(minutes: -30)), '-30 min');
+    expect(formatSpan(const Duration(minutes: 90)), '1 h 30');
+  });
 }

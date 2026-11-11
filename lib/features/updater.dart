@@ -112,7 +112,6 @@ class UpdateService extends ChangeNotifier {
         ..set(HttpHeaders.userAgentHeader, 'Bobine/$kAppVersion');
       final res = await req.close().timeout(const Duration(seconds: 15));
       final body = await res.transform(utf8.decoder).join();
-      _repo.kvSet('update_checked_at', '${DateTime.now().millisecondsSinceEpoch ~/ 1000}');
       if (res.statusCode == 404) {
         throw const _UpdateError(
           'Aucune version publiée trouvée. Si le dépôt GitHub est privé, '
@@ -121,6 +120,9 @@ class UpdateService extends ChangeNotifier {
       }
       if (res.statusCode >= 400) throw _UpdateError('GitHub a répondu ${res.statusCode}.');
       final info = parseRelease((jsonDecode(body) as Map).cast<String, Object?>());
+      // Noted as checked only once GitHub answered: an error (rate limit,
+      // no network) put off the next check by 20 hours.
+      _repo.kvSet('update_checked_at', '${DateTime.now().millisecondsSinceEpoch ~/ 1000}');
       _repo.kvSet('update_found', info == null ? '' : body);
       final skipped = _repo.kvGet('update_skip');
       if (info == null || (quiet && skipped == info.version)) {
@@ -132,13 +134,14 @@ class UpdateService extends ChangeNotifier {
       _set(UpdateStage.available);
       return info;
     } catch (e) {
-      available = null;
+      // The version found before stays offered: a failed check said
+      // nothing about it.
       error = e is _UpdateError
           ? e.message
           : (e is TimeoutException ? 'GitHub ne répond pas.' : 'Vérification impossible : $e');
       debugPrint('Mise à jour : $error');
-      _set(quiet ? UpdateStage.idle : UpdateStage.error);
-      return null;
+      _set(quiet ? (available != null ? UpdateStage.available : UpdateStage.idle) : UpdateStage.error);
+      return available;
     } finally {
       client.close(force: true);
     }
@@ -237,12 +240,19 @@ class UpdateService extends ChangeNotifier {
       final res = await req.close();
       if (res.statusCode >= 400) throw _UpdateError('Téléchargement refusé (${res.statusCode}).');
       final total = res.contentLength > 0 ? res.contentLength : (info.size ?? 0);
+      _cancelled = false;
       final sink = file.openWrite();
       final hashOut = _DigestSink();
       final hasher = sha256.startChunkedConversion(hashOut);
       var received = 0;
       var lastNotify = 0;
-      await for (final chunk in res) {
+      // A server that stops sending, or the user who gives up: it ends.
+      await for (final chunk in res.timeout(const Duration(seconds: 60))) {
+        if (_cancelled) {
+          await sink.close();
+          file.deleteSync();
+          throw const _UpdateError('Téléchargement annulé.');
+        }
         sink.add(chunk);
         hasher.add(chunk);
         received += chunk.length;
@@ -272,7 +282,11 @@ class UpdateService extends ChangeNotifier {
       progress = 1;
       _set(UpdateStage.ready);
     } catch (e) {
-      error = e is _UpdateError ? e.message : 'Téléchargement impossible : $e';
+      error = e is _UpdateError
+          ? e.message
+          : (e is TimeoutException
+                ? 'Le téléchargement ne progresse plus : réessaie.'
+                : 'Téléchargement impossible : $e');
       _set(UpdateStage.error);
     } finally {
       client.close(force: true);
@@ -298,17 +312,31 @@ class UpdateService extends ChangeNotifier {
   }
 
   /// Runs the installer silently (it closes Bobine and starts it again).
+  bool _cancelled = false;
+
+  /// Stops the download in progress.
+  void cancelDownload() {
+    if (stage == UpdateStage.downloading) _cancelled = true;
+  }
+
   Future<void> installAndRestart({Future<void> Function()? beforeExit}) async {
     final path = _installer;
     if (path == null || !Platform.isWindows) return;
+    try {
+      await Process.start(path, const [
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART',
+        '/CLOSEAPPLICATIONS',
+        '/relaunch=1',
+      ], mode: ProcessStartMode.detached);
+    } catch (e) {
+      // Blocked (an antivirus, a file removed): said, the app stays open.
+      error = "L'installateur n'a pas pu être lancé : $e";
+      _set(UpdateStage.error);
+      return;
+    }
     await beforeExit?.call();
-    await Process.start(path, const [
-      '/VERYSILENT',
-      '/SUPPRESSMSGBOXES',
-      '/NORESTART',
-      '/CLOSEAPPLICATIONS',
-      '/relaunch=1',
-    ], mode: ProcessStartMode.detached);
     exit(0);
   }
 }

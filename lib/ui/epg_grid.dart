@@ -177,13 +177,7 @@ class _EpgGridState extends State<EpgGrid> {
   DateTime get _anchor => _origin.add(Duration(minutes: (_offset.value + 160 / _px).round()));
 
   void _updateDay() {
-    final today = DateTime.now();
-    final v = _anchor;
-    widget.controller?.day.value = DateTime(
-      v.year,
-      v.month,
-      v.day,
-    ).difference(DateTime(today.year, today.month, today.day)).inDays;
+    widget.controller?.day.value = daysBetween(DateTime.now(), _anchor);
   }
 
   List<Program> _programs(Channel c) => _cache.putIfAbsent(
