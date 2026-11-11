@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../core/version.dart';
-import '../data/import/xmltv_parser.dart' show decodeEntities;
 import 'cast_device.dart';
+import 'cast_xml.dart';
 import 'mdns.dart' show setMulticastInterface;
 
 /// Finds DLNA / UPnP media renderers (smart TVs, Kodi, boxes) with SSDP.
@@ -17,6 +17,9 @@ class DlnaBrowser {
   static final group = InternetAddress('239.255.255.250');
   static const ssdpPort = 1900;
   static const targets = ['urn:schemas-upnp-org:device:MediaRenderer:1', 'urn:schemas-upnp-org:service:AVTransport:1'];
+
+  /// Descriptions fetched at most per search.
+  static const maxDescriptions = 32;
 
   /// Asks the network for [timeout] and reports each renderer once.
   Future<void> browse({required Duration timeout, required void Function(CastDevice) onDevice}) async {
@@ -38,9 +41,12 @@ class DlnaBrowser {
     final seen = <String>{};
     final pending = <Future<void>>[];
     final deadline = DateTime.now().add(timeout);
-    void onMessage(String text) {
+    void onMessage(String text, InternetAddress from) {
       final location = ssdpLocation(text);
-      if (location == null || !seen.add(location.toString())) return;
+      // The description is fetched from the device that answered, and a
+      // few of them at most: a device of the network can name any address.
+      if (location == null || seen.length >= maxDescriptions || !answerMayPointTo(location.host, from)) return;
+      if (!seen.add(location.toString())) return;
       pending.add(
         fetchDescription(http, location, deadline: deadline)
             .then((d) {
@@ -55,7 +61,7 @@ class DlnaBrowser {
         s.listen((e) {
           if (e != RawSocketEvent.read) return;
           final d = s.receive();
-          if (d != null) onMessage(latin1.decode(d.data, allowInvalid: true));
+          if (d != null) onMessage(latin1.decode(d.data, allowInvalid: true), d.address);
         }, onError: (Object _) {}),
     ];
     void search() {
@@ -97,7 +103,7 @@ class DlnaBrowser {
       await res.drain<void>();
       return null;
     }
-    final xml = await res.transform(const Utf8Decoder(allowMalformed: true)).join().timeout(wait);
+    final xml = await readDeviceAnswer(res, timeout: wait);
     return parseUpnpDescription(xml, location);
   }
 }
@@ -130,15 +136,7 @@ Uri? ssdpLocation(String message) {
 
 /// Reads a UPnP device description: a renderer when it has AVTransport.
 CastDevice? parseUpnpDescription(String xml, Uri location) {
-  String? tag(String source, String name) {
-    final m = RegExp(
-      '<(?:[\\w-]+:)?$name(?:\\s[^>]*)?>(.*?)</(?:[\\w-]+:)?$name\\s*>',
-      dotAll: true,
-      caseSensitive: false,
-    ).firstMatch(source);
-    final v = m?.group(1)?.trim();
-    return (v == null || v.isEmpty) ? null : decodeEntities(v);
-  }
+  String? tag(String source, String name) => xmlText(source, name);
 
   final urlBase = Uri.tryParse(tag(xml, 'URLBase') ?? '');
   final base = (urlBase != null && urlBase.hasScheme && urlBase.host.isNotEmpty) ? urlBase : location;
@@ -154,13 +152,7 @@ CastDevice? parseUpnpDescription(String xml, Uri location) {
   (Uri, String)? avTransport;
   (Uri, String)? rendering;
   (Uri, String)? connections;
-  final services = RegExp(
-    r'<(?:[\w-]+:)?service(?:\s[^>]*)?>(.*?)</(?:[\w-]+:)?service\s*>',
-    dotAll: true,
-    caseSensitive: false,
-  );
-  for (final m in services.allMatches(xml)) {
-    final block = m.group(1)!;
+  for (final block in xmlElements(xml, 'service').take(64)) {
     final type = tag(block, 'serviceType');
     final control = resolve(tag(block, 'controlURL'));
     if (type == null || control == null) continue;
@@ -169,6 +161,10 @@ CastDevice? parseUpnpDescription(String xml, Uri location) {
     if (connections == null && type.contains(':service:ConnectionManager:')) connections = (control, type);
   }
   if (avTransport == null) return null;
+  // Its controls are on the device the description came from (or its
+  // network): not on this computer, the router or the Internet.
+  final from = InternetAddress.tryParse(location.host);
+  if (from != null && !answerMayPointTo(avTransport.$1.host, from)) return null;
   final name = tag(xml, 'friendlyName') ?? location.host;
   return CastDevice(
     id: tag(xml, 'UDN') ?? '${location.host}:${location.port}',

@@ -9,6 +9,7 @@ import 'cast_device.dart';
 import 'cast_log.dart';
 import 'cast_media.dart';
 import 'cast_session.dart';
+import 'cast_xml.dart';
 
 /// Drives a DLNA / UPnP media renderer (SOAP on its AVTransport and
 /// RenderingControl services). Polled: renderers rarely send events reliably.
@@ -271,7 +272,7 @@ class DlnaSession implements CastSession {
       req.contentLength = body.length;
       req.add(body);
       final res = await req.close().timeout(timeout);
-      final text = await res.transform(const Utf8Decoder(allowMalformed: true)).join().timeout(timeout);
+      final text = await readDeviceAnswer(res, timeout: timeout);
       if (res.statusCode >= 300) {
         final code = soapValue(text, 'errorCode');
         final description = soapValue(text, 'errorDescription');
@@ -319,9 +320,8 @@ String soapEnvelope(String type, String action, List<(String, String)> args) {
 
 /// Text of the element [name] in a SOAP answer (namespace prefix ignored).
 String? soapValue(String xml, String name) {
-  final m = RegExp('<(?:[\\w-]+:)?$name(?:\\s[^>]*)?>(.*?)</(?:[\\w-]+:)?$name\\s*>', dotAll: true).firstMatch(xml);
-  if (m == null) return null;
-  return decodeEntities(m.group(1)!.trim());
+  final v = xmlElements(xml, name, caseSensitive: true).firstOrNull;
+  return v == null ? null : decodeEntities(v.trim());
 }
 
 String xmlEscape(String s) => s

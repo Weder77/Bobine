@@ -159,3 +159,27 @@ int _sharedBits(InternetAddress a, InternetAddress b) {
   }
   return bits;
 }
+
+/// Whether [a] is an address of the local network: private, link-local, or
+/// this computer.
+bool isLocalNetworkAddress(InternetAddress a) {
+  if (a.isLoopback || a.isLinkLocal) return true;
+  if (a.type != InternetAddressType.IPv4) return false;
+  final b = a.rawAddress;
+  return b[0] == 10 || (b[0] == 172 && b[1] >= 16 && b[1] <= 31) || (b[0] == 192 && b[1] == 168);
+}
+
+/// Whether a device that answered from [from] may be reached at [host]
+/// (an address it gave itself): the same address, or another one of the
+/// same local network (/24). Anything else (this computer for another
+/// device, the router, a host on the Internet) is not followed: a device
+/// of the network can answer anything.
+bool answerMayPointTo(String host, InternetAddress from) {
+  final to = InternetAddress.tryParse(host);
+  if (to == null) return false;
+  if (to.address == from.address) return true;
+  if (to.type != InternetAddressType.IPv4 || from.type != InternetAddressType.IPv4) return false;
+  if (to.isLoopback || !isLocalNetworkAddress(to) || !isLocalNetworkAddress(from)) return false;
+  final x = to.rawAddress, y = from.rawAddress;
+  return x[0] == y[0] && x[1] == y[1] && x[2] == y[2];
+}

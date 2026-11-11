@@ -66,8 +66,9 @@ List<DnsRecord> dnsRecords(Uint8List p) {
   if (p.length < 12) return out;
   int u16(int o) => (p[o] << 8) | p[o + 1];
   try {
-    final questions = u16(4);
-    final records = u16(6) + u16(8) + u16(10);
+    // A real answer has a few records; a forged one can claim 196 605.
+    final questions = u16(4).clamp(0, 16);
+    final records = (u16(6) + u16(8) + u16(10)).clamp(0, 64);
     var o = 12;
     for (var i = 0; i < questions; i++) {
       o = _readName(p, o).$2 + 4;
@@ -109,7 +110,7 @@ List<DnsRecord> dnsRecords(Uint8List p) {
   final labels = <String>[];
   var o = offset;
   int? after;
-  var jumps = 0;
+  var jumps = 0, size = 0;
   while (true) {
     final len = p[o];
     if (len == 0) {
@@ -125,6 +126,9 @@ List<DnsRecord> dnsRecords(Uint8List p) {
     if (len & 0xC0 != 0) throw const FormatException('DNS label');
     o++;
     if (o + len > p.length) throw RangeError('DNS label');
+    // 255 bytes at most (RFC 1035): pointers could otherwise build huge ones.
+    size += len + 1;
+    if (size > 255) throw const FormatException('DNS name too long');
     labels.add(utf8.decode(p.sublist(o, o + len), allowMalformed: true));
     o += len;
   }
@@ -215,7 +219,9 @@ class ChromecastBrowser {
       }
       // Answers without the details: ask for them.
       for (final instance in state.incomplete) {
-        if (asked.add(instance)) send(dnsQuery([(instance, DnsType.txt), (instance, DnsType.srv)]));
+        if (asked.length < ChromecastAnswers.maxEntries && asked.add(instance)) {
+          send(dnsQuery([(instance, DnsType.txt), (instance, DnsType.srv)]));
+        }
       }
     }
 
@@ -256,11 +262,16 @@ class ChromecastAnswers {
   /// Instances announced without their TXT record yet.
   Iterable<String> get incomplete => _instances.keys.where((i) => !_txt.containsKey(i));
 
+  /// Most instances and records kept: a network with more Chromecasts than
+  /// this is not a home, and forged answers must not fill the memory.
+  static const maxEntries = 64;
+
   /// Adds the [records] of a message sent by [from]; returns devices that are
   /// new or changed.
   List<CastDevice> add(List<DnsRecord> records, InternetAddress from) {
     for (final r in records) {
       final name = r.name.toLowerCase();
+      if (_instances.length >= maxEntries || _txt.length >= maxEntries || _hosts.length >= maxEntries) break;
       switch (r.type) {
         case DnsType.ptr when name == ChromecastBrowser.service && r.ptr != null:
           _instances[r.ptr!.toLowerCase()] = from;
@@ -291,7 +302,9 @@ class ChromecastAnswers {
       if (caps != null && caps & 1 == 0) continue;
       if (model != null && model.toLowerCase().contains('group')) continue;
       final srv = _srv[instance];
-      final host = (srv == null ? null : _hosts[srv.$1]) ?? responder;
+      final announced = srv == null ? null : _hosts[srv.$1];
+      // The address it gives itself, when it is on the responder's network.
+      final host = announced != null && answerMayPointTo(announced.address, responder) ? announced : responder;
       final device = CastDevice(
         id: txt['id'] ?? instance,
         name: _name(txt['fn'], _spelling[instance] ?? instance),

@@ -32,8 +32,14 @@ class FakeSession implements CastSession {
 
   void push(RemoteStatus s) => _updates.add(next = s);
 
+  /// When set, the connection waits for it.
+  Completer<void>? connectGate;
+
   @override
-  Future<void> connect() async => actions.add('connect');
+  Future<void> connect() async {
+    actions.add('connect');
+    await connectGate?.future;
+  }
 
   @override
   List<String> contentTypesFor(String url, {required bool live}) =>
@@ -600,6 +606,47 @@ void main() {
       // A film sent from its beginning to a TV that never started: no position.
       await slow.start(_tv, _movie());
       expect(await slow.stop(), isNull);
+    });
+
+    test('zapping while the TV connects: the last channel asked is the one played', () async {
+      final gate = Completer<void>();
+      final zapping = CastService(sessionFactory: (d) => session = FakeSession(d)..connectGate = gate);
+      addTearDown(zapping.stop);
+      final starting = zapping.start(_tv, _channel());
+      await Future<void>.delayed(Duration.zero);
+      await zapping.load(_movie());
+      expect(zapping.error, isNull);
+      expect(zapping.item.value!.extId, '9');
+      gate.complete();
+      await starting;
+      expect(session.loaded, hasLength(1));
+      expect(session.loaded.single.$1.title, 'Le film');
+      expect(zapping.error, isNull);
+    });
+
+    test('another device announced under the name of the TV takes nothing from it', () async {
+      const impostor = CastDevice(
+        id: 'tv',
+        name: 'Salon',
+        protocol: CastProtocol.chromecast,
+        host: '10.6.6.6',
+        port: 8009,
+      );
+      final scan = CastService(
+        sessionFactory: (d) => session = FakeSession(d),
+        browsers: [
+          (t, add) async {
+            add(_tv);
+            add(impostor);
+          },
+        ],
+      );
+      await scan.scan();
+      expect(scan.devices.value.single.host, '127.0.0.1');
+      // Direct mode chosen for the TV is not the impostor's.
+      scan.setDirect(_tv, true);
+      expect(scan.relayFor(_tv), isFalse);
+      expect(scan.relayFor(impostor), isTrue);
     });
 
     test('zapping loads the new channel on the same connection', () async {

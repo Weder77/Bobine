@@ -226,6 +226,81 @@ void main() {
 </service></serviceList></device></root>''';
       expect(parseUpnpDescription(server, Uri.parse('http://10.0.0.6/')), isNull);
     });
+
+    test('a file of this computer is a path or file://, not an rtsp or udp stream', () {
+      for (final local in [r'C:\Videos\Bobine\x.ts', '/home/moi/x.ts', 'file:///home/moi/x.ts']) {
+        expect(isLocalMedia(local), isTrue, reason: local);
+      }
+      for (final stream in ['rtsp://cam/x', 'udp://@239.0.0.1:1234', 'http://h/x.ts', 'RTMP://h/app']) {
+        expect(isLocalMedia(stream), isFalse, reason: stream);
+      }
+    });
+
+    test('an answer is followed only to the device that sent it, or its own network', () {
+      final tv = InternetAddress('192.168.1.20');
+      expect(answerMayPointTo('192.168.1.20', tv), isTrue);
+      expect(answerMayPointTo('192.168.1.21', tv), isTrue, reason: 'same /24');
+      for (final elsewhere in ['127.0.0.1', '192.168.2.1', '10.0.0.1', '8.8.8.8', 'tv.example', '']) {
+        expect(answerMayPointTo(elsewhere, tv), isFalse, reason: elsewhere);
+      }
+      // A description that sends the controls to this computer or the Internet.
+      const xml = '''<root><URLBase>http://127.0.0.1:8080/</URLBase><device><friendlyName>Piège</friendlyName>
+<serviceList><service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
+<controlURL>/ctl</controlURL></service></serviceList></device></root>''';
+      expect(parseUpnpDescription(xml, Uri.parse('http://192.168.1.20:9197/d.xml')), isNull);
+      expect(
+        parseUpnpDescription(xml.replaceFirst('127.0.0.1', '192.168.1.20'), Uri.parse('http://192.168.1.20/')),
+        isNotNull,
+      );
+    });
+
+    test('hostile descriptions: tags read in linear time, answers read up to a limit', () async {
+      // Thousands of opening tags never closed used to cost quadratic time.
+      final hostile = '<root>${'<service>' * 20000}${'<friendlyName>' * 20000}</root>';
+      final sw = Stopwatch()..start();
+      expect(parseUpnpDescription(hostile, Uri.parse('http://192.168.1.20/')), isNull);
+      expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(soapValue('<a>${'<Sink>' * 20000}', 'Sink'), isNull);
+
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      server.listen((req) async {
+        // An endless description.
+        for (var i = 0; i < 2000; i++) {
+          req.response.add(List.filled(1024, 0x41));
+          await req.response.flush();
+        }
+        await req.response.close();
+      });
+      final client = HttpClient();
+      addTearDown(client.close);
+      await expectLater(
+        DlnaBrowser.fetchDescription(client, Uri.parse('http://127.0.0.1:${server.port}/desc.xml')),
+        throwsA(isA<HttpException>()),
+      );
+    });
+  });
+
+  group('mDNS answers that cannot be trusted', () {
+    test('a name built from compression pointers is cut at 255 bytes, records are bounded', () {
+      // A label of 60 bytes pointing back to itself through 5 pointers.
+      final p = BytesBuilder()
+        ..add([0, 0, 0x84, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0]) // 65535 answers claimed
+        ..add([60, ...List.filled(60, 0x61), 0xC0, 12]);
+      expect(dnsRecords(p.toBytes()), isEmpty);
+    });
+
+    test('an answer cannot send the device to an address outside the responder network', () {
+      final answers = ChromecastAnswers();
+      const instance = 'Salon-1234._googlecast._tcp.local';
+      final devices = answers.add([
+        DnsRecord(ChromecastBrowser.service, DnsType.ptr, ptr: instance),
+        DnsRecord(instance, DnsType.txt, txt: const {'id': 'abc', 'fn': 'Salon', 'ca': '5'}),
+        DnsRecord(instance, DnsType.srv, port: 8009, target: 'salon.local'),
+        DnsRecord('salon.local', DnsType.a, address: InternetAddress('127.0.0.1')),
+      ], InternetAddress('192.168.1.30'));
+      expect(devices.single.host, '192.168.1.30');
+    });
   });
 
   test('renderer answering one request per connection (Philips): every action gets through', () async {
