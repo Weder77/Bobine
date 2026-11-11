@@ -16,9 +16,9 @@ void main() {
       {'name': 'Bobine-windows-x64.zip', 'browser_download_url': 'https://x/zip', 'size': 10},
       {
         'name': 'Bobine-Setup-$tag.exe',
-        'browser_download_url': 'https://x/setup',
+        'browser_download_url': 'https://github.com/Weder77/Bobine/releases/download/$tag/Bobine-Setup-$tag.exe',
         'size': 20,
-        'digest': 'sha256:ABCDEF',
+        'digest': 'sha256:${'AB' * 32}',
       },
     ],
   };
@@ -26,9 +26,9 @@ void main() {
   test('only a newer final release is offered, with the Windows installer', () {
     final info = UpdateService.parseRelease(release('v1.2.0'), current: '1.1.0', windows: true)!;
     expect(info.version, '1.2.0');
-    expect(info.assetUrl, 'https://x/setup');
+    expect(info.assetUrl, 'https://github.com/Weder77/Bobine/releases/download/v1.2.0/Bobine-Setup-v1.2.0.exe');
     expect(info.size, 20);
-    expect(info.sha256, 'abcdef');
+    expect(info.sha256, 'ab' * 32);
     expect(info.notes, 'Nouveautés');
 
     expect(UpdateService.parseRelease(release('v1.1.0'), current: '1.1.0', windows: true), isNull);
@@ -39,6 +39,35 @@ void main() {
     final other = UpdateService.parseRelease(release('v1.2.0'), current: '1.1.0', windows: false)!;
     expect(other.assetUrl, isNull);
     expect(other.page, contains('v1.2.0'));
+  });
+
+  test('an installer from elsewhere, or without its fingerprint, is not downloaded', () {
+    Map<String, Object?> withAsset(Map<String, Object?> a) => {
+      ...release('v1.2.0'),
+      'assets': [a],
+    };
+    final good = {
+      'name': 'Bobine-Setup.exe',
+      'browser_download_url': 'https://github.com/Weder77/Bobine/releases/download/v1.2.0/Bobine-Setup.exe',
+      'digest': 'sha256:${'0' * 64}',
+    };
+    UpdateInfo? parse(Map<String, Object?> a) =>
+        UpdateService.parseRelease(withAsset(a), current: '1.1.0', windows: true);
+    expect(parse(good)!.assetUrl, isNotNull);
+    expect(parse({...good, 'digest': null})!.assetUrl, isNull);
+    expect(parse({...good, 'digest': 'sha256:abc'})!.assetUrl, isNull);
+    expect(
+      parse({...good, 'browser_download_url': 'http://github.com/Weder77/Bobine/releases/download/x.exe'})!.assetUrl,
+      isNull,
+    );
+    expect(
+      parse({...good, 'browser_download_url': 'https://evil.example/Weder77/Bobine/releases/download/x.exe'})!.assetUrl,
+      isNull,
+    );
+    expect(
+      parse({...good, 'browser_download_url': 'https://github.com/other/repo/releases/download/x.exe'})!.assetUrl,
+      isNull,
+    );
   });
 
   test('the version found by the last check is offered again after a restart', () {

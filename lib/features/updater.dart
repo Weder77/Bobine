@@ -147,10 +147,15 @@ class UpdateService extends ChangeNotifier {
     if (compareVersions(tag, current) <= 0) return null;
     final assets = (r['assets'] as List? ?? const []).cast<Map>();
     final win = windows ?? Platform.isWindows;
-    final asset = win
+    final found = win
         ? assets.where((a) => RegExp(r'setup.*\.exe$', caseSensitive: false).hasMatch('${a['name']}')).firstOrNull
         : null;
-    final digest = '${asset?['digest'] ?? ''}';
+    final digest = '${found?['digest'] ?? ''}';
+    // Installed in silence: taken only from this project's releases on
+    // GitHub, in https, with the fingerprint GitHub gives of it. Otherwise
+    // the release page alone is offered.
+    final sha = RegExp(r'^sha256:([0-9a-fA-F]{64})$').firstMatch(digest)?.group(1)?.toLowerCase();
+    final asset = found != null && sha != null && isReleaseAsset('${found['browser_download_url']}') ? found : null;
     return UpdateInfo(
       version: tag.replaceFirst(RegExp(r'^[vV]'), ''),
       notes: (r['body'] as String?)?.trim(),
@@ -158,8 +163,18 @@ class UpdateService extends ChangeNotifier {
       assetUrl: asset?['browser_download_url'] as String?,
       assetName: asset?['name'] as String?,
       size: asset?['size'] as int?,
-      sha256: digest.startsWith('sha256:') ? digest.substring(7).toLowerCase() : null,
+      sha256: asset == null ? null : sha,
     );
+  }
+
+  /// An address of a file published with a release of [kReleaseRepo].
+  @visibleForTesting
+  static bool isReleaseAsset(String url) {
+    final u = Uri.tryParse(url);
+    return u != null &&
+        u.scheme == 'https' &&
+        u.host == 'github.com' &&
+        u.path.toLowerCase().startsWith('/${kReleaseRepo.toLowerCase()}/releases/download/');
   }
 
   void skip() {
@@ -171,7 +186,7 @@ class UpdateService extends ChangeNotifier {
 
   Future<void> download() async {
     final info = available;
-    if (info?.assetUrl == null || stage == UpdateStage.downloading) return;
+    if (info?.assetUrl == null || info?.sha256 == null || stage == UpdateStage.downloading) return;
     _set(UpdateStage.downloading);
     progress = 0;
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
@@ -205,7 +220,7 @@ class UpdateService extends ChangeNotifier {
       if (info.size != null && received != info.size) {
         throw const _UpdateError('Téléchargement incomplet, réessaie.');
       }
-      if (info.sha256 != null && hashOut.value.toString() != info.sha256) {
+      if (hashOut.value.toString() != info.sha256) {
         file.deleteSync();
         throw const _UpdateError("L'installateur téléchargé est altéré (empreinte SHA-256 différente).");
       }

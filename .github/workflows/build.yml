@@ -10,8 +10,10 @@ on:
     paths-ignore: ['**.md', 'docs/**', 'tool/fake_xtream.py']
   workflow_dispatch:
 
+# Read-only by default: only the publishing job, which runs no third-party
+# build step, may write to the repository (releases).
 permissions:
-  contents: write
+  contents: read
 
 # A newer push on the same branch replaces the build in progress (tags always finish).
 concurrency:
@@ -23,10 +25,15 @@ jobs:
     name: Windows (tests + build)
     runs-on: windows-latest
     timeout-minutes: 60
+    outputs:
+      release: ${{ steps.version.outputs.release }}
+      version: ${{ steps.version.outputs.value }}
+    # Actions pinned by commit: a moved tag cannot change what builds the
+    # installer the app then offers and runs.
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           flutter-version: '3.47.9'
@@ -88,31 +95,47 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "ISCC a échoué ($LASTEXITCODE)" }
           Get-ChildItem dist | Select-Object Name, Length
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Bobine-windows-x64
           path: Bobine-windows-x64.zip
           retention-days: 30
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Bobine-Setup
           path: dist/Bobine-Setup-*.exe
           retention-days: 30
 
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
         with:
           name: Bobine-test-cast
           path: bobine-test-cast.exe
           retention-days: 30
 
-      # Tag v* pushed, or new version merged into main (the tag is then created here).
-      - name: Publication de la Release
-        if: steps.version.outputs.release == 'true'
-        uses: softprops/action-gh-release@v2
+  # Tag v* pushed, or new version merged into main (the tag is then created here).
+  release:
+    name: Publication de la Release
+    needs: windows
+    if: needs.windows.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
         with:
-          tag_name: v${{ steps.version.outputs.value }}
-          name: Bobine ${{ steps.version.outputs.value }}
+          name: Bobine-windows-x64
+
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: Bobine-Setup
+          path: dist
+
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: v${{ needs.windows.outputs.version }}
+          name: Bobine ${{ needs.windows.outputs.version }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: |
