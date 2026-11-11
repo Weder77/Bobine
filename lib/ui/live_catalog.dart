@@ -48,7 +48,25 @@ class LiveCatalog extends ChangeNotifier {
     super.dispose();
   }
 
+  bool _shown = true, _stale = false;
+
+  /// Direct or the guide is on screen. Hidden, the channels are not
+  /// loaded and grouped again at each change (a profile, a favourite, the
+  /// end of an import): they are when shown.
+  set shown(bool v) {
+    if (v == _shown) return;
+    _shown = v;
+    if (v && _stale) {
+      _stale = false;
+      _onLibrary();
+    }
+  }
+
   void _onLibrary() {
+    if (!_shown) {
+      _stale = true;
+      return;
+    }
     if (_s.library.content != _contentVersion || source?.id != _s.settings.activeSourceId) {
       reload();
     } else if (source != null) {
@@ -61,6 +79,11 @@ class LiveCatalog extends ChangeNotifier {
   }
 
   void _onSettings() {
+    if (!_shown) {
+      _stale = true;
+      _contentVersion = -1; // grouped again when shown
+      return;
+    }
     if (_s.settings.cleanNames != _clean ||
         _s.settings.groupQualities != _group ||
         _s.settings.preferredQuality != _quality) {

@@ -46,8 +46,13 @@ class _RowData {
 class _CatalogScreenState extends State<CatalogScreen> {
   late final AppServices _s;
   CatalogController get _c => widget.controller;
-  int _loadedVersion = -1;
+  int _loadedVersion = -1, _loadedContent = -1;
   CatalogMode? _mode;
+
+  /// Rows made from the provider's content, kept until it changes.
+  ({List<Object> top, List<Object> recent, List<Object> best, List<(ContentCategory, List<Object>)> cats})?
+  _contentRows;
+  bool _rowsStale = true;
 
   // Rows mode.
   List<Object> _heroTitles = const [];
@@ -100,12 +105,26 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final src = _c.source;
     if (src == null) return;
     final fresh = _loadedVersion != _c.version;
+    final content = _loadedContent != _c.contentVersion;
     _loadedVersion = _c.version;
+    _loadedContent = _c.contentVersion;
     _mode = _c.mode;
+    if (content) _contentRows = null;
     if (fresh) {
       _favorites = TitleCards.loadFavorites(_s, src.id);
+      // A favourite or a position: the whole catalogue is not read again,
+      // only what shows the user's data.
+      _rowsStale = true;
+      if (content || _c.cat == 'fav') {
+        _gridKey = null;
+      } else if (_c.mode == CatalogMode.grid) {
+        _progress = _movieProgress(src);
+      }
+    }
+    // The rows are made when they are shown (not behind the grid).
+    if (_c.mode == CatalogMode.rows && _rowsStale) {
+      _rowsStale = false;
       _loadRows(src);
-      _gridKey = null;
     }
     if (_c.mode == CatalogMode.grid) _loadGrid(src);
   }
@@ -120,17 +139,22 @@ class _CatalogScreenState extends State<CatalogScreen> {
       for (final p in r.continueWatching(src.id))
         if (series ? p.kind == ContentKind.episode : p.kind == ContentKind.movie) p,
     ];
-    final top = [
-      for (final t in r.trending(src.id, limit: 40))
-        if (series ? t is Series : t is Movie) t,
-    ].take(10).toList();
     List<Object> list({int? categoryId, CatalogSort sort = CatalogSort.added}) => series
         ? r.series(src.id, categoryId: categoryId, sort: sort, limit: 30)
         : r.movies(src.id, categoryId: categoryId, sort: sort, limit: 30);
-    final recent = list();
+    final rows = _contentRows ??= (
+      top: [
+        for (final t in r.trending(src.id, limit: 40))
+          if (series ? t is Series : t is Movie) t,
+      ].take(10).toList(),
+      recent: list(),
+      best: list(sort: CatalogSort.rating),
+      cats: [
+        for (final c in r.categories(src.id, kind).where((c) => c.count >= 6).take(6)) (c, list(categoryId: c.id)),
+      ],
+    );
+    final (top, recent, best) = (rows.top, rows.recent, rows.best);
     final favorites = series ? r.favoriteSeries(src.id) : r.favoriteMovies(src.id);
-    final best = list(sort: CatalogSort.rating);
-    final cats = r.categories(src.id, kind).where((c) => c.count >= 6).take(6).toList();
 
     final hero = <Object>[];
     if (_resume.isNotEmpty) hero.add(_resume.first);
@@ -157,7 +181,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           sub: series ? 'sur ta source' : null,
         ),
       if (favorites.isNotEmpty) _RowData('Mes favoris', favorites, onMore: () => _c.openGrid('fav')),
-      for (final cat in cats) _RowData(cat.name, list(categoryId: cat.id), onMore: () => _c.openGrid('x:${cat.extId}')),
+      for (final (cat, items) in rows.cats) _RowData(cat.name, items, onMore: () => _c.openGrid('x:${cat.extId}')),
       if (best.isNotEmpty &&
           (best.first is Movie ? (best.first as Movie).rating : (best.first as Series).rating) != null)
         _RowData('Les mieux notés', best, onMore: () => _c.openGrid('all', CatalogSort.rating)),
@@ -264,10 +288,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
         _progress = const {};
       } else {
         _items = _c.cat == 'fav' ? r.favoriteMovies(src.id) : r.movies(src.id, categoryId: catId, sort: _c.sort);
-        _progress = {
-          for (final p in r.continueWatching(src.id, limit: 500))
-            if (p.kind == ContentKind.movie) p.extId: p.fraction,
-        };
+        _progress = _movieProgress(src);
       }
       _gridQuery = '\u0000';
     }
@@ -282,6 +303,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
             ];
     }
   }
+
+  Map<String, double> _movieProgress(Source src) => _c.series
+      ? const {}
+      : {
+          for (final p in _s.repo.continueWatching(src.id, limit: 500))
+            if (p.kind == ContentKind.movie) p.extId: p.fraction,
+        };
 
   Widget _buildGrid() {
     final cards = TitleCards(context, _s, _favorites);

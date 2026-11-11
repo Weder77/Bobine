@@ -102,6 +102,7 @@ class _AppShellState extends State<AppShell> {
     _live = LiveCatalog(_s);
     _movies = CatalogController(_s, series: false);
     _series = CatalogController(_s, series: true);
+    _showCatalogs();
     _s.imports.addListener(_onImports);
     _s.updates.addListener(_onUpdates);
     HardwareKeyboard.instance.addHandler(_onKey);
@@ -192,6 +193,14 @@ class _AppShellState extends State<AppShell> {
       _index = i;
       _built.add(i);
     });
+    _showCatalogs();
+  }
+
+  /// Only the catalogs on screen follow the changes as they come.
+  void _showCatalogs() {
+    _live.shown = _index == ShellTab.live || _index == ShellTab.guide;
+    _movies.shown = _index == ShellTab.movies;
+    _series.shown = _index == ShellTab.series;
   }
 
   /// Home, films and series start with a big image under the header.
