@@ -49,7 +49,9 @@ class UpdateService extends ChangeNotifier {
   UpdateService(this._repo, this._settings, {String? apiUrl})
     : _api =
           apiUrl ??
-          Platform.environment['BOBINE_UPDATE_URL'] ??
+          // Development builds only: in a published one it could point the
+          // updater at any server.
+          (kReleaseMode ? null : Platform.environment['BOBINE_UPDATE_URL']) ??
           'https://api.github.com/repos/$kReleaseRepo/releases/latest';
 
   final Repository _repo;

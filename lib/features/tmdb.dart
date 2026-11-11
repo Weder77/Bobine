@@ -187,8 +187,13 @@ String displayTitle(String raw) {
 /// with the user's own key. Results are kept 30 days (7 for "no match").
 class TmdbService {
   TmdbService(this._repo, this._settings, {String? apiBase, String? imageBase})
-    : _api = apiBase ?? Platform.environment['BOBINE_TMDB_BASE'] ?? 'https://api.themoviedb.org/3',
-      _img = imageBase ?? Platform.environment['BOBINE_TMDB_IMG'] ?? 'https://image.tmdb.org/t/p';
+    // The test servers named in the environment are for development builds
+    // only: in a published one, a variable set on the computer sent the key
+    // to another server.
+    : _api =
+          apiBase ?? (kReleaseMode ? null : Platform.environment['BOBINE_TMDB_BASE']) ?? 'https://api.themoviedb.org/3',
+      _img =
+          imageBase ?? (kReleaseMode ? null : Platform.environment['BOBINE_TMDB_IMG']) ?? 'https://image.tmdb.org/t/p';
 
   final Repository _repo;
   final AppSettings _settings;

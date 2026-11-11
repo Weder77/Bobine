@@ -358,7 +358,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     Duration? from;
     if (!_isLive) {
       final here = _casting ? _cast.position : _ps.player.state.position;
-      from = here > Duration.zero ? here : widget.session.start;
+      // The session's start is that of the title it opened with, not of the
+      // next episode played since.
+      final resume = _item.url == widget.session.item.url ? widget.session.start : null;
+      from = here > Duration.zero ? here : resume;
     }
     _s.tracker.flush();
     // The TV takes the connection: the preview gives its own back.
@@ -470,6 +473,26 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
     _flash(seconds > 0 ? '+$seconds s' : '$seconds s');
     _showControls();
+  }
+
+  /// Scroll not yet turned into volume (a touchpad sends many small ones).
+  double _wheel = 0;
+
+  /// The wheel changes the volume by 5 % a notch. A touchpad's small
+  /// moves add up to a notch (each one was 5 %), and a sideways scroll does
+  /// nothing (it lowered the volume).
+  void _onWheel(Offset delta) {
+    if (delta.dx.abs() > delta.dy.abs() || delta.dy == 0) return;
+    if (delta.dy.abs() >= 50) {
+      _wheel = 0;
+      return _changeVolume(delta.dy < 0 ? 5 : -5);
+    }
+    if (_wheel != 0 && _wheel.sign != delta.dy.sign) _wheel = 0;
+    _wheel += delta.dy;
+    if (_wheel.abs() >= 50) {
+      _changeVolume(_wheel < 0 ? 5 : -5);
+      _wheel = 0;
+    }
   }
 
   void _changeVolume(double delta) {
@@ -602,13 +625,22 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _typeDigit(String d) {
     _digitTimer?.cancel();
-    setState(() => _digits = (_digits + d).substring(_digits.length >= 4 ? 1 : 0));
+    // Up to 6 digits: providers number channels beyond 9999.
+    setState(() => _digits = (_digits + d).substring(_digits.length >= 6 ? 1 : 0));
     _digitTimer = Timer(const Duration(milliseconds: 1400), () {
       final n = int.tryParse(_digits);
       setState(() => _digits = '');
       if (n == null || _channels.isEmpty) return;
-      var idx = _channels.indexWhere((c) => c.number == n);
-      if (idx < 0 && n >= 1 && n <= _channels.length) idx = n - 1;
+      // The number shown for each channel (its own, else its place in the
+      // list), as in the lists: the place alone could pick a channel that
+      // shows another number.
+      var idx = -1;
+      for (var i = 0; i < _channels.length; i++) {
+        if ((_channels[i].number ?? i + 1) == n) {
+          idx = i;
+          break;
+        }
+      }
       if (idx >= 0) {
         _playChannel(idx);
       } else {
@@ -829,9 +861,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onKeyEvent: _onKey,
         child: Listener(
           onPointerSignal: (e) {
-            if (e is PointerScrollEvent && _panel == _Panel.none) {
-              _changeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
-            }
+            if (e is PointerScrollEvent && _panel == _Panel.none) _onWheel(e.scrollDelta);
           },
           child: MouseRegion(
             cursor: vis ? SystemMouseCursors.basic : SystemMouseCursors.none,

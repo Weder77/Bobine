@@ -70,6 +70,8 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
     super.initState();
     _s = AppScope.of(context);
     _takeovers = _s.player.takeovers;
+    // Already full screen (opened from the player): its button says so.
+    _fullscreen = AppWindow.fullscreen.value;
     // The main player and the mini-player stop: their connection is free.
     if (_s.pip.active) {
       unawaited(_s.pip.close());
@@ -147,16 +149,25 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
     _closePicker();
   }
 
+  /// "Regarder seule" in progress: a second one opened a second player,
+  /// stopped when the first closed.
+  bool _openingFull = false;
+
   /// Plays slot [i] in the full player (the others stop).
   Future<void> _openFull(int i) async {
     final slot = _c.slots[i];
-    if (slot == null) return;
+    if (slot == null || _openingFull) return;
+    _openingFull = true;
     final list = _c.channels;
     final index = list.indexWhere((c) => c.extId == slot.channel.extId);
     final nav = Navigator.of(context);
     // Free the provider's connections before the full player opens its own.
     await _c.stopAll();
     if (!mounted) return;
+    // The window is the player's now: this screen does not leave full screen
+    // when it closes (the player believed it still was, and needed two
+    // presses).
+    _s.player.takeOver();
     unawaited(
       nav.pushReplacement(
         PlayerScreen.route(
@@ -302,7 +313,10 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
                       rects[i].height * stage.height,
                     ).deflate(2);
               return Positioned.fromRect(
-                key: ValueKey('slot$i'),
+                // Keyed by its player, not its place: after a change of
+                // layout, a picture that moves keeps its video view, where
+                // a view made again for the same player stayed black.
+                key: _c.slots[i] == null ? ValueKey('empty$i') : ObjectKey(_c.slots[i]!.engine),
                 rect: rect,
                 child: _SlotView(
                   topInset: _chrome ? math.max(0, _barBottom - rect.top) : 0,
