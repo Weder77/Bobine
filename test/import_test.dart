@@ -33,6 +33,9 @@ void main() {
   final now = DateTime.now();
   // Xtream actions answered with an error, and "the playlist is a web page".
   final broken = <String>{};
+  // Xtream actions answered 200 with an empty list, and an empty guide.
+  final emptied = <String>{};
+  var emptyGuide = false;
   var portal = false;
 
   setUpAll(() async {
@@ -74,6 +77,10 @@ void main() {
           }
           if (broken.contains(q['action'])) {
             res.statusCode = 500;
+            break;
+          }
+          if (emptied.contains(q['action'])) {
+            res.write('[]');
             break;
           }
           final data = switch (q['action']) {
@@ -138,6 +145,10 @@ void main() {
           };
           res.write(jsonEncode(data));
         case '/xmltv.php':
+          if (emptyGuide) {
+            res.write('<?xml version="1.0"?><tv></tv>');
+            break;
+          }
           final xml = StringBuffer('<?xml version="1.0"?><tv>');
           xml.write('<channel id="CH0"><display-name>Chaîne 0</display-name></channel>');
           xml.write('<channel id="ch1"><display-name>Chaîne 1</display-name></channel>');
@@ -271,6 +282,51 @@ void main() {
     final again = await loadEpisodes(repo, dark);
     expect(again.map((e) => e.extId), ['7701', '7702']);
     expect(repo.episodes(id, '77'), hasLength(2));
+  });
+
+  test('an empty list in a good answer does not empty the source', () async {
+    final path = '${tmp.path}/emptied.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
+    await importXtream(path, id, null);
+    addTearDown(emptied.clear);
+
+    // "[]" for the channels: nothing is touched, and it is said.
+    emptied.add('get_live_streams');
+    await expectLater(importXtream(path, id, null), throwsA(predicate((e) => '$e'.contains('aucune chaîne'))));
+    expect(repo.channels(id), hasLength(300));
+    expect(repo.movies(id), hasLength(2));
+
+    // "[]" for the films or the series: they stay, the rest is refreshed.
+    emptied
+      ..clear()
+      ..addAll(['get_vod_streams', 'get_series']);
+    final r = await importXtream(path, id, null);
+    expect(r.live, 300);
+    expect(repo.movies(id), hasLength(2));
+    expect(repo.series(id).single.name, 'Dark');
+    expect(repo.source(id)!.lastError, allOf(contains('Films'), contains('Séries')));
+  });
+
+  test('an empty or unreadable guide keeps the one the source has', () async {
+    final path = '${tmp.path}/emptyguide.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(
+      name: 'XT',
+      type: SourceType.xtream,
+      url: '$base/',
+      username: 'u',
+      password: 'p',
+      epgUrl: '$base/xmltv.php',
+    );
+    final kept = await importEpg(path, id, 3, null);
+    expect(kept, greaterThan(0));
+    final at = repo.source(id)!.epgUpdatedAt;
+    emptyGuide = true;
+    addTearDown(() => emptyGuide = false);
+    await expectLater(importEpg(path, id, 3, null), throwsA(predicate((e) => '$e'.contains('guide reçu est vide'))));
+    expect(repo.db.select('SELECT count(*) AS n FROM epg_programs WHERE source_id = ?', [id]).first['n'], kept);
+    expect(repo.source(id)!.epgUpdatedAt, at, reason: 'not marked up to date: asked again next time');
   });
 
   test('a list that fails to download keeps what the source had, and says so', () async {

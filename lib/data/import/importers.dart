@@ -385,6 +385,24 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
       safe(api.seriesCategories(), 'Catégories séries', keeps: ContentKind.series),
       safe(api.seriesList(), 'Séries', keeps: ContentKind.series),
     ]);
+    // An empty list in a 200 answer ("[]", null, {"error": …}) is a panel
+    // having a bad moment far more often than a catalogue really emptied:
+    // what the source has is kept, as when the download fails.
+    int had(String table) => db.select('SELECT 1 FROM $table WHERE source_id = ? LIMIT 1', [sourceId]).length;
+    final noChannels = results[1].isEmpty;
+    if (noChannels && (had('channels') > 0 || (results[3].isEmpty && results[5].isEmpty))) {
+      throw NetException(
+        "Le serveur n'a renvoyé aucune chaîne (liste vide) : le contenu déjà importé est gardé. Réessaie plus tard.",
+      );
+    }
+    if (results[3].isEmpty && !failed.contains(ContentKind.movie) && had('movies') > 0) {
+      failed.add(ContentKind.movie);
+      warnings.add('Films : liste vide');
+    }
+    if (results[5].isEmpty && !failed.contains(ContentKind.series) && had('series') > 0) {
+      failed.add(ContentKind.series);
+      warnings.add('Séries : liste vide');
+    }
     // Half a kind is not written: its old content stays whole.
     if (failed.contains(ContentKind.movie)) results[2] = results[3] = const [];
     if (failed.contains(ContentKind.series)) results[4] = results[5] = const [];
@@ -570,6 +588,9 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       parser.add(chunk);
     }
     parser.close();
+    // Nothing read (an empty answer, a web page, an archive this does not
+    // open): the guide the source has is kept, and asked again next time.
+    if (seen == 0) throw NetException('Le guide reçu est vide ou illisible : le guide déjà importé est gardé.');
 
     progress('Enregistrement', 0);
     db.execute('BEGIN IMMEDIATE');
