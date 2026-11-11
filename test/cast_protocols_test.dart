@@ -464,6 +464,39 @@ void main() {
       expect(out.last.json['t'], 'é');
     });
 
+    test('a malformed message is refused, never a loop or another error', () {
+      // A 10-byte length with its sign bit set (-11): it sent the reader
+      // back to the start of the message, for ever.
+      for (final bad in [
+        [0x0A, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01],
+        [0x12, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01],
+        [0x0A, 0x80], // truncated number
+        [0x12, 0x05, 0x61], // length past the end
+        [0x09, 0x01, 0x02], // 8-byte field cut short
+        [0x0D, 0x01], // 4-byte field cut short
+        [0x08], // number missing
+      ]) {
+        expect(() => decodeCastMessage(Uint8List.fromList(bad)), throwsFormatException, reason: '$bad');
+      }
+    });
+
+    test('a device that sends garbage loses the connection', () async {
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      server.listen((c) {
+        // Framed as one message of 11 bytes, its content the looping one.
+        c.add([0, 0, 0, 11, 0x0A, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01]);
+      });
+      final s = ChromecastSession(
+        const CastDevice(id: 'cc', name: 'Faux', protocol: CastProtocol.chromecast, host: '127.0.0.1', port: 0),
+        connector: (host, port, timeout) => Socket.connect(host, server.port, timeout: timeout),
+      );
+      final lost = s.updates.firstWhere((u) => u.state == RemoteState.error).timeout(const Duration(seconds: 3));
+      await s.connect();
+      expect((await lost).error, 'Connexion perdue avec la télé.');
+      await s.close();
+    });
+
     test('launches the media receiver, loads, controls and quits', () async {
       final fake = await _FakeChromecast.start();
       final s = ChromecastSession(
