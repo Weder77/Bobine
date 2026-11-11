@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
@@ -415,8 +416,37 @@ class PlayerService {
     await player.stop();
   }
 
+  /// A film or an episode said to end well before its duration: mpv says
+  /// so when the connection drops. Not an end, a cut.
+  static bool endedEarly({required Duration position, required Duration duration}) {
+    if (duration <= Duration.zero) return false;
+    final margin = Duration(milliseconds: math.max(30000, duration.inMilliseconds ~/ 50));
+    return duration - position > margin;
+  }
+
+  /// The current film or episode ended before its end (see [endedEarly]).
+  bool get cutShort {
+    final item = current.value;
+    return item != null && !item.isLive && endedEarly(position: player.state.position, duration: player.state.duration);
+  }
+
   void _onEnded() {
     final item = current.value;
+    if (item != null && !item.isLive && cutShort) {
+      // Opened again where it stopped, with the attempts of a live stream.
+      final at = player.state.position;
+      final wait = _reconnect.next();
+      if (wait == null) {
+        if (_reconnect.exhausted) status.value = 'Lecture interrompue (coupure réseau). Réessaie.';
+        return;
+      }
+      status.value = 'Reconnexion… (${_reconnect.attempts})';
+      _reconnectTimer = Timer(wait, () {
+        _reconnect.launched();
+        if (current.value?.url == item.url) play(item, force: true, start: at, reconnecting: true);
+      });
+      return;
+    }
     if (item == null || !item.isLive) return;
     // Live streams should never end: reconnect with a back-off. The same
     // failure often arrives as several errors: one attempt at a time.

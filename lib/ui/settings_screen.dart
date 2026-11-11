@@ -955,7 +955,10 @@ class _SourceTile extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Supprimer « ${src.name} » ?'),
-        content: const Text('Les chaînes, favoris et la progression de lecture de cette source seront supprimés.'),
+        content: Text(
+          'Les chaînes, favoris et la progression de lecture de cette source seront supprimés.'
+          '${s.recordings.activeFor(src.id) > 0 ? ' Ses enregistrements en cours seront arrêtés (les fichiers sont gardés).' : ''}',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
           FilledButton(
@@ -966,7 +969,7 @@ class _SourceTile extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) s.deleteSource(src.id);
+    if (ok == true) await s.deleteSource(src.id);
   }
 
   @override

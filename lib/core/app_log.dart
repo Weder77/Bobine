@@ -28,6 +28,13 @@ class AppLog {
     } catch (_) {}
   }
 
+  /// Writes what is waiting to `bobine.log` (the app is closing).
+  static Future<void> flush() async {
+    try {
+      await _file?.flush();
+    } catch (_) {}
+  }
+
   /// Routes debugPrint and errors here; [logPath] receives a copy (rotated at 1 MB).
   static void install({String? logPath}) {
     if (logPath != null) {

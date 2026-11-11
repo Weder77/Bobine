@@ -397,6 +397,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _onCompleted() {
     if (!mounted || _isLive) return;
+    // Cut by the network: the service opens it again where it stopped.
+    if (!_casting && _ps.cutShort) return;
     _s.tracker.markFinished(_item);
     if (_nextEpisode != null && _s.settings.autoNextEpisode && _nextDismissed != _item.extId) {
       _playNextEpisode();

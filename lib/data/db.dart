@@ -7,7 +7,7 @@ import '../core/secrets.dart';
 import '../core/text.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 8;
+const int kSchemaVersion = 9;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -78,6 +78,7 @@ void _migrate(Database db) {
     if (version < 6) _migrateV6(db);
     if (version < 7) _migrateV7(db);
     if (version < 8) _migrateV8(db);
+    if (version < 9) _migrateV9(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -374,6 +375,32 @@ void _migrateV8(Database db) {
   }
   update.close();
   db.execute('UPDATE sources SET epg_updated_at = NULL');
+}
+
+/// v9: recordings are no longer deleted with their source: the files stay
+/// on the disk, and the list is the only way to find and play them.
+void _migrateV9(Database db) {
+  db.execute('''
+    CREATE TABLE recordings_v9 (
+      id INTEGER PRIMARY KEY,
+      source_id INTEGER NOT NULL,
+      channel_ext TEXT NOT NULL,
+      channel_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      start INTEGER NOT NULL,
+      stop INTEGER NOT NULL,
+      path TEXT,
+      status TEXT NOT NULL,
+      error TEXT,
+      size INTEGER,
+      created_at INTEGER NOT NULL
+    )''');
+  db.execute(
+    'INSERT INTO recordings_v9 SELECT id, source_id, channel_ext, channel_name, title, start, stop, path, status, '
+    'error, size, created_at FROM recordings',
+  );
+  db.execute('DROP TABLE recordings');
+  db.execute('ALTER TABLE recordings_v9 RENAME TO recordings');
 }
 
 /// The first schema, as created by Bobine 1.0 (to test migrations).

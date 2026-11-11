@@ -216,7 +216,20 @@ class AppServices {
     library.contentChanged();
   }
 
-  void deleteSource(int id) {
+  /// The app is closing: the position of what plays is saved, recordings
+  /// are stopped with their files kept, the log is written out.
+  Future<void> prepareExit() async {
+    try {
+      tracker.flush();
+    } catch (_) {}
+    await recordings.dispose();
+    await AppLog.flush();
+  }
+
+  Future<void> deleteSource(int id) async {
+    // Its recordings in progress are stopped first: their hidden players
+    // would go on writing until the app closes.
+    await recordings.stopSource(id);
     repo.deleteSource(id);
     _ensureActiveSource();
     epg.clear();

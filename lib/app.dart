@@ -1,3 +1,5 @@
+import 'dart:ui' show AppExitResponse;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -24,18 +26,59 @@ class _BobineAppState extends State<BobineApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.services.settings.addListener(_applyTheme);
+    widget.services.repo.onWriteFailed = _writeFailed;
     _applyTheme(initial: true);
+  }
+
+  /// A change that could not be saved, after two minutes of tries: said,
+  /// rather than lost without a word.
+  void _writeFailed() {
+    final context = appNavigatorKey.currentContext;
+    if (context == null) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(content: Text("Une modification n'a pas pu être enregistrée (base occupée) : refais-la.")),
+    );
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     widget.services.settings.removeListener(_applyTheme);
+    widget.services.repo.onWriteFailed = null;
     super.dispose();
   }
 
   @override
   void didChangePlatformBrightness() => _applyTheme();
+
+  /// Closing the window: asked first while something is being recorded,
+  /// then everything is saved and stopped properly.
+  @override
+  Future<AppExitResponse> didRequestAppExit() async {
+    final s = widget.services;
+    final recording = s.recordings.activeCount.value;
+    final context = appNavigatorKey.currentContext;
+    if (recording > 0 && context != null && context.mounted) {
+      final quit = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Quitter Bobine ?'),
+          content: Text(
+            recording == 1
+                ? "Un enregistrement est en cours : il sera arrêté (ce qui est déjà enregistré est gardé)."
+                : '$recording enregistrements sont en cours : ils seront arrêtés (ce qui est déjà enregistré est gardé).',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Rester')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Quitter')),
+          ],
+        ),
+      );
+      if (quit != true) return AppExitResponse.cancel;
+    }
+    await s.prepareExit();
+    return AppExitResponse.exit;
+  }
 
   /// Light, dark or the system's choice ("Paramètres → Apparence").
   void _applyTheme({bool initial = false}) {
