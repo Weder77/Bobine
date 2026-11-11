@@ -139,76 +139,79 @@ class BackupService {
       for (final r in (j[key] as List? ?? const [])) (r as Map).cast<String, Object?>(),
     ];
 
-    // Sources: same server and account (fingerprint), else same name and type,
-    // else created from the file when it carries the credentials.
-    final sources = <int, int>{};
-    final local = _repo.sources();
-    for (final b in list('sources')) {
-      final type = b['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u;
-      final match =
-          local.where((s) => sourceFingerprint(s) == b['fingerprint']).firstOrNull ??
-          local.where((s) => s.type == type && s.name == b['name']).firstOrNull;
-      if (match != null) {
-        sources[b['id'] as int] = match.id;
-        report.sourcesMatched++;
-      } else if (b['url'] is String && (b['url'] as String).isNotEmpty) {
-        sources[b['id'] as int] = _repo.insertSource(
-          name: '${b['name']}',
-          type: type,
-          url: b['url'] as String,
-          username: b['username'] as String?,
-          password: b['password'] as String?,
-          epgUrl: b['epgUrl'] as String?,
-          userAgent: b['userAgent'] as String?,
-          liveFormat: (b['liveFormat'] as String?) ?? 'ts',
-          epgOffset: (b['epgOffset'] as int?) ?? 0,
-        );
-        report.sourcesCreated++;
-      } else {
-        report.skippedSources.add('${b['name']}');
-      }
-    }
-
-    // Profiles: matched by name, created while there is room for them.
-    final profiles = <int, int>{};
-    final skippedProfiles = <Object?>{};
-    final localProfiles = _repo.profiles();
-    for (final b in list('profiles')) {
-      final name = '${b['name']}';
-      final avatar = b['avatar'] is String ? b['avatar'] as String : null;
-      final match = localProfiles.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
-      if (match != null) {
-        profiles[b['id'] as int] = match.id;
-        // "Moi" exists on every installation: without this, its picture
-        // would never come back on a new computer. One chosen here stays.
-        if (match.avatar == null && avatar != null) {
-          _repo.updateProfile(match.id, name: match.name, color: match.color, kids: match.kids, avatar: avatar);
-        }
-      } else if (_repo.canAddProfile) {
-        profiles[b['id'] as int] = _repo.createProfile(
-          name: name,
-          color: (b['color'] as int?) ?? 0xFFFFB547,
-          kids: (b['kids'] as int?) == 1,
-          avatar: avatar,
-        );
-        report.profilesCreated++;
-      } else {
-        skippedProfiles.add(b['id']);
-        report.skippedProfiles.add(name);
-      }
-    }
-
+    // Everything in one transaction: a busy database (an import running) is
+    // said so before anything is written, and a restore that fails halfway
+    // leaves nothing behind (no profile without its favourites).
     final db = _repo.db;
-    int? src(Map<String, Object?> r) => sources[r['source_id']];
-    // Null for the rows of a profile left out.
-    int? prof(Map<String, Object?> r) =>
-        skippedProfiles.contains(r['profile_id']) ? null : profiles[r['profile_id']] ?? 1;
     try {
       db.execute('BEGIN IMMEDIATE');
     } catch (_) {
       throw BackupException('Base occupée (mise à jour en cours) : réessaie dans un instant.');
     }
     try {
+      // Sources: same server and account (fingerprint), else same name and type,
+      // else created from the file when it carries the credentials.
+      final sources = <int, int>{};
+      final local = _repo.sources();
+      for (final b in list('sources')) {
+        final type = b['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u;
+        final match =
+            local.where((s) => sourceFingerprint(s) == b['fingerprint']).firstOrNull ??
+            local.where((s) => s.type == type && s.name == b['name']).firstOrNull;
+        if (match != null) {
+          sources[b['id'] as int] = match.id;
+          report.sourcesMatched++;
+        } else if (b['url'] is String && (b['url'] as String).isNotEmpty) {
+          sources[b['id'] as int] = _repo.insertSource(
+            name: '${b['name']}',
+            type: type,
+            url: b['url'] as String,
+            username: b['username'] as String?,
+            password: b['password'] as String?,
+            epgUrl: b['epgUrl'] as String?,
+            userAgent: b['userAgent'] as String?,
+            liveFormat: (b['liveFormat'] as String?) ?? 'ts',
+            epgOffset: (b['epgOffset'] as int?) ?? 0,
+          );
+          report.sourcesCreated++;
+        } else {
+          report.skippedSources.add('${b['name']}');
+        }
+      }
+
+      // Profiles: matched by name, created while there is room for them.
+      final profiles = <int, int>{};
+      final skippedProfiles = <Object?>{};
+      final localProfiles = _repo.profiles();
+      for (final b in list('profiles')) {
+        final name = '${b['name']}';
+        final avatar = b['avatar'] is String ? b['avatar'] as String : null;
+        final match = localProfiles.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+        if (match != null) {
+          profiles[b['id'] as int] = match.id;
+          // "Moi" exists on every installation: without this, its picture
+          // would never come back on a new computer. One chosen here stays.
+          if (match.avatar == null && avatar != null) {
+            _repo.updateProfile(match.id, name: match.name, color: match.color, kids: match.kids, avatar: avatar);
+          }
+        } else if (_repo.canAddProfile) {
+          profiles[b['id'] as int] = _repo.createProfile(
+            name: name,
+            color: (b['color'] as int?) ?? 0xFFFFB547,
+            kids: (b['kids'] as int?) == 1,
+            avatar: avatar,
+          );
+          report.profilesCreated++;
+        } else {
+          skippedProfiles.add(b['id']);
+          report.skippedProfiles.add(name);
+        }
+      }
+
+      int? src(Map<String, Object?> r) => sources[r['source_id']];
+      // Null for the rows of a profile left out.
+      int? prof(Map<String, Object?> r) =>
+          skippedProfiles.contains(r['profile_id']) ? null : profiles[r['profile_id']] ?? 1;
       for (final r in list('favorites')) {
         final s = src(r), p = prof(r);
         if (s == null || p == null) continue;

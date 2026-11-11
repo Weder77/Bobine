@@ -3,6 +3,7 @@ import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:image/image.dart' as img;
 
 /// A photo chosen for a profile, made small enough to travel with it: it is
@@ -54,18 +55,17 @@ class ProfilePhoto {
     // The JPEG decoder has already turned the picture upright.
     final ifd = src.exif.imageIfd;
     if (ifd.hasOrientation && ifd.orientation != 1) src = img.bakeOrientation(src);
-    // Palette pictures (GIF, PNG-8) cannot be averaged: made RGB first.
-    if (src.hasPalette) src = _rgb8(src);
-    final short = math.min(src.width, src.height);
-    if (short > _workSide) {
-      // Reduced before being cut, so that no step copies it at full size.
-      src = img.copyResize(
-        src,
-        width: math.max(1, src.width * _workSide ~/ short),
-        height: math.max(1, src.height * _workSide ~/ short),
-        interpolation: img.Interpolation.average,
-      );
+    if (src.hasPalette) {
+      // Palette pictures (GIF, PNG-8) cannot be averaged: a large one is
+      // first brought near the working size (nearest pixel, all a palette
+      // allows), then made RGB, so the per-pixel conversion stays small.
+      final side = math.min(src.width, src.height);
+      if (side > 2 * _workSide) src = _scaled(src, 2 * _workSide / side, img.Interpolation.nearest);
+      src = _rgb8(src);
     }
+    final short = math.min(src.width, src.height);
+    // Reduced before being cut, so that no step copies it at full size.
+    if (short > _workSide) src = _scaled(src, _workSide / short, img.Interpolation.average);
     src = _rgb8(src);
     final side = math.min(src.width, src.height);
     final square = img.copyCrop(
@@ -90,6 +90,17 @@ class ProfilePhoto {
     }
     return null;
   }
+
+  static img.Image _scaled(img.Image image, double factor, img.Interpolation interpolation) => img.copyResize(
+    image,
+    width: math.max(1, (image.width * factor).round()),
+    height: math.max(1, (image.height * factor).round()),
+    interpolation: interpolation,
+  );
+
+  /// The decoding step alone, to check the size a picture is decoded at.
+  @visibleForTesting
+  static img.Image? decodeForTest(Uint8List bytes) => _decode(bytes);
 
   /// First frame of the picture in [bytes]; null when it is not one, or too
   /// large to decode at full size. Its dimensions are read before anything

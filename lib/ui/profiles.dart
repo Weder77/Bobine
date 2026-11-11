@@ -310,18 +310,31 @@ class _ProfileEditor extends StatefulWidget {
 }
 
 class _ProfileEditorState extends State<_ProfileEditor> {
-  late final _name = TextEditingController(text: widget.profile?.name ?? '')..addListener(_nameChanged);
+  // A longer name (older version, another device) is cut here, in sight,
+  // rather than at the first key typed.
+  late final _name = TextEditingController(
+    text: (widget.profile?.name ?? '').characters.take(profileNameMaxLength).toString(),
+  )..addListener(_nameChanged);
   late int _color = widget.profile?.color ?? profileColors[1];
   late bool _kids = widget.profile?.kids ?? false;
 
   /// Chosen picture: null (initial), `preset:<name>` or [_photo].
   late String? _avatar = widget.profile?.avatar;
 
+  /// Pictures chosen so far: a photo that finishes processing is selected
+  /// only if nothing was chosen meanwhile.
+  int _choices = 0;
+
   /// Photo of the profile, kept while the other pictures are tried.
   late String? _photo = ProfilePhoto.isPhoto(widget.profile?.avatar) ? widget.profile!.avatar : null;
   bool _importing = false;
 
   void _nameChanged() => setState(() {}); // the initial in the preview
+
+  void _choose(String? avatar) => setState(() {
+    _avatar = avatar;
+    _choices++;
+  });
 
   @override
   void dispose() {
@@ -337,7 +350,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
     );
     if (file == null || !mounted) return;
     // What is chosen while the photo is processed stays chosen.
-    final chosen = _avatar;
+    final choices = _choices;
     setState(() => _importing = true);
     String? photo;
     try {
@@ -352,7 +365,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
       _importing = false;
       if (photo != null) {
         _photo = photo;
-        if (_avatar == chosen) _avatar = photo;
+        if (_choices == choices) _avatar = photo;
       }
     });
     if (photo == null) {
@@ -382,8 +395,15 @@ class _ProfileEditorState extends State<_ProfileEditor> {
     Navigator.of(context).pop();
   }
 
-  Widget _avatarOf(String? avatar, double size) =>
-      AvatarView(avatar: avatar, color: _color, initial: Profile.initialOf(_name.text), kids: _kids, size: size);
+  /// [avatar] as this profile would look; [kids] off for the tiles of
+  /// pictures, which would all carry the child badge.
+  Widget _avatarOf(String? avatar, double size, {bool? kids}) => AvatarView(
+    avatar: avatar,
+    color: _color,
+    initial: Profile.initialOf(_name.text),
+    kids: kids ?? _kids,
+    size: size,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -433,20 +453,20 @@ class _ProfileEditorState extends State<_ProfileEditor> {
                 _AvatarChoice(
                   tooltip: 'Initiale',
                   selected: _avatar == null,
-                  onTap: () => setState(() => _avatar = null),
+                  onTap: () => _choose(null),
                   child: _avatarOf(null, tile),
                 ),
                 for (final e in profileAvatars.entries)
                   _AvatarChoice(
                     tooltip: e.value,
                     selected: _avatar == presetAvatar(e.key),
-                    onTap: () => setState(() => _avatar = presetAvatar(e.key)),
-                    child: _avatarOf(presetAvatar(e.key), tile),
+                    onTap: () => _choose(presetAvatar(e.key)),
+                    child: _avatarOf(presetAvatar(e.key), tile, kids: false),
                   ),
                 _AvatarChoice(
                   tooltip: _photo == null ? 'Importer une photo' : 'Ta photo',
                   selected: _photo != null && _avatar == _photo,
-                  onTap: _importing ? null : (_photo == null ? _importPhoto : () => setState(() => _avatar = _photo)),
+                  onTap: _importing ? null : (_photo == null ? _importPhoto : () => _choose(_photo)),
                   child: _importing
                       ? const SizedBox(
                           width: tile,
@@ -465,7 +485,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
                           ),
                           child: Icon(Icons.add_photo_alternate_outlined, size: 22, color: AppColors.muted),
                         )
-                      : _avatarOf(_photo, tile),
+                      : _avatarOf(_photo, tile, kids: false),
                 ),
               ],
             ),

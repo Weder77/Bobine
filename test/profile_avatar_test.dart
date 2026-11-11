@@ -98,20 +98,27 @@ void main() {
       }
     });
 
-    test('a palette picture keeps its colours', () {
-      final src = img.Image(width: 100, height: 100);
-      img.fill(src, color: img.ColorRgb8(30, 90, 220));
-      final gif = img.encodeGif(src);
-      final p = _decoded(ProfilePhoto.encode(gif)!).getPixel(96, 96);
-      expect(p.r, closeTo(30, 12));
-      expect(p.g, closeTo(90, 12));
-      expect(p.b, closeTo(220, 12));
+    test('a palette picture keeps its colours, small or large', () {
+      for (final side in [100, 1000]) {
+        final src = img.Image(width: side, height: side);
+        img.fill(src, color: img.ColorRgb8(30, 90, 220));
+        final gif = img.encodeGif(src);
+        expect(img.decodeGif(gif)!.hasPalette, isTrue);
+        final p = _decoded(ProfilePhoto.encode(gif)!).getPixel(96, 96);
+        expect(p.r, closeTo(30, 12), reason: '$side px');
+        expect(p.g, closeTo(90, 12), reason: '$side px');
+        expect(p.b, closeTo(220, 12), reason: '$side px');
+      }
     });
 
     test('a large JPEG is decoded at a reduced size; a huge picture is refused before decoding', () {
       final big = img.Image(width: 4000, height: 3000);
       img.fill(big, color: img.ColorRgb8(200, 120, 40));
-      final out = _decoded(ProfilePhoto.encode(img.encodeJpg(big, quality: 60))!);
+      final jpg = img.encodeJpg(big, quality: 60);
+      // 1/8 would leave 375 px on the short side, under the 384 needed: 1/4.
+      final decoded = ProfilePhoto.decodeForTest(jpg)!;
+      expect([decoded.width, decoded.height], [1000, 750]);
+      final out = _decoded(ProfilePhoto.encode(jpg)!);
       expect(out.width, 192);
       expect(out.getPixel(96, 96).r, closeTo(200, 10));
 
@@ -199,6 +206,24 @@ void main() {
       expect(bBackup.restore(json).profilesCreated, 0);
       expect(b.profile(1)!.avatar, 'preset:chat');
       expect(b.profiles().firstWhere((p) => p.name == 'Léa').avatar, 'preset:robot');
+    });
+
+    test('a restore that fails halfway leaves nothing behind', () {
+      final (a, aBackup) = install();
+      final src = a.insertSource(name: 'S', type: SourceType.m3u, url: 'http://s/list.m3u');
+      a.profileId = a.createProfile(name: 'Léa', color: 1, avatar: 'preset:chat');
+      a.toggleFavorite(src, ContentKind.movie, 'film');
+      final json = jsonDecode(jsonEncode(aBackup.build(credentials: true))) as Map<String, Object?>;
+      // A damaged row, after the profile and the source.
+      json['progress'] = [
+        {'profile_id': a.profileId, 'source_id': src, 'kind': 'movie', 'ext_id': 'x', 'position_ms': 1},
+      ];
+
+      final (b, bBackup) = install();
+      expect(() => bBackup.restore(json), throwsA(isA<BackupException>()));
+      expect(b.profiles().map((p) => p.name), ['Moi']);
+      expect(b.sources(), isEmpty);
+      expect(b.db.select('SELECT * FROM favorites'), isEmpty);
     });
 
     test('profiles beyond ten are left out, with what belongs to them', () {
