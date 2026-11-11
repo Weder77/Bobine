@@ -140,6 +140,8 @@ class DlnaSession implements CastSession {
       if (load != _loads) return;
       try {
         final state = await _transportState();
+        // Another media may have been loaded while the TV answered.
+        if (load != _loads) return;
         if (state == 'PLAYING' || state == 'PAUSED_PLAYBACK') {
           await seek(to);
           return;

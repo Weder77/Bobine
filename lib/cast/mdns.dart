@@ -269,19 +269,23 @@ class ChromecastAnswers {
   /// Adds the [records] of a message sent by [from]; returns devices that are
   /// new or changed.
   List<CastDevice> add(List<DnsRecord> records, InternetAddress from) {
+    // A full table refuses new names only: what is already known keeps
+    // being updated (a device's new address), where everything stopped.
+    bool room(Map<String, Object?> m, String key) => m.containsKey(key) || m.length < maxEntries;
     for (final r in records) {
       final name = r.name.toLowerCase();
-      if (_instances.length >= maxEntries || _txt.length >= maxEntries || _hosts.length >= maxEntries) break;
       switch (r.type) {
         case DnsType.ptr when name == ChromecastBrowser.service && r.ptr != null:
-          _instances[r.ptr!.toLowerCase()] = from;
-          _spelling[r.ptr!.toLowerCase()] = r.ptr!;
+          final instance = r.ptr!.toLowerCase();
+          if (!room(_instances, instance)) continue;
+          _instances[instance] = from;
+          _spelling[instance] = r.ptr!;
         case DnsType.txt when r.txt != null:
-          _txt[name] = r.txt!;
+          if (room(_txt, name)) _txt[name] = r.txt!;
         case DnsType.srv when r.target != null:
-          _srv[name] = (r.target!.toLowerCase(), r.port ?? 8009);
+          if (room(_srv, name)) _srv[name] = (r.target!.toLowerCase(), r.port ?? 8009);
         case DnsType.a when r.address != null:
-          _hosts[name] = r.address!;
+          if (room(_hosts, name)) _hosts[name] = r.address!;
       }
     }
     // A device that answers a TXT / SRV query directly is known too.

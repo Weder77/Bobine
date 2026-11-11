@@ -7,9 +7,11 @@ const String kReleaseRepo = 'Weder77/Bobine';
 
 /// Public Ed25519 key (base64, 32 bytes) the installers of the releases are
 /// signed with (see `docs/signature-mises-a-jour.md`). Once set, an update
-/// is installed only when its signature is valid: a release published by
-/// someone else (a stolen GitHub access, a compromised build step) is
-/// refused. Empty: the fingerprint given by GitHub alone is checked.
+/// is installed only when its signature is valid: an installer put on a
+/// release without the key (an asset replaced, a release made by hand) is
+/// refused. Signed by the build, it does not protect from the build itself
+/// (a workflow changed, a step compromised): only signing outside GitHub
+/// would. Empty: the fingerprint given by GitHub alone is checked.
 const String kUpdatePublicKey = '';
 
 /// Compares two "1.2.3" versions (a leading "v" and a "+build" are ignored).

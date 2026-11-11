@@ -121,6 +121,27 @@ void main() {
       expect(tv.add(dnsRecords(_chromecastAnswer(fn: 'Chambre')), from).single.name, 'Chambre');
     });
 
+    test('a full table still follows the devices it knows', () {
+      final answers = ChromecastAnswers();
+      final from = InternetAddress('192.168.1.42');
+      expect(answers.add(dnsRecords(_chromecastAnswer(fn: 'Salon')), from), hasLength(1));
+      // Forged answers fill the table…
+      for (var i = 0; i < ChromecastAnswers.maxEntries + 5; i++) {
+        final instance = 'Faux-$i._googlecast._tcp.local';
+        answers.add(
+          dnsRecords(
+            _DnsWriter.answer(
+              count: 1,
+              (w) => w.record(ChromecastBrowser.service, DnsType.ptr, () => w.name(instance)),
+            ),
+          ),
+          InternetAddress('192.168.1.${100 + i % 100}'),
+        );
+      }
+      // …and the known device's new name still comes through.
+      expect(answers.add(dnsRecords(_chromecastAnswer(fn: 'Chambre')), from).single.name, 'Chambre');
+    });
+
     test('a bare PTR asks for details; the responder address is used without A record', () {
       const instance = 'Google-TV-ffffffffffffffffffffffffffffffff._googlecast._tcp.local';
       final answers = ChromecastAnswers();
@@ -225,6 +246,20 @@ void main() {
 <serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType><controlURL>/cd</controlURL>
 </service></serviceList></device></root>''';
       expect(parseUpnpDescription(server, Uri.parse('http://10.0.0.6/')), isNull);
+    });
+
+    test('the volume and format addresses of a description stay on its network too', () {
+      const xml = '''<root><device><friendlyName>TV</friendlyName><serviceList>
+<service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType><controlURL>/av</controlURL></service>
+<service><serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>
+<controlURL>http://203.0.113.9/rc</controlURL></service>
+<service><serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>
+<controlURL>http://127.0.0.1:8080/cm</controlURL></service>
+</serviceList></device></root>''';
+      final d = parseUpnpDescription(xml, Uri.parse('http://192.168.1.20:9197/desc.xml'))!;
+      expect(d.avTransport, Uri.parse('http://192.168.1.20:9197/av'));
+      expect(d.renderingControl, isNull);
+      expect(d.connectionManager, isNull);
     });
 
     test('a file of this computer is a path or file://, not an rtsp or udp stream', () {

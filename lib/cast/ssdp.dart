@@ -165,6 +165,10 @@ CastDevice? parseUpnpDescription(String xml, Uri location) {
   // network): not on this computer, the router or the Internet.
   final from = InternetAddress.tryParse(location.host);
   if (from != null && !answerMayPointTo(avTransport.$1.host, from)) return null;
+  // The same for the volume and the formats: a description could send
+  // those requests to any address.
+  if (from != null && rendering != null && !answerMayPointTo(rendering.$1.host, from)) rendering = null;
+  if (from != null && connections != null && !answerMayPointTo(connections.$1.host, from)) connections = null;
   final name = tag(xml, 'friendlyName') ?? location.host;
   return CastDevice(
     id: tag(xml, 'UDN') ?? '${location.host}:${location.port}',

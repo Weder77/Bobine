@@ -1,9 +1,16 @@
 # Signature des mises à jour
 
-Bobine installe ses mises à jour en silence. Pour qu'une release publiée par
-quelqu'un d'autre (accès GitHub volé, étape de build compromise) ne puisse pas
-être installée, l'installateur peut être signé avec une clé Ed25519 dont la
-moitié publique est intégrée à l'application.
+Bobine installe ses mises à jour en silence. Pour qu'un installateur déposé
+sur une release sans la clé (fichier remplacé, release faite à la main) ne
+puisse pas être installé, l'installateur peut être signé avec une clé Ed25519
+dont la moitié publique est intégrée à l'application.
+
+Limite : la signature est faite par le build GitHub. Elle ne protège pas d'un
+build lui-même compromis (workflow modifié par un accès volé, étape tierce
+piégée) : le job signe ce que le build a produit. Pour s'en protéger aussi, il
+faut signer hors de GitHub, sur ton ordinateur, l'installateur téléchargé
+depuis l'artefact du build (mêmes commandes que dans le workflow), puis
+déposer le `.sig` sur la release.
 
 Tant que la clé n'est pas configurée, l'application vérifie seulement que
 l'installateur vient des releases du dépôt sur github.com, en https, avec
