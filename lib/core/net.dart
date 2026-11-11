@@ -134,8 +134,9 @@ Stream<List<int>> gunzipIfNeeded(Stream<List<int>> input) {
 }
 
 /// Largest answer kept whole in memory (API answers: lists of channels,
-/// films, series). Real ones are a few dozen MB for a very big provider.
-const int kMaxMemoryBody = 512 << 20;
+/// films, series). Real ones are a few dozen MB for a very big provider;
+/// six of them are asked at once.
+const int kMaxMemoryBody = 200 << 20;
 
 /// Longest silence accepted from a server in the middle of an answer.
 const Duration kBodyStall = Duration(seconds: 90);

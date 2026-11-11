@@ -4,9 +4,10 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../core/secrets.dart';
+import '../core/text.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 7;
+const int kSchemaVersion = 8;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -76,6 +77,7 @@ void _migrate(Database db) {
     if (version < 5) _migrateV5(db);
     if (version < 6) _migrateV6(db);
     if (version < 7) _migrateV7(db);
+    if (version < 8) _migrateV8(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -358,6 +360,20 @@ void _migrateV6(Database db) {
 /// otherwise bring back, say, a parental code removed since.
 void _migrateV7(Database db) {
   db.execute('CREATE TABLE sync_seen (id TEXT PRIMARY KEY, modified_at INTEGER NOT NULL) WITHOUT ROWID');
+}
+
+/// v8: channel name keys keep other alphabets and are null when nothing is
+/// left to tell a channel by (see [channelMatchKey]). Guides are imported
+/// again at the next start, to be stored with the same keys.
+void _migrateV8(Database db) {
+  final rows = db.select('SELECT id, name FROM channels');
+  final update = db.prepare('UPDATE channels SET match_key = ? WHERE id = ?');
+  for (final r in rows) {
+    final key = channelMatchKey(r['name'] as String);
+    update.execute([key.isEmpty ? null : key, r['id']]);
+  }
+  update.close();
+  db.execute('UPDATE sources SET epg_updated_at = NULL');
 }
 
 /// The first schema, as created by Bobine 1.0 (to test migrations).

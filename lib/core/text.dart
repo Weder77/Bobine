@@ -153,24 +153,33 @@ String redactCredentials(String text) => text
     .replaceAllMapped(_secretBearer, (m) => '${m.group(1)}***')
     .replaceAllMapped(_secretJson, (m) => '${m.group(1)}***"');
 
+// "FR: ", "|FR| ", "FR | ", "FR - ", "[FR]", "(FR)". A dash right after
+// the letters is part of the name: "BBC-One", "RMC-Sport 1".
 final RegExp _countryPrefix = RegExp(
-  r'^\s*(\|?[a-z]{2,3}\|?\s*[:|\-]\s*|\[[a-z]{2,3}\]\s*|\([a-z]{2,3}\)\s*)',
+  r'^\s*(\|?[a-z]{2,3}\|?\s*[:|]\s*|\|[a-z]{2,3}\|\s*|[a-z]{2,3}\s+-\s+|\[[a-z]{2,3}\]\s*|\([a-z]{2,3}\)\s*)',
   caseSensitive: false,
 );
+final RegExp _notLetterOrDigit = RegExp(r'[^\p{L}\p{N}]+', unicode: true);
+final RegExp _onlyDigits = RegExp(r'^\d*$');
 final RegExp _qualityTokens = RegExp(
   r'\b(uhd|fhd|hd|sd|hq|lq|4k|8k|hevc|h265|h264|1080p?|720p?|2160p?|50fps|60fps|backup|vip|\+1)\b',
   caseSensitive: false,
 );
 
 /// Normalizes a channel name for EPG matching:
-/// "FR: TF1 HD" -> "tf1", "|FR| France 2 FHD" -> "france2".
+/// "FR: TF1 HD" -> "tf1", "|FR| France 2 FHD" -> "france2",
+/// "Россия 1 HD" -> "россия1". Empty when nothing is left to tell the
+/// channel by (no letters, or only a number): such a key would put the
+/// guide of one channel on others.
 String channelMatchKey(String name) {
-  var s = foldText(name);
+  var s = foldText(name.length > 200 ? name.substring(0, 200) : name);
   s = s.replaceFirst(_countryPrefix, '');
-  s = s.replaceAll(RegExp(r'[\[\(][^\]\)]*[\]\)]'), ' ');
+  // An opening bracket ends a group too: many unclosed ones made this
+  // expression slow (each of them read to the end of the name).
+  s = s.replaceAll(RegExp(r'[\[\(][^\]\)\[\(]*[\]\)]'), ' ');
   s = s.replaceAll(_qualityTokens, ' ');
-  s = s.replaceAll(RegExp(r'[^a-z0-9]+'), '');
-  return s;
+  s = s.replaceAll(_notLetterOrDigit, '');
+  return _onlyDigits.hasMatch(s) ? '' : s;
 }
 
 /// Fast, stable 64-bit FNV-1a hash rendered as hex (used for ids / file names).
@@ -186,10 +195,12 @@ String stableHash(String input) {
   return hi.toRadixString(16).padLeft(8, '0') + lo.toRadixString(16).padLeft(8, '0');
 }
 
-/// Extracts a plausible release year from a title like "Dune (2021)" or "Dune - 2021".
+/// Extracts a plausible release year from a title like "Dune (2021)" or
+/// "Dune - 2021" (not "Blade Runner 2049": too far ahead to be one).
 int? yearFromTitle(String title) {
   final m = RegExp(r'[\(\[\s\-](19[2-9]\d|20[0-4]\d)[\)\]]?\s*$').firstMatch(title.trim());
-  return m == null ? null : int.parse(m.group(1)!);
+  final y = m == null ? null : int.parse(m.group(1)!);
+  return y == null || y > DateTime.now().year + 2 ? null : y;
 }
 
 /// Best effort conversion of loosely-typed JSON values (Xtream APIs mix strings and numbers).

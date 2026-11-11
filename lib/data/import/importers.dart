@@ -192,12 +192,18 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
     final seriesByKey = <String, ({String extId, int position})>{};
     var count = 0, refused = 0;
 
+    // Next suffix to try for a name already seen: counting from 1 again
+    // for each copy made a list of the same entry repeated slow (the
+    // square of its length). The ids are the same as before.
+    final nextSuffix = <String, int>{};
     String uniqueId(String base) {
       var id = stableHash(base);
-      var n = 1;
-      while (!seenIds.add(id)) {
+      if (seenIds.add(id)) return id;
+      var n = nextSuffix[base] ?? 1;
+      do {
         id = stableHash('$base#${n++}');
-      }
+      } while (!seenIds.add(id));
+      nextSuffix[base] = n;
       return id;
     }
 
@@ -208,6 +214,11 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
         return;
       }
       count++;
+      if (count > kMaxPlaylistEntries) {
+        throw NetException(
+          'Playlist trop grande (plus de $kMaxPlaylistEntries entrées) : import arrêté, le contenu déjà importé est gardé.',
+        );
+      }
       if (count % 1000 == 0) progress('Analyse', count);
       final kind = classifyEntry(e);
       final group = e.groupTitle;
@@ -226,7 +237,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
             asInt(e.attr('catchup-days') ?? e.attr('tvg-rec') ?? e.attr('timeshift')) ?? 0,
             e.attr('catchup') ?? e.attr('catchup-type'),
             _catchupSource(e.attr('catchup-source')),
-            channelMatchKey(e.name),
+            _matchKey(e.name),
             batch.channels.length,
           ]);
         case M3uKind.movie:
@@ -453,7 +464,7 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
     for (final s in results[1]) {
       final id = asString(s['stream_id']);
       if (id == null || !seen.add('l$id')) continue;
-      final name = asString(s['name']) ?? 'Chaîne $id';
+      final name = _name(asString(s['name'])) ?? 'Chaîne $id';
       final archive = asInt(s['tv_archive']) == 1 ? (asInt(s['tv_archive_duration']) ?? 0) : 0;
       batch.channels.add([
         id,
@@ -467,14 +478,14 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
         archive,
         archive > 0 ? 'xc' : null,
         null,
-        channelMatchKey(name),
+        _matchKey(name),
         batch.channels.length,
       ]);
     }
     for (final m in results[3]) {
       final id = asString(m['stream_id']);
       if (id == null || !seen.add('m$id')) continue;
-      final name = asString(m['name']) ?? 'Film $id';
+      final name = _name(asString(m['name'])) ?? 'Film $id';
       batch.movies.add([
         id,
         catKey(ContentKind.movie, m['category_id']),
@@ -492,7 +503,7 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
     for (final s in results[5]) {
       final id = asString(s['series_id']);
       if (id == null || !seen.add('s$id')) continue;
-      final name = asString(s['name']) ?? 'Série $id';
+      final name = _name(asString(s['name'])) ?? 'Série $id';
       final release = asString(s['releaseDate']) ?? asString(s['release_date']);
       final year = (release != null && release.length >= 4) ? int.tryParse(release.substring(0, 4)) : null;
       final backdrop = s['backdrop_path'] is List && (s['backdrop_path'] as List).isNotEmpty
@@ -554,6 +565,24 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     final channelNames = <String, String>{};
     var seen = 0;
 
+    // Only the programmes of the source's channels are kept (by tvg-id, or
+    // by a name of the guide channel): a guide of every channel of a
+    // country held in memory before being written could exhaust it. A
+    // source without channels yet keeps everything, up to a bound.
+    final epgIds = {
+      for (final r in db.select(
+        'SELECT DISTINCT lower(epg_id) AS e FROM channels WHERE source_id = ? AND epg_id IS NOT NULL',
+        [sourceId],
+      ))
+        r['e'] as String,
+    };
+    final matchKeys = {
+      for (final r in db.select('SELECT DISTINCT name FROM channels WHERE source_id = ?', [sourceId]))
+        channelMatchKey(r['name'] as String),
+    }..remove('');
+    final keepAll = epgIds.isEmpty && matchKeys.isEmpty;
+    final known = <String>{...epgIds};
+
     final parser = XmltvParser(
       onProgramme: (channel, rawStart, rawStop, title, desc, category) {
         seen++;
@@ -561,13 +590,19 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
         final start = rawStart + shift;
         final stop = rawStop + shift;
         if (stop < minStop || start > maxStart) return;
+        if (!keepAll && !known.contains(channel.toLowerCase())) return;
+        if (programmes.length >= kMaxGuideProgrammes) return;
         programmes.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title), category]);
       },
       onChannel: (id, names) {
         final lid = id.toLowerCase();
         for (final n in [...names, id]) {
           final key = channelMatchKey(n);
-          if (key.isNotEmpty) channelNames.putIfAbsent(key, () => lid);
+          if (key.isEmpty || channelNames.length >= kMaxGuideProgrammes) continue;
+          if (keepAll || matchKeys.contains(key)) {
+            channelNames.putIfAbsent(key, () => lid);
+            known.add(lid);
+          }
         }
       },
     );
@@ -632,3 +667,21 @@ void recordSourceError(String dbPath, int sourceId, String? message) {
     db.close();
   }
 }
+
+/// The name key stored with a channel, null when it has none: channels
+/// without one must not all look like the same channel.
+String? _matchKey(String name) {
+  final k = channelMatchKey(name);
+  return k.isEmpty ? null : k;
+}
+
+/// A name from the provider, cut to the length of the M3U ones: every name
+/// goes through several expressions, and real ones are far shorter.
+String? _name(String? v) => v == null || v.length <= kMaxEntryName ? v : v.substring(0, kMaxEntryName).trim();
+
+/// Entries read from one playlist at most: all are held in memory before
+/// being written. The largest real ones are a few hundred thousand.
+const int kMaxPlaylistEntries = 1500000;
+
+/// Programmes kept from one guide at most (held in memory the same way).
+const int kMaxGuideProgrammes = 3000000;

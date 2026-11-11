@@ -298,14 +298,18 @@ class Repository {
 
   /// Streams of the same channel in other qualities ("TF1 HD", "TF1 FHD"…),
   /// visible ones only, [c] included.
-  List<Channel> channelVariants(Channel c) => db
-      .select(
-        'SELECT * FROM channels WHERE source_id = ? AND match_key = ? '
-        'AND ${_visible('channels', ContentKind.live, c.sourceId)} ORDER BY position',
-        [c.sourceId, channelMatchKey(c.name)],
-      )
-      .map(Channel.fromRow)
-      .toList();
+  List<Channel> channelVariants(Channel c) {
+    final key = channelMatchKey(c.name);
+    if (key.isEmpty) return [c];
+    return db
+        .select(
+          'SELECT * FROM channels WHERE source_id = ? AND match_key = ? '
+          'AND ${_visible('channels', ContentKind.live, c.sourceId)} ORDER BY position',
+          [c.sourceId, key],
+        )
+        .map(Channel.fromRow)
+        .toList();
+  }
 
   Channel? channelByExt(int sourceId, String extId) {
     final rows = db.select('SELECT * FROM channels WHERE source_id = ? AND ext_id = ? LIMIT 1', [sourceId, extId]);

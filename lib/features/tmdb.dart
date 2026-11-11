@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import '../core/open_url.dart';
+import '../core/text.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
@@ -99,27 +100,38 @@ class TmdbInfo {
   );
 }
 
+/// Language, version and quality markers of provider titles.
+const _markers =
+    r'4K|UHD|FHD|HD|SD|HEVC|H\.?26[45]|1080p|720p|2160p|VOSTFR|VOST|VF|VFF|VFQ|VO|MULTI|TRUEFRENCH|FRENCH|HDR|DV';
+
+/// Three-letter language tags seen before titles ("ENG: "); two capitals
+/// are always taken as one ("FR - "), but "CSI: Miami" is a title.
+const _languages3 = 'ENG|FRA|FRE|GER|DEU|ITA|SPA|ESP|POR|ARA|TUR|NLD|POL|RUS|VFF|VFQ|VOF|VOST';
+
 /// Title and year as TMDB knows them, from a provider name such as
-/// "FR - Odyssée (2018) [4K]" or "|FR| Les Veilleurs S01".
+/// "FR - Odyssée (2018) [4K]" or "|FR| Les Veilleurs S01". Markers are
+/// taken off only between brackets or at the ends: "The French Dispatch"
+/// and "Blade Runner - 2049" are titles.
 (String, int?) cleanTitle(String raw, {int? year}) {
   var t = raw;
   int? y = year;
+  final latest = DateTime.now().year + 2;
   final yearMatch = RegExp(r'[\(\[]\s*((?:19|20)\d{2})\s*[\)\]]|[-–]\s*((?:19|20)\d{2})\s*$').firstMatch(t);
-  if (yearMatch != null) {
-    y ??= int.tryParse(yearMatch.group(1) ?? yearMatch.group(2)!);
+  final found = yearMatch == null ? null : int.parse(yearMatch.group(1) ?? yearMatch.group(2)!);
+  if (yearMatch != null && found! >= 1900 && found <= latest) {
+    y ??= found;
     t = t.replaceRange(yearMatch.start, yearMatch.end, ' ');
   }
   t = t
       // Language / country tags at the start: "FR - ", "|FR| ", "[VF] ", "EN: ".
-      .replaceAll(RegExp(r'^\s*(?:\|[A-Z]{2,4}\||\[[A-Z]{2,6}\]|[A-Z]{2,3}\s*[-:|])\s*'), '')
-      // Quality and version markers anywhere.
+      .replaceAll(RegExp('^\\s*(?:\\|[A-Z]{2,4}\\||\\[[A-Z]{2,6}\\]|(?:[A-Z]{2}|$_languages3)\\s*[-:|])\\s*'), '')
+      // Markers between brackets, anywhere: "[4K]", "(VOSTFR)".
       .replaceAll(
-        RegExp(
-          r'[\[\(]?\b(?:4K|UHD|FHD|HD|SD|HEVC|H\.?26[45]|1080p|720p|2160p|VOSTFR|VOST|VF|VFF|VFQ|MULTI|TRUEFRENCH|FRENCH|HDR|DV)\b[\]\)]?',
-          caseSensitive: false,
-        ),
+        RegExp('[\\[\\(]\\s*(?:$_markers)(?:[\\s,/+-]+(?:$_markers))*\\s*[\\]\\)]', caseSensitive: false),
         ' ',
       )
+      // A run of them at the end: "Brume MULTI 1080p".
+      .replaceAll(RegExp('(?:[\\s.\\-]+(?:$_markers))+\\s*\$', caseSensitive: false), ' ')
       // Season markers for series names.
       .replaceAll(RegExp(r'\bS\d{1,2}(E\d{1,3})?\b', caseSensitive: false), ' ')
       .replaceAll(RegExp(r'[\[\]\(\)|]'), ' ')
@@ -127,6 +139,41 @@ class TmdbInfo {
       .trim();
   t = t.replaceAll(RegExp(r'[-–:]+$'), '').trim();
   return (t, y);
+}
+
+/// The TMDB result that is [title], or null when none is close enough: the
+/// first result of a search is often another work, and it would be shown
+/// (and kept 30 days) as this one.
+@visibleForTesting
+Map? pickTmdbResult(List<Map> results, String title, {required bool tv}) {
+  List<String> words(String s) =>
+      searchKey(s.replaceAll(RegExp(r"[^\p{L}\p{N}]+", unicode: true), ' ')).split(' ')..removeWhere((w) => w.isEmpty);
+  final wanted = words(title);
+  if (wanted.isEmpty) return null;
+  double score(Map r) {
+    var best = 0.0;
+    for (final name in [r[tv ? 'name' : 'title'], r[tv ? 'original_name' : 'original_title']]) {
+      if (name is! String) continue;
+      final got = words(name);
+      if (got.join(' ') == wanted.join(' ')) return 1;
+      final common = got.toSet().intersection(wanted.toSet()).length;
+      final all = got.toSet().union(wanted.toSet()).length;
+      if (all > 0) best = best > common / all ? best : common / all;
+    }
+    return best;
+  }
+
+  Map? pick;
+  var top = 0.0;
+  for (final r in results.take(10)) {
+    final sc = score(r);
+    if (sc == 1) return r;
+    if (sc > top) {
+      top = sc;
+      pick = r;
+    }
+  }
+  return top >= 0.5 ? pick : null;
 }
 
 /// Name to show for a provider title: without year, language or quality
@@ -208,14 +255,8 @@ class TmdbService {
       final again = await _get('/search/${tv ? 'tv' : 'movie'}', {'query': title, 'language': 'fr-FR'});
       results = (again['results'] as List? ?? const []).cast<Map>();
     }
-    if (results.isEmpty) return null;
-    final norm = title.toLowerCase();
-    final best = results.firstWhere(
-      (r) =>
-          '${r[tv ? 'name' : 'title']}'.toLowerCase() == norm ||
-          '${r[tv ? 'original_name' : 'original_title']}'.toLowerCase() == norm,
-      orElse: () => results.first,
-    );
+    final best = pickTmdbResult(results, title, tv: tv);
+    if (best == null || best['id'] is! int) return null;
     final id = best['id'] as int;
     final d = await _get('/${tv ? 'tv' : 'movie'}/$id', {
       'language': 'fr-FR',

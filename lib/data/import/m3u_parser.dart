@@ -27,11 +27,15 @@ class EpisodeInfo {
   final int episode;
 }
 
-final RegExp _attrRe = RegExp(r'''([A-Za-z0-9_\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,"']+))''');
-final RegExp _episodeRe = RegExp(
-  r'^(.*?)[\s\-_.:|(\[]*\b[Ss](\d{1,2})[\s\-_.]*[EeXx](\d{1,4})\b',
-  caseSensitive: false,
-);
+// The look-behind makes a name start where a run of name characters
+// starts: tried from inside the run as well, a long line without "=" took
+// a time growing with the square of its length (seconds, then minutes).
+final RegExp _attrRe = RegExp(r'''(?<![A-Za-z0-9_\-:])([A-Za-z0-9_\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s,"']+))''');
+final RegExp _episodeRe = RegExp(r'\b[Ss](\d{1,2})[\s\-_.]*[EeXx](\d{1,4})\b');
+
+/// Longest display name kept: real ones are far shorter, and every name
+/// goes through several expressions.
+const int kMaxEntryName = 500;
 const Set<String> _vodExtensions = {
   'mp4',
   'mkv',
@@ -98,7 +102,8 @@ class M3uParser {
     }
 
     // URL line.
-    final name = _pendingName ?? _nameFromUrl(line);
+    var name = _pendingName ?? _nameFromUrl(line);
+    if (name.length > kMaxEntryName) name = name.substring(0, kMaxEntryName);
     onEntry(M3uEntry(name: name, url: line, attrs: _pendingAttrs, group: _pendingGroup));
     _pendingName = null;
     _pendingAttrs = const {};
@@ -124,6 +129,7 @@ class M3uParser {
     var name = comma < 0 ? '' : body.substring(comma + 1).trim();
     final attrs = parseAttributes(attrPart);
     if (name.isEmpty) name = attrs['tvg-name'] ?? '';
+    if (name.length > kMaxEntryName) name = name.substring(0, kMaxEntryName).trim();
     _pendingName = name.isEmpty ? null : name;
     _pendingAttrs = attrs;
   }
@@ -182,8 +188,17 @@ M3uKind classifyEntry(M3uEntry e) {
 EpisodeInfo? parseEpisode(String name) {
   final m = _episodeRe.firstMatch(name);
   if (m == null) return null;
-  var series = m.group(1)!.trim();
-  series = series.replaceAll(RegExp(r'[\s\-_.:|(\[]+$'), '').trim();
+  // The series name: what comes before, without the separators that end it
+  // (trimmed by hand: an expression anchored at the end is slow on a long
+  // run of them).
+  var end = m.start;
+  while (end > 0 && _seriesEnd.contains(name.codeUnitAt(end - 1))) {
+    end--;
+  }
+  final series = name.substring(0, end).trim();
   if (series.isEmpty) return null;
-  return EpisodeInfo(series, int.parse(m.group(2)!), int.parse(m.group(3)!));
+  return EpisodeInfo(series, int.parse(m.group(1)!), int.parse(m.group(2)!));
 }
+
+/// Spaces and " -_.:|([" before "S01E02".
+final Set<int> _seriesEnd = {...' \t-_.:|(['.codeUnits, 0xA0};

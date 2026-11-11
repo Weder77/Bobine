@@ -279,6 +279,37 @@ http://srv/plain/stream4.ts
       expect(channelMatchKey('|FR| France 2 FHD'), 'france2');
       expect(channelMatchKey('France 2'), 'france2');
       expect(channelMatchKey('Canal+ Sport (Backup)'), 'canalsport');
+      expect(channelMatchKey('FR | TF1'), 'tf1');
+      expect(channelMatchKey('[UK] BBC One'), 'bbcone');
+      // Other alphabets are kept, and two channels do not get the key "1".
+      expect(channelMatchKey('Россия 1 HD'), 'россия1');
+      expect(channelMatchKey('БНТ 1'), 'бнт1');
+      expect(channelMatchKey('الجزيرة'), isNotEmpty);
+      expect(channelMatchKey('Первый канал'), 'первыйканал');
+      // A dash is part of a name, not a country.
+      expect(channelMatchKey('BBC-One'), 'bbcone');
+      expect(channelMatchKey('RMC-Sport 1'), isNot(channelMatchKey('Sky-Sport 1')));
+      // Nothing to tell the channel by.
+      expect(channelMatchKey('13'), '');
+      expect(channelMatchKey('FR: 1 HD'), '');
+    });
+
+    test('a very long line is read at once', () {
+      final sw = Stopwatch()..start();
+      final n = 200000;
+      M3uParser.parseAttributes('a' * n);
+      parseEpisode('a ${'- ' * n}');
+      parseEpisode('${'- ' * n}S01E02');
+      channelMatchKey('(' * n);
+      channelMatchKey('[a' * n);
+      final entries = <M3uEntry>[];
+      M3uParser(entries.add)
+        ..addLine('#EXTM3U')
+        ..addLine('#EXTINF:-1 ${'a' * n},${'(' * n}')
+        ..addLine('http://h/1.ts');
+      expect(entries.single.name.length, kMaxEntryName);
+      expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(parseEpisode('Lupin - - S01E03')!.seriesName, 'Lupin');
     });
 
     test('filter words match in any order', () {

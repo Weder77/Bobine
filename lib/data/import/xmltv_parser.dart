@@ -146,7 +146,8 @@ class XmltvParser {
     return all.first.text;
   }
 
-  static final _attrRe = RegExp(r'''([\w\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)')''');
+  // Look-behind: see the M3U parser, a long tag without "=" was slow.
+  static final _attrRe = RegExp(r'''(?<![\w\-:])([\w\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)')''');
 
   static Map<String, String> _attributes(String tag) {
     final out = <String, String>{};

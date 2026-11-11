@@ -152,7 +152,9 @@ void main() {
           final xml = StringBuffer('<?xml version="1.0"?><tv>');
           xml.write('<channel id="CH0"><display-name>Chaîne 0</display-name></channel>');
           xml.write('<channel id="ch1"><display-name>Chaîne 1</display-name></channel>');
-          for (final id in ['CH0', 'ch1']) {
+          // A channel the source does not have.
+          xml.write('<channel id="zz"><display-name>Ailleurs</display-name></channel>');
+          for (final id in ['CH0', 'ch1', 'zz']) {
             var t = now.subtract(const Duration(hours: 3));
             for (var i = 0; i < 24; i++) {
               final e = t.add(const Duration(minutes: 30));
@@ -203,6 +205,9 @@ void main() {
 
     final kept = await importEpg(path, id, 3, null);
     expect(kept, greaterThan(20));
+    // The programmes of a channel this source does not have are not kept.
+    expect(repo.db.select("SELECT 1 FROM epg_programs WHERE channel = 'zz'"), isEmpty);
+    expect(repo.db.select("SELECT 1 FROM epg_programs WHERE channel = 'ch0'"), isNotEmpty);
 
     final epg = EpgCache(repo);
     final channels = repo.channels(id);
