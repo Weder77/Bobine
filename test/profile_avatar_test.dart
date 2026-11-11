@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image/image.dart' as img;
 import 'package:bobine/data/db.dart';
@@ -13,6 +14,28 @@ import 'package:bobine/features/profile_photo.dart';
 import 'package:bobine/ui/profiles.dart';
 
 img.Image _decoded(String avatar) => img.decodeJpg(ProfilePhoto.bytesOf(avatar)!)!;
+
+int _crc32(List<int> bytes) {
+  var c = 0xFFFFFFFF;
+  for (final b in bytes) {
+    c ^= b;
+    for (var k = 0; k < 8; k++) {
+      c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
+    }
+  }
+  return c ^ 0xFFFFFFFF;
+}
+
+/// A real PNG whose header claims [width] x [height] pixels.
+Uint8List _pngClaiming(int width, int height) {
+  final png = Uint8List.fromList(img.encodePng(img.Image(width: 2, height: 2)));
+  final data = ByteData.sublistView(png);
+  // Signature (8), length (4), "IHDR" (4), then width and height.
+  data.setUint32(16, width);
+  data.setUint32(20, height);
+  data.setUint32(29, _crc32(png.sublist(12, 29)));
+  return png;
+}
 
 void main() {
   group('photo', () {
@@ -58,6 +81,44 @@ void main() {
       expect(p.r, closeTo(0x7F, 8));
       expect(p.g, closeTo(0xA6, 8));
       expect(p.b, closeTo(0xFF, 8));
+    });
+
+    test('a grey picture stays grey, with or without transparency', () {
+      for (final channels in [1, 2]) {
+        final src = img.Image(width: 120, height: 90, numChannels: channels);
+        for (final p in src) {
+          p
+            ..r = 128
+            ..a = 255;
+        }
+        final png = img.encodePng(src);
+        expect(img.decodePng(png)!.numChannels, channels);
+        final p = _decoded(ProfilePhoto.encode(png)!).getPixel(96, 96);
+        expect([p.r, p.g, p.b], everyElement(closeTo(128, 6)), reason: '$channels channel(s): ${[p.r, p.g, p.b]}');
+      }
+    });
+
+    test('a palette picture keeps its colours', () {
+      final src = img.Image(width: 100, height: 100);
+      img.fill(src, color: img.ColorRgb8(30, 90, 220));
+      final gif = img.encodeGif(src);
+      final p = _decoded(ProfilePhoto.encode(gif)!).getPixel(96, 96);
+      expect(p.r, closeTo(30, 12));
+      expect(p.g, closeTo(90, 12));
+      expect(p.b, closeTo(220, 12));
+    });
+
+    test('a large JPEG is decoded at a reduced size; a huge picture is refused before decoding', () {
+      final big = img.Image(width: 4000, height: 3000);
+      img.fill(big, color: img.ColorRgb8(200, 120, 40));
+      final out = _decoded(ProfilePhoto.encode(img.encodeJpg(big, quality: 60))!);
+      expect(out.width, 192);
+      expect(out.getPixel(96, 96).r, closeTo(200, 10));
+
+      // 12000 x 12000 would take about 430 MB: never decoded.
+      final huge = _pngClaiming(12000, 12000);
+      expect(img.PngDecoder().startDecode(huge)!.width, 12000);
+      expect(ProfilePhoto.encode(huge), isNull);
     });
 
     test('what is not a picture is refused', () {
@@ -126,6 +187,20 @@ void main() {
       expect(b.profiles().firstWhere((p) => p.name == 'Tom').avatar, photo);
     });
 
+    test('a profile found by name gets its picture back, unless it has one here', () {
+      final (a, aBackup) = install();
+      final moi = a.profile(1)!;
+      a.updateProfile(1, name: moi.name, color: moi.color, kids: false, avatar: 'preset:chat');
+      a.createProfile(name: 'Léa', color: 1, avatar: 'preset:panda');
+      final json = jsonDecode(jsonEncode(aBackup.build(credentials: false))) as Map<String, Object?>;
+
+      final (b, bBackup) = install(); // a new computer: it has its own "Moi"
+      b.createProfile(name: 'Léa', color: 1, avatar: 'preset:robot');
+      expect(bBackup.restore(json).profilesCreated, 0);
+      expect(b.profile(1)!.avatar, 'preset:chat');
+      expect(b.profiles().firstWhere((p) => p.name == 'Léa').avatar, 'preset:robot');
+    });
+
     test('profiles beyond ten are left out, with what belongs to them', () {
       final (a, aBackup) = install();
       final src = a.insertSource(name: 'S', type: SourceType.m3u, url: 'http://s/list.m3u');
@@ -143,11 +218,29 @@ void main() {
       expect(report.profilesCreated, 1);
       expect(report.skippedProfiles, ['Tom', 'Zoé']);
       expect(report.toString(), contains('${Profile.max} profils au maximum'));
+      expect(report.toString(), isNot(contains('rien de nouveau')));
       expect(b.profiles(), hasLength(Profile.max));
       final favorites = b.db.select('SELECT profile_id, ext_id FROM favorites');
       expect(favorites.map((r) => r['ext_id']), ['film-Léa']);
       expect(favorites.single['profile_id'], b.profiles().firstWhere((p) => p.name == 'Léa').id);
     });
+  });
+
+  testWidgets('a kids profile with a picture still shows the child', (tester) async {
+    Future<int> badges({required bool kids, String? avatar}) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Center(
+            child: AvatarView(avatar: avatar, color: 0xFF7FA6FF, initial: 'Z', kids: kids, size: 64),
+          ),
+        ),
+      );
+      return find.byIcon(Icons.child_care_rounded).evaluate().length;
+    }
+
+    expect(await badges(kids: true, avatar: 'preset:panda'), 1);
+    expect(await badges(kids: true), 1); // the child instead of the initial
+    expect(await badges(kids: false, avatar: 'preset:panda'), 0);
   });
 
   test('the sync log notes a change of picture alone', () {

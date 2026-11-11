@@ -592,18 +592,29 @@ class SyncEngine {
       return;
     }
     final values = [d['name'] ?? 'Profil', d['color'] ?? 0xFFFFB547, d['kids'] ?? 0];
-    // The picture is sent by the versions that have one. An older version
-    // leaves it out of what it sends: the picture held here stays.
-    final avatar = d.containsKey('avatar') ? [d['avatar'] is String ? d['avatar'] : null] : const [];
+    // The picture is sent by the versions that have one; an older version
+    // leaves it out of what it sends.
+    final hasAvatar = d.containsKey('avatar');
+    final avatar = d['avatar'] is String ? d['avatar'] as String : null;
     if (id != null) {
-      _db.execute(
-        'UPDATE profiles SET name = ?, color = ?, kids = ?${avatar.isEmpty ? '' : ', avatar = ?'} WHERE id = ?',
-        [...values, ...avatar, id],
-      );
+      if (hasAvatar) {
+        _db.execute('UPDATE profiles SET name = ?, color = ?, kids = ?, avatar = ? WHERE id = ?', [
+          ...values,
+          avatar,
+          id,
+        ]);
+      } else {
+        _db.execute('UPDATE profiles SET name = ?, color = ?, kids = ? WHERE id = ?', [...values, id]);
+        // The picture held here stays, and goes back to the account: the
+        // devices that link next would get the profile without it.
+        if (_db.select('SELECT 1 FROM profiles WHERE id = ? AND avatar IS NOT NULL', [id]).isNotEmpty) {
+          _noteAfter('profiles', uid, i.item);
+        }
+      }
     } else {
       _db.execute('INSERT INTO profiles (name, color, kids, avatar, created_at, uid) VALUES (?, ?, ?, ?, ?, ?)', [
         ...values,
-        avatar.isEmpty ? null : avatar.first,
+        avatar,
         DateTime.now().millisecondsSinceEpoch ~/ 1000,
         uid,
       ]);

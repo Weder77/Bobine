@@ -738,6 +738,18 @@ void main() {
       );
       await b.sync();
       expect(b.profile('Léa B.').avatar, 'preset:panda');
+
+      // The picture goes back to the account: a device linking now gets it.
+      await b.sync();
+      final c = Device(remote);
+      await c.sync();
+      expect(c.profile('Léa B.').avatar, 'preset:panda');
+      await a.sync();
+      expect(a.profile('Léa B.').avatar, 'preset:panda');
+      // And it settles: nothing more goes back and forth.
+      await a.sync();
+      await b.sync();
+      expect((await a.sync()).sent + (await b.sync()).sent, 0);
     });
 
     test('changing only the picture is a change to send', () async {

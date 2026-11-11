@@ -29,7 +29,12 @@ class RestoreReport {
     if (profilesCreated > 0) '$profilesCreated profil(s) créé(s)',
     if (favorites > 0) '$favorites favori(s)',
     if (progress > 0) '$progress reprise(s)',
-    if (favorites == 0 && progress == 0 && sourcesCreated == 0 && profilesCreated == 0)
+    if (favorites == 0 &&
+        progress == 0 &&
+        sourcesCreated == 0 &&
+        profilesCreated == 0 &&
+        skippedSources.isEmpty &&
+        skippedProfiles.isEmpty)
       'rien de nouveau, tout était déjà là',
     if (skippedSources.isNotEmpty) 'ignoré : ${skippedSources.join(', ')} (source absente)',
     if (skippedProfiles.isNotEmpty) 'ignoré : ${skippedProfiles.join(', ')} (${Profile.max} profils au maximum)',
@@ -170,15 +175,21 @@ class BackupService {
     final localProfiles = _repo.profiles();
     for (final b in list('profiles')) {
       final name = '${b['name']}';
+      final avatar = b['avatar'] is String ? b['avatar'] as String : null;
       final match = localProfiles.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
       if (match != null) {
         profiles[b['id'] as int] = match.id;
+        // "Moi" exists on every installation: without this, its picture
+        // would never come back on a new computer. One chosen here stays.
+        if (match.avatar == null && avatar != null) {
+          _repo.updateProfile(match.id, name: match.name, color: match.color, kids: match.kids, avatar: avatar);
+        }
       } else if (_repo.canAddProfile) {
         profiles[b['id'] as int] = _repo.createProfile(
           name: name,
           color: (b['color'] as int?) ?? 0xFFFFB547,
           kids: (b['kids'] as int?) == 1,
-          avatar: b['avatar'] is String ? b['avatar'] as String : null,
+          avatar: avatar,
         );
         report.profilesCreated++;
       } else {

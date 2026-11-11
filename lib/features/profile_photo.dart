@@ -17,6 +17,10 @@ class ProfilePhoto {
   /// Largest file accepted, before it is reduced.
   static const maxInputBytes = 40 * 1024 * 1024;
 
+  /// Largest picture decoded at full size (JPEG photos are decoded straight
+  /// at a reduced size, whatever theirs): 64 MP already take about 200 MB.
+  static const maxInputPixels = 64 * 1000 * 1000;
+
   /// Largest photo kept: with the profile's name, once encrypted and encoded,
   /// it stays well under the 16 KB of an item on the account.
   static const maxBytes = 8000;
@@ -24,6 +28,10 @@ class ProfilePhoto {
   /// Sizes tried, sharpest first (the picker shows avatars at 128 px).
   static const _sizes = [192, 160, 128, 96, 64];
   static const _qualities = [88, 80, 72, 64, 56, 48, 40];
+
+  /// Short side a picture is brought down to before it is cut: twice the
+  /// largest size, so the last reduction still averages several pixels.
+  static const _workSide = 384;
 
   /// The photo in [bytes] (JPEG, PNG, WebP, GIF, BMP…), cut to its centre
   /// square, as a value for `profiles.avatar`. A transparent picture is laid
@@ -35,17 +43,30 @@ class ProfilePhoto {
   /// [fromFile], on this isolate.
   static String? encode(Uint8List bytes, {int background = 0xFF1A1503}) {
     if (bytes.isEmpty || bytes.length > maxInputBytes) return null;
-    img.Image? decoded;
+    final img.Image? decoded;
     try {
-      decoded = img.decodeImage(bytes, frame: 0);
+      decoded = _decode(bytes);
     } catch (_) {
       return null;
     }
     if (decoded == null || decoded.width < 1 || decoded.height < 1) return null;
-    var src = img.bakeOrientation(decoded);
-    if (src.hasPalette || src.format != img.Format.uint8) {
-      src = src.convert(format: img.Format.uint8, numChannels: src.hasAlpha ? 4 : 3);
+    var src = decoded;
+    // The JPEG decoder has already turned the picture upright.
+    final ifd = src.exif.imageIfd;
+    if (ifd.hasOrientation && ifd.orientation != 1) src = img.bakeOrientation(src);
+    // Palette pictures (GIF, PNG-8) cannot be averaged: made RGB first.
+    if (src.hasPalette) src = _rgb8(src);
+    final short = math.min(src.width, src.height);
+    if (short > _workSide) {
+      // Reduced before being cut, so that no step copies it at full size.
+      src = img.copyResize(
+        src,
+        width: math.max(1, src.width * _workSide ~/ short),
+        height: math.max(1, src.height * _workSide ~/ short),
+        interpolation: img.Interpolation.average,
+      );
     }
+    src = _rgb8(src);
     final side = math.min(src.width, src.height);
     final square = img.copyCrop(
       src,
@@ -68,6 +89,48 @@ class ProfilePhoto {
       }
     }
     return null;
+  }
+
+  /// First frame of the picture in [bytes]; null when it is not one, or too
+  /// large to decode at full size. Its dimensions are read before anything
+  /// is decoded.
+  static img.Image? _decode(Uint8List bytes) {
+    final decoder = img.findDecoderForData(bytes);
+    final info = decoder?.startDecode(bytes);
+    if (decoder == null || info == null || info.width < 1 || info.height < 1) return null;
+    if (decoder is img.JpegDecoder) {
+      // Decoded straight at 1/2, 1/4 or 1/8 of its size: fast, and small in memory.
+      final short = math.min(info.width, info.height);
+      var scale = 8;
+      while (scale > 1 && short ~/ scale < _workSide) {
+        scale ~/= 2;
+      }
+      return img.JpegDecoder(scale: scale).decode(bytes);
+    }
+    if (info.width * info.height > maxInputPixels) return null;
+    return decoder.decode(bytes, frame: 0);
+  }
+
+  /// [image] as 8-bit RGB, or RGBA when it has transparency. A grey picture
+  /// has one channel (two with transparency), and the JPEG encoder reads its
+  /// green and blue as 0: it would come out red.
+  static img.Image _rgb8(img.Image image) {
+    if (image.format == img.Format.uint8 && !image.hasPalette && image.numChannels >= 3) return image;
+    final alpha = image.hasAlpha;
+    final grey = !image.hasPalette && image.numChannels <= 2;
+    final out = img.Image(width: image.width, height: image.height, numChannels: alpha ? 4 : 3);
+    int v(num n) => (n * 255).round().clamp(0, 255);
+    for (final p in image) {
+      final r = v(p.rNormalized);
+      final g = grey ? r : v(p.gNormalized);
+      final b = grey ? r : v(p.bNormalized);
+      if (alpha) {
+        out.setPixelRgba(p.x, p.y, r, g, b, v(p.aNormalized));
+      } else {
+        out.setPixelRgb(p.x, p.y, r, g, b);
+      }
+    }
+    return out;
   }
 
   /// [image] without transparency, on [background].

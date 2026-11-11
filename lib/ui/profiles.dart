@@ -1,5 +1,8 @@
+import 'dart:math' as math;
+
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/theme.dart';
 import '../data/models.dart';
@@ -34,6 +37,10 @@ String? avatarAsset(String? avatar) {
   final name = avatar.substring('preset:'.length);
   return profileAvatars.containsKey(name) ? 'assets/avatars/$name.png' : null;
 }
+
+/// Longest profile name: with a photo, the profile must still fit in one
+/// item of the sync account, or it would stop following the account.
+const profileNameMaxLength = 40;
 
 /// Shown when a profile cannot be added.
 const profilesFullMessage = '${Profile.max} profils au maximum : supprime un profil pour en créer un autre.';
@@ -83,8 +90,9 @@ class AvatarView extends StatelessWidget {
   static ImageProvider? _image(String? avatar) {
     final asset = avatarAsset(avatar);
     if (asset != null) return AssetImage(asset);
-    final cached = _photos[avatar];
-    if (cached != null) return cached;
+    // Least recently used first: a photo used again goes to the end.
+    final cached = _photos.remove(avatar);
+    if (cached != null) return _photos[avatar!] = cached;
     final bytes = ProfilePhoto.bytesOf(avatar);
     if (bytes == null) return null;
     if (_photos.length >= 2 * Profile.max) _photos.remove(_photos.keys.first);
@@ -103,7 +111,7 @@ class AvatarView extends StatelessWidget {
             style: TextStyle(fontFamily: AppFonts.body, fontSize: size * 0.44, fontWeight: FontWeight.w700, color: ink),
           );
     final image = _image(avatar);
-    return Container(
+    final square = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
@@ -120,6 +128,29 @@ class AvatarView extends StatelessWidget {
               gaplessPlayback: true,
               errorBuilder: (_, _, _) => letter,
             ),
+    );
+    if (!kids || image == null) return square;
+    // A picture hides the child of a kids profile: a badge keeps it in sight.
+    final badge = math.max(14.0, size * 0.34);
+    return Stack(
+      children: [
+        square,
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: badge,
+            height: badge,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.cream,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF1A1503), width: math.max(1, badge * 0.07)),
+            ),
+            child: Icon(Icons.child_care_rounded, size: badge * 0.7, color: const Color(0xFF1A1503)),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -180,7 +211,7 @@ class ProfilePickerScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 44),
-              if (profiles.length < Profile.max)
+              if (s.repo.canAddProfile)
                 OutlinedButton.icon(
                   onPressed: () async {
                     await showProfileEditor(context);
@@ -305,6 +336,8 @@ class _ProfileEditorState extends State<_ProfileEditor> {
       ],
     );
     if (file == null || !mounted) return;
+    // What is chosen while the photo is processed stays chosen.
+    final chosen = _avatar;
     setState(() => _importing = true);
     String? photo;
     try {
@@ -317,7 +350,10 @@ class _ProfileEditorState extends State<_ProfileEditor> {
     if (!mounted) return;
     setState(() {
       _importing = false;
-      if (photo != null) _photo = _avatar = photo;
+      if (photo != null) {
+        _photo = photo;
+        if (_avatar == chosen) _avatar = photo;
+      }
     });
     if (photo == null) {
       ScaffoldMessenger.of(
@@ -372,6 +408,7 @@ class _ProfileEditorState extends State<_ProfileEditor> {
                     controller: _name,
                     autofocus: true,
                     decoration: const InputDecoration(labelText: 'Prénom'),
+                    inputFormatters: [LengthLimitingTextInputFormatter(profileNameMaxLength)],
                     onSubmitted: (_) => _save(),
                   ),
                 ),
