@@ -203,10 +203,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _subs.add(
       _ps.player.stream.playing.listen((p) {
         if (!mounted) return;
-        setState(() {
-          _playing = p;
-          if (p) _error = null;
-        });
+        // The error stays until pictures really come (see _onTick): play /
+        // pause on a dead link took the error card and "Réessayer" away,
+        // leaving a black screen.
+        setState(() => _playing = p);
       }),
     );
     // Playback is starting: no pause screen while it loads. Unless this is
@@ -228,7 +228,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _cast.removeListener(_onCast);
     _s.tracker.flush();
-    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick]) {
+    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick, _zapTimer]) {
       t?.cancel();
     }
     for (final s in _subs) {
@@ -456,7 +456,15 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return _showControls();
     }
     if (_isLive && seconds < 0) _timeshift = true;
-    _ps.seekBy(Duration(seconds: seconds));
+    final st = _ps.player.state;
+    if (!_isLive && st.completed) {
+      // At the end of a film a relative seek left it "ended": Espace then
+      // started it over from 0:00. A seek to a place does not.
+      final to = st.position + Duration(seconds: seconds);
+      _ps.player.seek(to < Duration.zero ? Duration.zero : (to > st.duration ? st.duration : to));
+    } else {
+      _ps.seekBy(Duration(seconds: seconds));
+    }
     _flash(seconds > 0 ? '+$seconds s' : '$seconds s');
     _showControls();
   }
@@ -546,11 +554,18 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_channels.isEmpty || _source == null) return;
     for (var step = 1; step <= _channels.length; step++) {
       final i = (_chIndex + delta * step) % _channels.length;
-      if (!_channelLocked(_channels[i])) return _playChannel(i);
+      if (!_channelLocked(_channels[i])) return _playChannel(i, settle: true);
     }
   }
 
-  void _playChannel(int index) {
+  /// Opening of the stream chosen by zapping, put off a moment.
+  Timer? _zapTimer;
+
+  /// [settle]: a gamepad held on a direction sends a full press every
+  /// 90 ms. The channel shown changes at once, its stream is opened once
+  /// the zapping stops (300 ms): eleven streams a second were asked of the
+  /// provider, and "Récentes" filled with channels passed by.
+  void _playChannel(int index, {bool settle = false}) {
     if (_source == null || index < 0 || index >= _channels.length) return;
     final c = _channels[index];
     if (_channelLocked(c)) {
@@ -564,8 +579,20 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _timeshift = false;
       _variants = null;
     });
-    _open(_item);
-    _s.repo.touchChannel(c.sourceId, c.extId);
+    _zapTimer?.cancel();
+    void open() {
+      _open(_item);
+      _s.repo.touchChannel(c.sourceId, c.extId);
+    }
+
+    if (settle) {
+      final item = _item;
+      _zapTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted && identical(_item, item)) open();
+      });
+    } else {
+      open();
+    }
     _flash('${c.number ?? index + 1}  ${_s.channelName(c)}');
     _showControls();
   }

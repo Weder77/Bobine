@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bobine/cast/cast_device.dart';
+import 'package:bobine/cast/cast_keep_awake.dart';
 import 'package:bobine/cast/cast_media.dart';
 import 'package:bobine/cast/cast_service.dart';
 import 'package:bobine/cast/cast_session.dart';
@@ -439,6 +440,19 @@ void main() {
       await none.start(_dlna, _movie());
       expect(none.error, 'La télé ne lit pas ce type de flux.');
       await none.stop();
+    });
+
+    test('the computer is kept awake while the TV plays, and let sleep after', () async {
+      final calls = <bool>[];
+      final awake = CastKeepAwake(cast, localPlaying: () => false, toggle: (on) async => calls.add(on));
+      addTearDown(awake.dispose);
+      await cast.start(_tv, _movie());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(awake.on, isTrue);
+      expect(calls, [true]);
+      await cast.stop();
+      expect(awake.on, isFalse);
+      expect(calls, [true, false]);
     });
 
     test('search lists the devices by name', () async {

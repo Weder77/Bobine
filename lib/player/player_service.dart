@@ -98,6 +98,16 @@ class PlayerService {
   final String cacheDir;
 
   late final Player player;
+
+  /// The local player shows a picture (false before it is ready).
+  bool get isPlaying {
+    try {
+      return player.state.playing;
+    } catch (_) {
+      return false;
+    }
+  }
+
   late final VideoController video;
 
   final ValueNotifier<PlayItem?> current = ValueNotifier(null);
@@ -395,6 +405,10 @@ class PlayerService {
     final ua = item.userAgent;
     await setProp('user-agent', (ua == null || ua.isEmpty) ? 'libmpv' : ua);
     if (item.isLive) {
+      // A speed chosen on a film does not apply to a live stream: read
+      // faster than it arrives, it buffered again and again, and its
+      // speed menu is hidden.
+      if (player.state.rate != 1.0) await player.setRate(1.0);
       // Live: start as soon as possible; data arrives in real time anyway.
       await setProp('cache-secs', '600');
       await setProp('cache-pause-wait', '1');

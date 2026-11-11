@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'cast/cast_keep_awake.dart';
 import 'cast/cast_log.dart';
 import 'cast/cast_service.dart';
 import 'core/app_log.dart';
@@ -154,6 +155,7 @@ class AppServices {
     final cast = CastService(describe: (item) => services._castTitles(item));
     final tracker = PlaybackTracker(player, repo, onSaved: library.userChanged, cast: cast);
     final pip = PipController(player, cast);
+    CastKeepAwake(cast, localPlaying: () => player.isPlaying);
     final reminders = ReminderService(repo, settings);
     final recordings = RecordingService(repo, settings, onChanged: library.userChanged);
     final sync = SyncService(repo, settings, onChanges: (c) => services._afterSync(c));
