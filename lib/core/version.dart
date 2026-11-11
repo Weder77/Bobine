@@ -5,6 +5,13 @@ const String kAppVersion = '1.6.5';
 /// Repository the updates are published to.
 const String kReleaseRepo = 'Weder77/Bobine';
 
+/// Public Ed25519 key (base64, 32 bytes) the installers of the releases are
+/// signed with (see `docs/signature-mises-a-jour.md`). Once set, an update
+/// is installed only when its signature is valid: a release published by
+/// someone else (a stolen GitHub access, a compromised build step) is
+/// refused. Empty: the fingerprint given by GitHub alone is checked.
+const String kUpdatePublicKey = '';
+
 /// Compares two "1.2.3" versions (a leading "v" and a "+build" are ignored).
 int compareVersions(String a, String b) {
   List<int> parts(String v) => v

@@ -168,6 +168,14 @@ class SupabaseApi {
     if (code == 'sync quota exceeded' || (detail ?? '').contains('sync quota exceeded')) {
       return SyncApiException('Limite de données du compte atteinte.', code: 'quota', status: status);
     }
+    if (code == 'sync rate exceeded' || (detail ?? '').contains('sync rate exceeded')) {
+      // Tried again later by the back-off of the service, keys kept.
+      return SyncApiException(
+        'Trop de synchros en peu de temps : nouvel essai plus tard.',
+        code: 'rate',
+        network: true,
+      );
+    }
     // The account was deleted from another device (its rows can no longer
     // reference it).
     if (code == '23503') {

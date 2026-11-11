@@ -70,6 +70,46 @@ void main() {
     );
   });
 
+  test('once a key is set, only an installer signed with it is taken', () async {
+    // Made with OpenSSL, as the release job does (see docs/signature-mises-a-jour.md).
+    const publicKey = 'LWthxiq5A0skBoom1M00zvyOKB7g5u+mnFHjtusbtyY=';
+    final signature = base64.decode(
+      'o6wZe9HeJSTItfToDxfZg82UfTdFO7tCEohWuiX4SURQwVcpan/kthCWKCip2KbcHjTnOQ2cbaC2pjqzfdQJBw==',
+    );
+    final digest = [
+      for (var i = 0; i < 64; i += 2)
+        int.parse('24fd14f605109ea98f1a239e4c6bb88a4d8f6a7d2693deb368e258d44da0a0ff'.substring(i, i + 2), radix: 16),
+    ];
+    expect(await UpdateService.signatureValid(digest, signature, publicKey), isTrue);
+    expect(await UpdateService.signatureValid([...digest]..[0] ^= 1, signature, publicKey), isFalse);
+    expect(await UpdateService.signatureValid(digest, signature, base64.encode(List.filled(32, 7))), isFalse);
+
+    final before = UpdateService.publicKey;
+    addTearDown(() => UpdateService.publicKey = before);
+    UpdateService.publicKey = publicKey;
+    final installer = {
+      'name': 'Bobine-Setup.exe',
+      'browser_download_url': 'https://github.com/Weder77/Bobine/releases/download/v1.2.0/Bobine-Setup.exe',
+      'digest': 'sha256:24fd14f605109ea98f1a239e4c6bb88a4d8f6a7d2693deb368e258d44da0a0ff',
+    };
+    Map<String, Object?> rel(List<Map<String, Object?>> assets) => {...release('v1.2.0'), 'assets': assets};
+    // Without its signature: the release page only.
+    expect(UpdateService.parseRelease(rel([installer]), current: '1.1.0', windows: true)!.assetUrl, isNull);
+    final signed = UpdateService.parseRelease(
+      rel([
+        installer,
+        {
+          'name': 'Bobine-Setup.exe.sig',
+          'browser_download_url': 'https://github.com/Weder77/Bobine/releases/download/v1.2.0/Bobine-Setup.exe.sig',
+        },
+      ]),
+      current: '1.1.0',
+      windows: true,
+    )!;
+    expect(signed.assetUrl, isNotNull);
+    expect(signed.signatureUrl, endsWith('.sig'));
+  });
+
   test('the version found by the last check is offered again after a restart', () {
     final repo = Repository(openMemoryDatabase());
     final settings = AppSettings(repo);

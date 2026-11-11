@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
+import 'package:cryptography/cryptography.dart' as c;
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -21,6 +22,7 @@ class UpdateInfo {
     this.assetName,
     this.size,
     this.sha256,
+    this.signatureUrl,
   });
   final String version;
   final String? notes;
@@ -33,6 +35,9 @@ class UpdateInfo {
   final String? assetName;
   final int? size;
   final String? sha256;
+
+  /// Detached signature of the installer (its name followed by `.sig`).
+  final String? signatureUrl;
 }
 
 enum UpdateStage { idle, checking, upToDate, available, downloading, ready, error }
@@ -155,7 +160,18 @@ class UpdateService extends ChangeNotifier {
     // GitHub, in https, with the fingerprint GitHub gives of it. Otherwise
     // the release page alone is offered.
     final sha = RegExp(r'^sha256:([0-9a-fA-F]{64})$').firstMatch(digest)?.group(1)?.toLowerCase();
-    final asset = found != null && sha != null && isReleaseAsset('${found['browser_download_url']}') ? found : null;
+    final signed = found == null
+        ? null
+        : assets
+              .where((a) => a['name'] == '${found['name']}.sig' && isReleaseAsset('${a['browser_download_url']}'))
+              .firstOrNull;
+    final asset =
+        found != null &&
+            sha != null &&
+            isReleaseAsset('${found['browser_download_url']}') &&
+            (publicKey.isEmpty || signed != null)
+        ? found
+        : null;
     return UpdateInfo(
       version: tag.replaceFirst(RegExp(r'^[vV]'), ''),
       notes: (r['body'] as String?)?.trim(),
@@ -164,7 +180,28 @@ class UpdateService extends ChangeNotifier {
       assetName: asset?['name'] as String?,
       size: asset?['size'] as int?,
       sha256: asset == null ? null : sha,
+      signatureUrl: asset == null ? null : signed?['browser_download_url'] as String?,
     );
+  }
+
+  /// Key the installers must be signed with (a test sets its own).
+  @visibleForTesting
+  static String publicKey = kUpdatePublicKey;
+
+  /// Whether [signature] is the Ed25519 signature, by [publicKeyB64], of
+  /// the SHA-256 [digest] of an installer.
+  @visibleForTesting
+  static Future<bool> signatureValid(List<int> digest, List<int> signature, String publicKeyB64) async {
+    try {
+      final key = base64.decode(publicKeyB64);
+      if (key.length != 32 || signature.length != 64) return false;
+      return await c.Ed25519().verify(
+        digest,
+        signature: c.Signature(signature, publicKey: c.SimplePublicKey(key, type: c.KeyPairType.ed25519)),
+      );
+    } catch (_) {
+      return false;
+    }
   }
 
   /// An address of a file published with a release of [kReleaseRepo].
@@ -224,6 +261,13 @@ class UpdateService extends ChangeNotifier {
         file.deleteSync();
         throw const _UpdateError("L'installateur téléchargé est altéré (empreinte SHA-256 différente).");
       }
+      if (publicKey.isNotEmpty) {
+        final sig = info.signatureUrl == null ? null : await _small(client, info.signatureUrl!);
+        if (sig == null || !await signatureValid(hashOut.value.bytes, sig, publicKey)) {
+          file.deleteSync();
+          throw const _UpdateError("L'installateur n'est pas signé par Bobine : mise à jour refusée.");
+        }
+      }
       _installer = file.path;
       progress = 1;
       _set(UpdateStage.ready);
@@ -232,6 +276,24 @@ class UpdateService extends ChangeNotifier {
       _set(UpdateStage.error);
     } finally {
       client.close(force: true);
+    }
+  }
+
+  /// A small file (a signature), or null.
+  static Future<List<int>?> _small(HttpClient client, String url) async {
+    try {
+      final req = await client.getUrl(Uri.parse(url));
+      req.headers.set(HttpHeaders.userAgentHeader, 'Bobine/$kAppVersion');
+      final res = await req.close();
+      if (res.statusCode >= 400) return null;
+      final bytes = <int>[];
+      await for (final chunk in res) {
+        bytes.addAll(chunk);
+        if (bytes.length > 4096) return null;
+      }
+      return bytes;
+    } catch (_) {
+      return null;
     }
   }
 

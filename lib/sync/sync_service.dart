@@ -85,6 +85,23 @@ class SyncService extends ChangeNotifier {
   int _account = 0;
 
   bool get signedIn => _session != null && _keys != null;
+
+  /// Whether [password] is the account's: checked on this device, by the
+  /// keys it gives (no network needed). Used to choose a new parental code
+  /// when it was forgotten.
+  Future<bool> checkPassword(String password) async {
+    final keys = _keys, mail = email;
+    if (keys == null || mail == null || password.isEmpty) return false;
+    final again = await SyncKeys.derive(mail, password);
+    final a = again.encKey, b = keys.encKey;
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a[i] ^ b[i];
+    }
+    return diff == 0;
+  }
+
   String? get email => _session?.email ?? pendingEmail;
 
   /// Starts the automatic synchronisation (at app start).

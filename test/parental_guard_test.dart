@@ -64,6 +64,18 @@ void main() {
       }
       expect(g.lockedUntil, now.add(ParentalGuard.maxWait));
     });
+
+    test('a new code chosen (code forgotten) lifts the wait', () {
+      final g = guard();
+      for (var i = 0; i < ParentalGuard.freeTries; i++) {
+        g.check('0000');
+      }
+      expect(g.lockedUntil, isNotNull);
+      g.reset();
+      settings.update((s) => s.parentalPin = '4321');
+      expect(g.lockedUntil, isNull);
+      expect(g.check('4321'), isTrue);
+    });
   });
 
   test('a code that could not be typed is not taken from a backup or the account', () {

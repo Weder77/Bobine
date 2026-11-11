@@ -561,7 +561,33 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     final minStop = now - 7 * 86400;
     final maxStart = now + days * 86400;
 
-    final programmes = <List<Object?>>[];
+    // Programmes go to a temporary table of this connection, in batches,
+    // as they are read: the guide is no longer held in memory before it is
+    // written. The source's guide is replaced by it at the end, in one
+    // transaction (the old one stays if anything fails before).
+    db.execute('DROP TABLE IF EXISTS temp.epg_stage');
+    db.execute(
+      'CREATE TEMP TABLE epg_stage (channel TEXT, start INTEGER, stop INTEGER, title TEXT, description TEXT, '
+      'search TEXT, category TEXT)',
+    );
+    final stage = db.prepare('INSERT INTO temp.epg_stage VALUES (?, ?, ?, ?, ?, ?, ?)');
+    final batch = <List<Object?>>[];
+    var kept = 0;
+    void flush() {
+      if (batch.isEmpty) return;
+      db.execute('BEGIN');
+      try {
+        for (final row in batch) {
+          stage.execute(row);
+        }
+        db.execute('COMMIT');
+      } catch (_) {
+        db.execute('ROLLBACK');
+        rethrow;
+      }
+      batch.clear();
+    }
+
     final channelNames = <String, String>{};
     var seen = 0;
 
@@ -591,8 +617,10 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
         final stop = rawStop + shift;
         if (stop < minStop || start > maxStart) return;
         if (!keepAll && !known.contains(channel.toLowerCase())) return;
-        if (programmes.length >= kMaxGuideProgrammes) return;
-        programmes.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title), category]);
+        if (kept >= kMaxGuideProgrammes) return;
+        kept++;
+        batch.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title), category]);
+        if (batch.length >= 5000) flush();
       },
       onChannel: (id, names) {
         final lid = id.toLowerCase();
@@ -623,6 +651,8 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       parser.add(chunk);
     }
     parser.close();
+    flush();
+    stage.close();
     // Nothing read (an empty answer, a web page, an archive this does not
     // open): the guide the source has is kept, and asked again next time.
     if (seen == 0) throw NetException('Le guide reçu est vide ou illisible : le guide déjà importé est gardé.');
@@ -632,16 +662,12 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     try {
       db.execute('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
       db.execute('DELETE FROM epg_channels WHERE source_id = ?', [sourceId]);
-      final p = db.prepare(
+      db.execute(
         'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description, search, category) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'SELECT ?, channel, start, stop, title, description, search, category FROM temp.epg_stage',
+        [sourceId],
       );
-      var i = 0;
-      for (final row in programmes) {
-        p.execute([sourceId, ...row]);
-        if (++i % 5000 == 0) progress('Enregistrement', i);
-      }
-      p.close();
+      progress('Enregistrement', kept);
       final c = db.prepare('INSERT OR IGNORE INTO epg_channels (source_id, name_key, epg_id) VALUES (?, ?, ?)');
       channelNames.forEach((key, id) => c.execute([sourceId, key, id]));
       c.close();
@@ -651,10 +677,10 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       db.execute('ROLLBACK');
       rethrow;
     }
-    return programmes.length;
+    return kept;
   } finally {
     client.close(force: true);
-    db.close();
+    db.close(); // the temporary table goes with the connection
   }
 }
 
@@ -683,7 +709,7 @@ String? _name(String? v) => v == null || v.length <= kMaxEntryName ? v : v.subst
 /// being written. The largest real ones are a few hundred thousand.
 const int kMaxPlaylistEntries = 1500000;
 
-/// Programmes kept from one guide at most (held in memory the same way).
+/// Programmes kept from one guide at most (a bound on the disk it takes).
 const int kMaxGuideProgrammes = 3000000;
 
 /// The source accepts an invalid certificate from its server (its setting).

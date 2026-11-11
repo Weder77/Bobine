@@ -57,6 +57,12 @@ class ParentalGuard {
     return false;
   }
 
+  /// Forgets the wrong codes typed (a new code was chosen).
+  void reset() {
+    _repo.kvSet(_failsKey, null);
+    _repo.kvSet(_untilKey, null);
+  }
+
   /// What to tell after a code was refused.
   String get refusal {
     final until = lockedUntil;

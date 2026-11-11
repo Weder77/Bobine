@@ -378,6 +378,7 @@ class AppServices {
 
   /// Sets (or with null removes) the parental code.
   void setParentalPin(String? pin) {
+    parental.reset();
     settings.forgetUnreadablePin();
     settings.update((s) => s.parentalPin = pin);
     parentalUnlocked = false;

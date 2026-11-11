@@ -89,7 +89,8 @@ jobs:
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) {
-            choco install innosetup -y --no-progress
+            # Fixed version: what builds the installer does not change by itself.
+            choco install innosetup --version=6.7.1 -y --no-progress
           }
           & $iscc "/DAppVersion=${{ steps.version.outputs.value }}" "/DSourceDir=$PWD\build\windows\x64\runner\Release" windows\installer\bobine.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC a échoué ($LASTEXITCODE)" }
@@ -132,6 +133,26 @@ jobs:
           name: Bobine-Setup
           path: dist
 
+      # Signature of the installer, checked by the app before it installs an
+      # update (see docs/signature-mises-a-jour.md). Without the secret, the
+      # release is published unsigned, as before.
+      - name: Signature de l'installateur
+        env:
+          SIGNING_KEY: ${{ secrets.BOBINE_UPDATE_SIGNING_KEY }}
+        run: |
+          if [ -z "$SIGNING_KEY" ]; then
+            echo "Pas de clé de signature : installateur non signé."
+            exit 0
+          fi
+          umask 077
+          printf '%s\n' "$SIGNING_KEY" > "$RUNNER_TEMP/key.pem"
+          for f in dist/Bobine-Setup-*.exe; do
+            openssl dgst -sha256 -binary "$f" > "$RUNNER_TEMP/digest.bin"
+            openssl pkeyutl -sign -inkey "$RUNNER_TEMP/key.pem" -rawin -in "$RUNNER_TEMP/digest.bin" -out "$f.sig"
+          done
+          rm -f "$RUNNER_TEMP/key.pem"
+          ls -l dist
+
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: v${{ needs.windows.outputs.version }}
@@ -141,3 +162,4 @@ jobs:
           files: |
             Bobine-windows-x64.zip
             dist/Bobine-Setup-*.exe
+            dist/Bobine-Setup-*.exe.sig

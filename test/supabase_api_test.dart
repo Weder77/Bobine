@@ -181,10 +181,14 @@ void main() {
       await sync.signIn('moi@example.com', 'mot de passe secret');
       await sync.syncNow();
       expect(repo.kvGet(SyncEngine.cursorKey), isNotNull);
+      // The password lets a forgotten parental code be changed, checked here.
+      expect(await sync.checkPassword('mot de passe secret'), isTrue);
+      expect(await sync.checkPassword('autre chose'), isFalse);
 
       await sync.signOut();
       expect(fake.requests.last, 'POST /auth/v1/logout?scope=local');
       expect(sync.signedIn, isFalse);
+      expect(await sync.checkPassword('mot de passe secret'), isFalse);
       expect(sync.status, SyncStatus.signedOut);
       for (final key in ['sync.session', 'sync.keys', 'sync.last', SyncEngine.cursorKey]) {
         expect(repo.kvGet(key), isNull, reason: key);
