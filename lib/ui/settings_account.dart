@@ -10,6 +10,7 @@ import '../services.dart';
 import '../sync/supabase_api.dart';
 import '../sync/sync_service.dart';
 import 'widgets/common.dart' show HoverBuilder;
+import 'widgets/pin_dialog.dart';
 
 /// Digits of the codes sent by e-mail: Supabase → Authentication → Sign In /
 /// Providers → Email → "Email OTP length".
@@ -619,6 +620,10 @@ class _SignedOutState extends State<_SignedOut> {
     if (_busy != null) return;
     final error = _check();
     if (error != null) return setState(() => _error = error);
+    // Another account brings its own parental code, locks and kids profiles
+    // (and receives this computer's sources): not without the code here.
+    if (_mode != _Mode.forgot && !await confirmParent(context, title: 'Compte Bobine')) return;
+    if (!mounted) return;
     setState(() {
       _error = null;
       _info = null;
@@ -943,7 +948,12 @@ class _SignedIn extends StatelessWidget {
   const _SignedIn(this.sync);
   final SyncService sync;
 
+  Future<void> _signOut(BuildContext context) async {
+    if (await confirmParent(context, title: 'Se déconnecter')) await sync.signOut();
+  }
+
   Future<void> _delete(BuildContext context) async {
+    if (!await confirmParent(context, title: 'Supprimer le compte') || !context.mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -1018,7 +1028,13 @@ class _SignedIn extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
-          OutlinedButton(onPressed: sync.signOut, style: _outlined(), child: const Text('Se déconnecter')),
+          Builder(
+            builder: (context) => OutlinedButton(
+              onPressed: () => _signOut(context),
+              style: _outlined(),
+              child: const Text('Se déconnecter'),
+            ),
+          ),
         ],
       ),
     );

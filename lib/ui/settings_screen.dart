@@ -14,6 +14,7 @@ import 'settings_tmdb.dart';
 import 'source_form.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
+import 'widgets/pin_dialog.dart';
 
 /// Page asked for when the settings open ("Gérer les profils" → 'profils').
 final settingsPageRequest = ValueNotifier<String?>(null);
@@ -37,6 +38,20 @@ class _Page {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _page = 'sources';
   final _scroll = ScrollController();
+
+  /// Pages a kids profile opens only with the parental code: they show the
+  /// sources' identifiers, or can undo the parental control (another
+  /// account, a source deleted and added again, a backup, the categories).
+  static const _protected = {'compte', 'sources', 'parental', 'sauvegarde', 'enregistrements', 'tmdb'};
+
+  /// Profile for which the code was typed (until another profile is used).
+  int? _unlockedFor;
+
+  Future<void> _unlock() async {
+    final s = AppScope.of(context);
+    final id = s.profile.id;
+    if (await confirmParent(context, title: 'Paramètres protégés') && mounted) setState(() => _unlockedFor = id);
+  }
 
   @override
   void initState() {
@@ -411,7 +426,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 10),
                       Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
                       const SizedBox(height: 30),
-                      ...page.build(context),
+                      if (_protected.contains(page.id) &&
+                          s.profile.kids &&
+                          s.settings.parentalEnabled &&
+                          _unlockedFor != s.profile.id)
+                        _ProtectedPage(onUnlock: _unlock)
+                      else
+                        ...page.build(context),
                     ],
                   ),
                 ),
@@ -885,6 +906,42 @@ String maskedHost(String url) {
   return uri.hasPort ? '$host:${uri.port}' : host;
 }
 
+/// In place of a page a kids profile opens only with the parental code.
+class _ProtectedPage extends StatelessWidget {
+  const _ProtectedPage({required this.onUnlock});
+  final VoidCallback onUnlock;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(28),
+    decoration: BoxDecoration(
+      color: AppColors.surface2,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.lock_rounded, color: AppColors.accent, size: 28),
+        const SizedBox(height: 14),
+        const Text('Page protégée', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text(
+          'Dans un profil enfant, cette page demande le code parental.',
+          style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.muted),
+        ),
+        const SizedBox(height: 18),
+        FilledButton.icon(
+          autofocus: true,
+          onPressed: onUnlock,
+          icon: const Icon(Icons.pin_outlined, size: 18),
+          label: const Text('Taper le code'),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Card of a source: name, server, state, figures and actions.
 class _SourceTile extends StatelessWidget {
   const _SourceTile({required this.source});
@@ -892,6 +949,8 @@ class _SourceTile extends StatelessWidget {
 
   Future<void> _delete(BuildContext context, AppServices s) async {
     final src = source;
+    // The locks and hidden categories of the source go with it.
+    if (!await confirmParent(context, title: 'Supprimer la source') || !context.mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(

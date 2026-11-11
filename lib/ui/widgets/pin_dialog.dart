@@ -2,6 +2,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/theme.dart';
+import '../../services.dart';
+
+/// Whether an action that can undo the parental control (account, sources,
+/// backups) needs the code now: always in a kids profile, elsewhere until
+/// the code was typed this session.
+bool parentalCodeNeeded(AppServices s) =>
+    codeNeeded(enabled: s.settings.parentalEnabled, kids: s.profile.kids, unlocked: s.parentalUnlocked);
+
+/// [parentalCodeNeeded], from its three facts.
+bool codeNeeded({required bool enabled, required bool kids, required bool unlocked}) => enabled && (kids || !unlocked);
+
+/// Asks the parental code before such an action. True when it may go on:
+/// no code needed, or the right one typed.
+Future<bool> confirmParent(BuildContext context, {required String title}) async {
+  final s = AppScope.of(context);
+  if (!parentalCodeNeeded(s)) return true;
+  final pin = await askPin(context, title: title, message: 'Tape le code parental.');
+  if (pin == null || !context.mounted) return false;
+  if (pin == s.settings.parentalPin) return true;
+  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+  return false;
+}
 
 /// Asks for the 4-digit parental code. With [confirm], it is asked twice
 /// (setting a new code). Returns null when cancelled.

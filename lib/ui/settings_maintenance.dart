@@ -58,15 +58,7 @@ class BackupSection extends StatelessWidget {
   /// Asks the parental code when one is set; true when it may go on.
   /// A backup "with credentials" holds the code in clear, and restoring a
   /// file replaces it (or removes it) and the locks of the categories.
-  Future<bool> _parentAgrees(BuildContext context, String title) async {
-    final s = AppScope.of(context);
-    if (!s.settings.parentalEnabled) return true;
-    final pin = await askPin(context, title: title, message: 'Tape le code parental.');
-    if (pin == null || !context.mounted) return false;
-    if (pin == s.settings.parentalPin) return true;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
-    return false;
-  }
+  Future<bool> _parentAgrees(BuildContext context, String title) => confirmParent(context, title: title);
 
   Future<void> _export(BuildContext context) async {
     final s = AppScope.of(context);
