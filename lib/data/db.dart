@@ -4,7 +4,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../core/secrets.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 6;
+const int kSchemaVersion = 7;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -62,6 +62,7 @@ void _migrate(Database db) {
     }
     if (version < 5) _migrateV5(db);
     if (version < 6) _migrateV6(db);
+    if (version < 7) _migrateV7(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -336,6 +337,14 @@ void _migrateV6(Database db) {
     'CREATE TRIGGER sync_profiles_upd AFTER UPDATE OF name, color, kids, avatar, uid ON profiles '
     'WHEN NEW.uid IS NOT NULL AND $_syncLive BEGIN ${_syncLogSql('profiles', 'NEW.uid')} END',
   );
+}
+
+/// v7: the newest version of each item received from or sent to the
+/// account, by item id. An account (or a server) that hands back an older
+/// version of an item than one already seen here is not followed: it could
+/// otherwise bring back, say, a parental code removed since.
+void _migrateV7(Database db) {
+  db.execute('CREATE TABLE sync_seen (id TEXT PRIMARY KEY, modified_at INTEGER NOT NULL) WITHOUT ROWID');
 }
 
 /// The first schema, as created by Bobine 1.0 (to test migrations).

@@ -678,6 +678,67 @@ void main() {
     expect(remote.items.length, greaterThan(before), reason: 'the server had it; it is sent again, harmlessly');
   });
 
+  group('an account that cannot be trusted', () {
+    test('the deleted flag in clear deletes nothing, and a date in clear does not win', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote), b = Device(remote);
+      final src = a.xtream();
+      a.repo.toggleFavorite(src, ContentKind.movie, '503');
+      await a.sync();
+      await b.sync();
+      final bSrc = b.source('Mon IPTV').id;
+      expect(b.repo.isFavorite(bSrc, ContentKind.movie, '503'), isTrue);
+
+      // The server marks everything deleted and dated in the future, the
+      // sealed content left as it was.
+      final future = DateTime.now().millisecondsSinceEpoch + 3600000;
+      for (final i in remote.items.values.toList()) {
+        remote.items[i.id] = RemoteItem(
+          id: i.id,
+          modifiedAt: future,
+          deleted: true,
+          payload: i.payload,
+          rev: ++remote._rev,
+        );
+      }
+      final got = await b.sync();
+      expect(b.repo.sources(), hasLength(1), reason: 'nothing deleted');
+      expect(b.repo.isFavorite(bSrc, ContentKind.movie, '503'), isTrue);
+      expect(got.skipped, greaterThan(0), reason: 'the altered items are left aside');
+    });
+
+    test('an older version handed back again is not followed', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote), b = Device(remote);
+      a.settings.update((s) => s.parentalPin = '1234');
+      await a.sync();
+      await b.sync();
+      expect(b.settings.parentalPin, '1234');
+      final codec = SyncCodec(_keys);
+      String? pin;
+      for (final i in remote.items.values) {
+        final r = await codec.open(i.id, i.payload);
+        if (r['t'] == 'settings' && (r['k'] as List).first == 'parentalPin') pin = i.id;
+      }
+      final withCode = remote.items[pin]!;
+
+      // The code changes on A; then the server hands B the old version again.
+      await _tick();
+      a.settings.update((s) => s.parentalPin = '5678');
+      await a.sync();
+      await b.sync();
+      expect(b.settings.parentalPin, '5678');
+      remote.items[pin!] = RemoteItem(
+        id: pin,
+        modifiedAt: withCode.modifiedAt,
+        payload: withCode.payload,
+        rev: ++remote._rev,
+      );
+      await b.sync();
+      expect(b.settings.parentalPin, '5678', reason: 'the old code came back');
+    });
+  });
+
   group('profile pictures', () {
     String? avatarOf(Device d, String name) => d.profile(name).avatar;
 
@@ -733,7 +794,8 @@ void main() {
       remote.items[id!] = RemoteItem(
         id: id,
         modifiedAt: DateTime.now().millisecondsSinceEpoch + 1000,
-        payload: await codec.seal(id, {...record, 'd': data}),
+        // An older Bobine does not seal the time either.
+        payload: await codec.seal(id, {...record, 'd': data}..remove('m')),
         rev: ++remote._rev,
       );
       await b.sync();

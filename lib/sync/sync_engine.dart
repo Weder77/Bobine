@@ -129,7 +129,11 @@ class SyncEngine {
   Future<SyncChanges> run() async {
     final changes = SyncChanges();
     final linking = cursor == null;
-    if (linking) _seed();
+    if (linking) {
+      // Another account, or the same one read again from the start.
+      _db.execute('DELETE FROM sync_seen');
+      _seed();
+    }
 
     // Receive.
     var after = cursor ?? 0;
@@ -171,6 +175,9 @@ class SyncEngine {
         final newer = items.isEmpty ? const <RemoteItem>[] : await remote.push(items);
         _alive();
         _acknowledge(sent);
+        for (final b in sent) {
+          _sawVersion(b.id, b.changedAt);
+        }
         changes.sent += sent.length;
         if (newer.isNotEmpty) {
           // The account kept its version of these: its time is later.
@@ -284,6 +291,9 @@ class SyncEngine {
         continue;
       }
       record['v'] = _version;
+      // The time the server stores in clear, sealed with the content: a
+      // server cannot date a version otherwise to make it win.
+      record['m'] = changedAt;
       final id = codec.itemId(_naturalKey(table, record['k'] as List<Object?>));
       out.add(_Outgoing(table, key, changedAt, id, record));
     }
@@ -372,6 +382,19 @@ class SyncEngine {
     }
   }
 
+  /// Notes that the version of [id] dated [at] is known here.
+  void _sawVersion(String id, int at) => _db.execute(
+    'INSERT INTO sync_seen (id, modified_at) VALUES (?, ?) '
+    'ON CONFLICT (id) DO UPDATE SET modified_at = max(modified_at, excluded.modified_at)',
+    [id, at],
+  );
+
+  /// The newest version of [id] known here, or null.
+  int? _seenVersion(String id) {
+    final rows = _db.select('SELECT modified_at FROM sync_seen WHERE id = ?', [id]);
+    return rows.isEmpty ? null : rows.first['modified_at'] as int;
+  }
+
   // --------------------------------------------------------------- incoming
 
   /// Decrypts [items]. One that cannot be read (damaged on the account) is
@@ -396,10 +419,20 @@ class SyncEngine {
         if (record['t'] is! String || key is! List) continue;
         // A record is only accepted under the id it belongs to.
         if (codec.itemId(_naturalKey(record['t'] as String, key)) != i.id) continue;
+        // Its time is the sealed one (versions before this one did not
+        // seal it): a server that dates it otherwise altered it.
+        final sealed = record['m'];
+        if (sealed != null && sealed != i.modifiedAt) {
+          changes.skipped++;
+          continue;
+        }
+        // An older version than one already known here: handed back again
+        // (a server replaying what it once stored), not to be followed.
+        final seen = _seenVersion(i.id);
+        if (seen != null && i.modifiedAt < seen) continue;
+        // Deleted is what the sealed content says, not the server's flag.
         final data = record['d'];
-        out.add(
-          _Incoming(record['t'] as String, key, i.deleted || data is! Map ? null : data.cast<String, Object?>(), i),
-        );
+        out.add(_Incoming(record['t'] as String, key, data is! Map ? null : data.cast<String, Object?>(), i));
       } catch (_) {
         changes.skipped++; // readable, but not a record
       }
@@ -487,6 +520,7 @@ class SyncEngine {
         _db.execute('SAVEPOINT sync_item');
         try {
           apply();
+          _sawVersion(i.item.id, i.item.modifiedAt);
         } catch (_) {
           _db.execute('ROLLBACK TO sync_item');
           changes.skipped++;
