@@ -32,9 +32,13 @@ l'empreinte SHA-256 donnée par GitHub.
 
    La coller dans `kUpdatePublicKey` (`lib/core/version.dart`).
 
-3. Ajouter la clé privée aux secrets du dépôt GitHub (Settings → Secrets and
-   variables → Actions), sous le nom `BOBINE_UPDATE_SIGNING_KEY`, avec tout le
-   contenu de `bobine-update.pem` (lignes `BEGIN` et `END` comprises).
+3. Ajouter la clé privée comme secret de l'environnement `PRD` (Settings →
+   Environments → PRD → Add environment secret), sous le nom
+   `BOBINE_UPDATE_SIGNING_KEY`, avec tout le contenu de `bobine-update.pem`
+   (lignes `BEGIN` et `END` comprises). Seul le job de publication déclare
+   cet environnement : les autres jobs ne voient pas la clé. Dans les
+   réglages de l'environnement, limiter « Deployment branches and tags » à
+   `main` et aux tags `v*` empêche une autre branche de s'en servir.
 
 4. Garder `bobine-update.pem` en lieu sûr (gestionnaire de mots de passe) et
    ne jamais le committer.

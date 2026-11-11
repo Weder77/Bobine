@@ -121,6 +121,8 @@ jobs:
     if: needs.windows.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # The signing key is a secret of this environment: only this job sees it.
+    environment: PRD
     permissions:
       contents: write
     steps:
