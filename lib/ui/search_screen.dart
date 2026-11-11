@@ -256,9 +256,11 @@ class _SearchScreenState extends State<SearchScreen> {
                 image: m.poster,
                 year: m.year,
                 rating: m.rating,
+                // The detail first (as everywhere else): the film did not
+                // start at once from a search result.
                 onTap: () {
                   _remember();
-                  Launch.movie(context, m);
+                  Launch.openMovie(context, m);
                 },
                 onContextMenu: (at) => showMovieActions(context, m, at),
               ),
@@ -280,7 +282,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 rating: sr.rating,
                 onTap: () {
                   _remember();
-                  playSeries(context, sr);
+                  Launch.openSeries(context, sr);
                 },
                 onContextMenu: (at) => showSeriesActions(context, sr, at),
               ),
@@ -352,7 +354,7 @@ class _TrendRow extends StatelessWidget {
     final sr = item is Series ? item as Series : null;
     final title = m?.name ?? sr!.name;
     final year = m?.year ?? sr?.year;
-    void open() => m != null ? Launch.movie(context, m) : playSeries(context, sr!);
+    void open() => m != null ? Launch.openMovie(context, m) : Launch.openSeries(context, sr!);
     return HoverBuilder(
       onActivate: open,
       onContextMenu: (at) => m != null ? showMovieActions(context, m, at) : showSeriesActions(context, sr!, at),

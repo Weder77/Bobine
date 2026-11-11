@@ -423,6 +423,16 @@ void _migrateV9(Database db) {
 /// the source.
 void _migrateV10(Database db) {
   db.execute('ALTER TABLE sources ADD COLUMN bad_cert_ok INTEGER NOT NULL DEFAULT 0');
+  // Sources already in https keep working as before (any certificate was
+  // accepted until now): the option is on for them, and can be turned off
+  // in the source. Done before the trigger below includes the column, so
+  // each device decides for its own sources.
+  for (final r in db.select('SELECT id, url, epg_url FROM sources')) {
+    bool https(Object? v) => (Secrets.reveal(v as String?) ?? '').trim().toLowerCase().startsWith('https://');
+    if (https(r['url']) || https(r['epg_url'])) {
+      db.execute('UPDATE sources SET bad_cert_ok = 1 WHERE id = ?', [r['id']]);
+    }
+  }
   db.execute('DROP TRIGGER sync_sources_upd');
   db.execute(
     'CREATE TRIGGER sync_sources_upd AFTER UPDATE OF name, type, url, username, password, epg_url, user_agent, '

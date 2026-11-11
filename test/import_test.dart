@@ -471,17 +471,23 @@ void main() {
     raw.execute(
       "INSERT INTO sources (id, name, type, url, created_at) VALUES (1, 'old', 'm3u', 'http://x/list.m3u', 0)",
     );
+    raw.execute(
+      "INSERT INTO sources (id, name, type, url, created_at) VALUES (2, 'tls', 'm3u', 'https://y/list.m3u', 1)",
+    );
     raw.execute("INSERT INTO favorites VALUES (1, 'movie', 'm42', 5)");
     raw.execute("INSERT INTO progress VALUES (1, 'movie', 'm42', 60000, 600000, 0, 7, 'Film', NULL, NULL, NULL)");
     raw.close();
     final repo = track(Repository(openAppDatabase(path)));
     expect(repo.db.select('PRAGMA user_version').first.columnAt(0), kSchemaVersion);
-    final src = repo.sources().single;
+    final src = repo.sources().firstWhere((s) => s.id == 1);
     expect(src.epgOffsetMinutes, 0);
     expect(src.url, 'http://x/list.m3u');
+    // v10: an https source made before keeps accepting its certificate.
+    expect(src.acceptInvalidCertificate, isFalse);
+    expect(repo.source(2)!.acceptInvalidCertificate, isTrue);
     expect(repo.profiles().single.id, 1);
     // v5: ids shared by all devices, the first profile is the same everywhere.
-    expect(repo.db.select('SELECT uid FROM sources').single['uid'], matches(RegExp(r'^[0-9a-f]{32}$')));
+    expect(repo.db.select('SELECT uid FROM sources WHERE id = 1').single['uid'], matches(RegExp(r'^[0-9a-f]{32}$')));
     expect(repo.db.select('SELECT uid FROM profiles').single['uid'], kDefaultProfileUid);
     expect(repo.profiles().single.avatar, isNull); // v6: the initial, as before
     expect(repo.favoriteKeys(1, ContentKind.movie), {'m42'});
