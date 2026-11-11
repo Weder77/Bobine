@@ -77,7 +77,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _Page(
         'profils',
         'Profils',
-        'Chaque profil garde ses favoris, sa progression et ses rappels.',
+        'Chaque profil garde ses favoris, sa progression et ses rappels. Jusqu’à ${Profile.max} profils.',
         (context) => [
           const ProfileCards(),
           const SizedBox(height: 30),

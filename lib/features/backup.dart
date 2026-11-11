@@ -18,6 +18,10 @@ class RestoreReport {
   /// without credentials): their favourites and progress were skipped.
   final List<String> skippedSources = [];
 
+  /// Profiles of the file not created: there were already [Profile.max]
+  /// here. Their favourites and progress were skipped.
+  final List<String> skippedProfiles = [];
+
   @override
   String toString() => [
     if (sourcesCreated > 0) '$sourcesCreated source(s) ajoutée(s)',
@@ -25,9 +29,15 @@ class RestoreReport {
     if (profilesCreated > 0) '$profilesCreated profil(s) créé(s)',
     if (favorites > 0) '$favorites favori(s)',
     if (progress > 0) '$progress reprise(s)',
-    if (favorites == 0 && progress == 0 && sourcesCreated == 0 && profilesCreated == 0)
+    if (favorites == 0 &&
+        progress == 0 &&
+        sourcesCreated == 0 &&
+        profilesCreated == 0 &&
+        skippedSources.isEmpty &&
+        skippedProfiles.isEmpty)
       'rien de nouveau, tout était déjà là',
     if (skippedSources.isNotEmpty) 'ignoré : ${skippedSources.join(', ')} (source absente)',
+    if (skippedProfiles.isNotEmpty) 'ignoré : ${skippedProfiles.join(', ')} (${Profile.max} profils au maximum)',
   ].join(' · ');
 }
 
@@ -85,7 +95,7 @@ class BackupService {
             if (credentials) ...{'url': s.url, 'username': s.username, 'password': s.password, 'epgUrl': s.epgUrl},
           },
       ],
-      'profiles': rows('SELECT id, name, color, kids FROM profiles ORDER BY id'),
+      'profiles': rows('SELECT id, name, color, kids, avatar FROM profiles ORDER BY id'),
       'favorites': rows('SELECT * FROM favorites'),
       'progress': rows('SELECT * FROM progress'),
       'recent_channels': rows('SELECT * FROM recent_channels'),
@@ -129,75 +139,91 @@ class BackupService {
       for (final r in (j[key] as List? ?? const [])) (r as Map).cast<String, Object?>(),
     ];
 
-    // Sources: same server and account (fingerprint), else same name and type,
-    // else created from the file when it carries the credentials.
-    final sources = <int, int>{};
-    final local = _repo.sources();
-    for (final b in list('sources')) {
-      final type = b['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u;
-      final match =
-          local.where((s) => sourceFingerprint(s) == b['fingerprint']).firstOrNull ??
-          local.where((s) => s.type == type && s.name == b['name']).firstOrNull;
-      if (match != null) {
-        sources[b['id'] as int] = match.id;
-        report.sourcesMatched++;
-      } else if (b['url'] is String && (b['url'] as String).isNotEmpty) {
-        sources[b['id'] as int] = _repo.insertSource(
-          name: '${b['name']}',
-          type: type,
-          url: b['url'] as String,
-          username: b['username'] as String?,
-          password: b['password'] as String?,
-          epgUrl: b['epgUrl'] as String?,
-          userAgent: b['userAgent'] as String?,
-          liveFormat: (b['liveFormat'] as String?) ?? 'ts',
-          epgOffset: (b['epgOffset'] as int?) ?? 0,
-        );
-        report.sourcesCreated++;
-      } else {
-        report.skippedSources.add('${b['name']}');
-      }
-    }
-
-    // Profiles: matched by name.
-    final profiles = <int, int>{};
-    final localProfiles = _repo.profiles();
-    for (final b in list('profiles')) {
-      final name = '${b['name']}';
-      final match = localProfiles.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
-      if (match != null) {
-        profiles[b['id'] as int] = match.id;
-      } else {
-        profiles[b['id'] as int] = _repo.createProfile(
-          name: name,
-          color: (b['color'] as int?) ?? 0xFFFFB547,
-          kids: (b['kids'] as int?) == 1,
-        );
-        report.profilesCreated++;
-      }
-    }
-
+    // Everything in one transaction: a busy database (an import running) is
+    // said so before anything is written, and a restore that fails halfway
+    // leaves nothing behind (no profile without its favourites).
     final db = _repo.db;
-    int? src(Map<String, Object?> r) => sources[r['source_id']];
-    int prof(Map<String, Object?> r) => profiles[r['profile_id']] ?? 1;
     try {
       db.execute('BEGIN IMMEDIATE');
     } catch (_) {
       throw BackupException('Base occupée (mise à jour en cours) : réessaie dans un instant.');
     }
     try {
+      // Sources: same server and account (fingerprint), else same name and type,
+      // else created from the file when it carries the credentials.
+      final sources = <int, int>{};
+      final local = _repo.sources();
+      for (final b in list('sources')) {
+        final type = b['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u;
+        final match =
+            local.where((s) => sourceFingerprint(s) == b['fingerprint']).firstOrNull ??
+            local.where((s) => s.type == type && s.name == b['name']).firstOrNull;
+        if (match != null) {
+          sources[b['id'] as int] = match.id;
+          report.sourcesMatched++;
+        } else if (b['url'] is String && (b['url'] as String).isNotEmpty) {
+          sources[b['id'] as int] = _repo.insertSource(
+            name: '${b['name']}',
+            type: type,
+            url: b['url'] as String,
+            username: b['username'] as String?,
+            password: b['password'] as String?,
+            epgUrl: b['epgUrl'] as String?,
+            userAgent: b['userAgent'] as String?,
+            liveFormat: (b['liveFormat'] as String?) ?? 'ts',
+            epgOffset: (b['epgOffset'] as int?) ?? 0,
+          );
+          report.sourcesCreated++;
+        } else {
+          report.skippedSources.add('${b['name']}');
+        }
+      }
+
+      // Profiles: matched by name, created while there is room for them.
+      final profiles = <int, int>{};
+      final skippedProfiles = <Object?>{};
+      final localProfiles = _repo.profiles();
+      for (final b in list('profiles')) {
+        final name = '${b['name']}';
+        final avatar = b['avatar'] is String ? b['avatar'] as String : null;
+        final match = localProfiles.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+        if (match != null) {
+          profiles[b['id'] as int] = match.id;
+          // "Moi" exists on every installation: without this, its picture
+          // would never come back on a new computer. One chosen here stays.
+          if (match.avatar == null && avatar != null) {
+            _repo.updateProfile(match.id, name: match.name, color: match.color, kids: match.kids, avatar: avatar);
+          }
+        } else if (_repo.canAddProfile) {
+          profiles[b['id'] as int] = _repo.createProfile(
+            name: name,
+            color: (b['color'] as int?) ?? 0xFFFFB547,
+            kids: (b['kids'] as int?) == 1,
+            avatar: avatar,
+          );
+          report.profilesCreated++;
+        } else {
+          skippedProfiles.add(b['id']);
+          report.skippedProfiles.add(name);
+        }
+      }
+
+      int? src(Map<String, Object?> r) => sources[r['source_id']];
+      // Null for the rows of a profile left out.
+      int? prof(Map<String, Object?> r) =>
+          skippedProfiles.contains(r['profile_id']) ? null : profiles[r['profile_id']] ?? 1;
       for (final r in list('favorites')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT OR IGNORE INTO favorites (profile_id, source_id, kind, ext_id, added_at) VALUES (?, ?, ?, ?, ?)',
-          [prof(r), s, r['kind'], r['ext_id'], r['added_at']],
+          [p, s, r['kind'], r['ext_id'], r['added_at']],
         );
         report.favorites += db.updatedRows;
       }
       for (final r in list('progress')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT INTO progress (profile_id, source_id, kind, ext_id, position_ms, duration_ms, finished, updated_at, '
           'title, subtitle, image, series_ext) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) '
@@ -205,7 +231,7 @@ class BackupService {
           'duration_ms = excluded.duration_ms, finished = excluded.finished, updated_at = excluded.updated_at '
           'WHERE excluded.updated_at > progress.updated_at',
           [
-            prof(r),
+            p,
             s,
             r['kind'],
             r['ext_id'],
@@ -222,12 +248,12 @@ class BackupService {
         report.progress += db.updatedRows;
       }
       for (final r in list('recent_channels')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT INTO recent_channels (profile_id, source_id, ext_id, watched_at) VALUES (?, ?, ?, ?) '
           'ON CONFLICT (profile_id, source_id, ext_id) DO UPDATE SET watched_at = max(watched_at, excluded.watched_at)',
-          [prof(r), s, r['ext_id'], r['watched_at']],
+          [p, s, r['ext_id'], r['watched_at']],
         );
         report.other++;
       }
@@ -251,12 +277,12 @@ class BackupService {
         report.other++;
       }
       for (final r in list('reminders')) {
-        final s = src(r);
-        if (s == null) continue;
+        final s = src(r), p = prof(r);
+        if (s == null || p == null) continue;
         db.execute(
           'INSERT OR IGNORE INTO reminders (profile_id, source_id, channel_ext, channel_name, title, start, stop) '
           'VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [prof(r), s, r['channel_ext'], r['channel_name'], r['title'], r['start'], r['stop']],
+          [p, s, r['channel_ext'], r['channel_name'], r['title'], r['start'], r['stop']],
         );
         report.other++;
       }

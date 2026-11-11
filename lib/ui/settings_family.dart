@@ -30,15 +30,31 @@ class ProfileCards extends StatelessWidget {
             onTap: () => p.id == current.id ? showProfileEditor(context, profile: p) : switchToProfile(context, p),
             onEdit: () => showProfileEditor(context, profile: p),
           ),
-        SizedBox(
-          height: 200,
-          child: DashedAction(
-            icon: Icons.add_rounded,
-            label: 'Ajouter un profil',
-            vertical: true,
-            onTap: () => showProfileEditor(context),
+        if (s.repo.canAddProfile)
+          SizedBox(
+            height: 200,
+            child: DashedAction(
+              icon: Icons.add_rounded,
+              label: 'Ajouter un profil',
+              vertical: true,
+              onTap: () => showProfileEditor(context),
+            ),
+          )
+        else
+          Container(
+            height: 200,
+            padding: const EdgeInsets.all(20),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.borderFaint),
+            ),
+            child: Text(
+              '${Profile.max} profils au maximum',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, height: 1.4, color: AppColors.faint),
+            ),
           ),
-        ),
       ],
     );
   }
@@ -54,8 +70,6 @@ class _ProfileCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = profile;
-    final color = Color(p.color);
-    final ink = color.computeLuminance() > 0.4 ? AppColors.onAction : AppColors.text;
     return HoverBuilder(
       onActivate: onTap,
       focusRingRadius: 12,
@@ -74,16 +88,7 @@ class _ProfileCard extends StatelessWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Container(
-                      width: 84,
-                      height: 84,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
-                      child: Text(
-                        p.name.isEmpty ? '?' : p.name.characters.first.toUpperCase(),
-                        style: posterStyle(42, color: ink, height: 1),
-                      ),
-                    ),
+                    ProfileAvatar(profile: p, size: 84),
                     const SizedBox(height: 12),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),

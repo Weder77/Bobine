@@ -397,6 +397,7 @@ void main() {
     // v5: ids shared by all devices, the first profile is the same everywhere.
     expect(repo.db.select('SELECT uid FROM sources').single['uid'], matches(RegExp(r'^[0-9a-f]{32}$')));
     expect(repo.db.select('SELECT uid FROM profiles').single['uid'], kDefaultProfileUid);
+    expect(repo.profiles().single.avatar, isNull); // v6: the initial, as before
     expect(repo.favoriteKeys(1, ContentKind.movie), {'m42'});
     expect(repo.progress(1, ContentKind.movie, 'm42')?.position, const Duration(minutes: 1));
     // Another profile starts empty.

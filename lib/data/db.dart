@@ -4,7 +4,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../core/secrets.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 5;
+const int kSchemaVersion = 6;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -61,6 +61,7 @@ void _migrate(Database db) {
       db.execute('UPDATE sources SET epg_updated_at = NULL');
     }
     if (version < 5) _migrateV5(db);
+    if (version < 6) _migrateV6(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -237,6 +238,18 @@ const Map<String, List<String>> kSyncKeys = {
 /// Current time in ms, in SQL.
 const String _sqlNowMs = "CAST((julianday('now') - 2440587.5) * 86400000 AS INTEGER)";
 
+/// Condition of the sync triggers: not while changes from the account are applied.
+const String _syncLive = 'NOT EXISTS (SELECT 1 FROM sync_mute)';
+
+/// Notes [key] of [table] as changed now, from a trigger.
+///
+/// An upsert, not INSERT OR REPLACE: inside a trigger, SQLite applies the
+/// conflict policy of the statement that fired it (ABORT for an upsert,
+/// IGNORE for INSERT OR IGNORE) to "OR" clauses, not to upserts.
+String _syncLogSql(String table, String key) =>
+    "INSERT INTO sync_log (tbl, key, changed_at) VALUES ('$table', $key, $_sqlNowMs) "
+    'ON CONFLICT (tbl, key) DO UPDATE SET changed_at = excluded.changed_at;';
+
 /// v5: synchronisation between devices.
 ///
 /// Sources and profiles get a `uid` shared by all devices. Every change to
@@ -262,13 +275,8 @@ void _migrateV5(Database db) {
     ) WITHOUT ROWID''');
   db.execute('CREATE TABLE sync_mute (muted INTEGER)');
 
-  const live = 'NOT EXISTS (SELECT 1 FROM sync_mute)';
-  // An upsert, not INSERT OR REPLACE: inside a trigger, SQLite applies the
-  // conflict policy of the statement that fired it (ABORT for an upsert,
-  // IGNORE for INSERT OR IGNORE) to "OR" clauses, not to upserts.
-  String log(String table, String key) =>
-      "INSERT INTO sync_log (tbl, key, changed_at) VALUES ('$table', $key, $_sqlNowMs) "
-      'ON CONFLICT (tbl, key) DO UPDATE SET changed_at = excluded.changed_at;';
+  const live = _syncLive;
+  const log = _syncLogSql;
 
   // Sources and profiles: a uid is given to new rows, and logged under it.
   const syncedColumns = {
@@ -315,6 +323,19 @@ void _migrateV5(Database db) {
     );
     db.execute('CREATE TRIGGER sync_${t}_del AFTER DELETE ON $t WHEN $live BEGIN ${log(t, key('OLD'))} END');
   }
+}
+
+/// v6: profile pictures. `avatar` is null (the initial on the profile's
+/// colour), `preset:<name>` (a picture of assets/avatars) or a small photo
+/// as a `data:image/jpeg;base64,` address. It follows the account like the
+/// name and the colour.
+void _migrateV6(Database db) {
+  db.execute('ALTER TABLE profiles ADD COLUMN avatar TEXT');
+  db.execute('DROP TRIGGER sync_profiles_upd');
+  db.execute(
+    'CREATE TRIGGER sync_profiles_upd AFTER UPDATE OF name, color, kids, avatar, uid ON profiles '
+    'WHEN NEW.uid IS NOT NULL AND $_syncLive BEGIN ${_syncLogSql('profiles', 'NEW.uid')} END',
+  );
 }
 
 /// The first schema, as created by Bobine 1.0 (to test migrations).

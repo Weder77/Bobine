@@ -412,7 +412,11 @@ class ProgressEntry {
 
 /// A local profile: its own favourites, progress and recent channels.
 class Profile {
-  const Profile({required this.id, required this.name, required this.color, this.kids = false});
+  const Profile({required this.id, required this.name, required this.color, this.kids = false, this.avatar});
+
+  /// Most profiles an installation can create.
+  static const max = 10;
+
   final int id;
   final String name;
   final int color;
@@ -420,10 +424,23 @@ class Profile {
   /// Kids profile: categories behind the parental code are never shown.
   final bool kids;
 
-  String get initial => name.trim().isEmpty ? '?' : String.fromCharCode(name.trim().runes.first).toUpperCase();
+  /// Picture of the profile: null for the initial on [color],
+  /// `preset:<name>` for a bundled picture, or a photo (`data:image/jpeg;base64,…`).
+  final String? avatar;
 
-  factory Profile.fromRow(Row r) =>
-      Profile(id: r['id'] as int, name: r['name'] as String, color: r['color'] as int, kids: (r['kids'] as int) == 1);
+  String get initial => initialOf(name);
+
+  /// First letter of [name], for avatars without a picture.
+  static String initialOf(String name) =>
+      name.trim().isEmpty ? '?' : String.fromCharCode(name.trim().runes.first).toUpperCase();
+
+  factory Profile.fromRow(Row r) => Profile(
+    id: r['id'] as int,
+    name: r['name'] as String,
+    color: r['color'] as int,
+    kids: (r['kids'] as int) == 1,
+    avatar: r['avatar'] as String?,
+  );
 }
 
 /// "Remind me" set on a future programme.

@@ -1,7 +1,12 @@
+import 'dart:math' as math;
+
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/theme.dart';
 import '../data/models.dart';
+import '../features/profile_photo.dart';
 import '../services.dart';
 import 'shell.dart';
 import 'widgets/brand.dart';
@@ -11,7 +16,36 @@ import 'widgets/pin_dialog.dart';
 /// Colours offered for profiles.
 const profileColors = [0xFFFF5A36, 0xFFE8C547, 0xFF6FB7A8, 0xFF7FA6FF, 0xFFC08BF0, 0xFFF3EEE8];
 
-/// Round avatar with the profile's initial.
+/// Pictures offered for profiles (name → label), stored as `preset:<name>`.
+/// The files are `assets/avatars/<name>.png`, drawn by tool/make_avatars.py.
+const profileAvatars = {
+  'popcorn': 'Pop-corn',
+  'clap': 'Clap',
+  'chat': 'Chat',
+  'renard': 'Renard',
+  'robot': 'Robot',
+  'panda': 'Panda',
+};
+
+/// `profiles.avatar` value of a bundled picture.
+String presetAvatar(String name) => 'preset:$name';
+
+/// Asset of a bundled picture; null for anything else, a picture this
+/// version does not have included.
+String? avatarAsset(String? avatar) {
+  if (avatar == null || !avatar.startsWith('preset:')) return null;
+  final name = avatar.substring('preset:'.length);
+  return profileAvatars.containsKey(name) ? 'assets/avatars/$name.png' : null;
+}
+
+/// Longest profile name: with a photo, the profile must still fit in one
+/// item of the sync account, or it would stop following the account.
+const profileNameMaxLength = 40;
+
+/// Shown when a profile cannot be added.
+const profilesFullMessage = '${Profile.max} profils au maximum : supprime un profil pour en créer un autre.';
+
+/// Avatar of a profile (rounded square).
 class ProfileAvatar extends StatelessWidget {
   const ProfileAvatar({super.key, required this.profile, this.size = 40, this.round = false});
   final Profile profile;
@@ -21,26 +55,102 @@ class ProfileAvatar extends StatelessWidget {
   final bool round;
 
   @override
+  Widget build(BuildContext context) => AvatarView(
+    avatar: profile.avatar,
+    color: profile.color,
+    initial: profile.initial,
+    kids: profile.kids,
+    size: size,
+  );
+}
+
+/// What a profile looks like: its picture or photo, else its initial (a
+/// child for a kids profile) on its colour.
+class AvatarView extends StatelessWidget {
+  const AvatarView({
+    super.key,
+    required this.avatar,
+    required this.color,
+    required this.initial,
+    this.kids = false,
+    this.size = 40,
+  });
+
+  /// `profiles.avatar`: null, `preset:<name>` or a photo.
+  final String? avatar;
+  final int color;
+  final String initial;
+  final bool kids;
+  final double size;
+
+  /// Photos already decoded: the same image object keeps Flutter's cache
+  /// (a new one at each build would decode it again and flicker).
+  static final _photos = <String, MemoryImage>{};
+
+  static ImageProvider? _image(String? avatar) {
+    final asset = avatarAsset(avatar);
+    if (asset != null) return AssetImage(asset);
+    // Least recently used first: a photo used again goes to the end.
+    final cached = _photos.remove(avatar);
+    if (cached != null) return _photos[avatar!] = cached;
+    final bytes = ProfilePhoto.bytesOf(avatar);
+    if (bytes == null) return null;
+    if (_photos.length >= 2 * Profile.max) _photos.remove(_photos.keys.first);
+    return _photos[avatar!] = MemoryImage(bytes);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final color = Color(profile.color);
+    final bg = Color(color);
     // Dark initial on light colours, light on dark ones.
-    final ink = color.computeLuminance() > 0.35 ? const Color(0xFF1A1503) : const Color(0xFF1A0A05);
-    return Container(
+    final ink = bg.computeLuminance() > 0.35 ? const Color(0xFF1A1503) : const Color(0xFF1A0A05);
+    final letter = kids
+        ? Icon(Icons.child_care_rounded, size: size * 0.55, color: ink)
+        : Text(
+            initial,
+            style: TextStyle(fontFamily: AppFonts.body, fontSize: size * 0.44, fontWeight: FontWeight.w700, color: ink),
+          );
+    final image = _image(avatar);
+    final square = Container(
       width: size,
       height: size,
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(size * (size >= 60 ? 0.19 : 0.23))),
-      child: profile.kids
-          ? Icon(Icons.child_care_rounded, size: size * 0.55, color: ink)
-          : Text(
-              profile.initial,
-              style: TextStyle(
-                fontFamily: AppFonts.body,
-                fontSize: size * 0.44,
-                fontWeight: FontWeight.w700,
-                color: ink,
-              ),
+      clipBehavior: image == null ? Clip.none : Clip.antiAlias,
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(size * (size >= 60 ? 0.19 : 0.23))),
+      child: image == null
+          ? letter
+          : Image(
+              image: image,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.medium,
+              gaplessPlayback: true,
+              errorBuilder: (_, _, _) => letter,
             ),
+    );
+    if (!kids || image == null) return square;
+    // A picture hides the child of a kids profile: a badge keeps it in sight.
+    final badge = math.max(14.0, size * 0.34);
+    return Stack(
+      children: [
+        square,
+        Positioned(
+          right: 0,
+          bottom: 0,
+          child: Container(
+            width: badge,
+            height: badge,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: AppColors.cream,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF1A1503), width: math.max(1, badge * 0.07)),
+            ),
+            child: Icon(Icons.child_care_rounded, size: badge * 0.7, color: const Color(0xFF1A1503)),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -101,14 +211,15 @@ class ProfilePickerScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 44),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await showProfileEditor(context);
-                  (context as Element).markNeedsBuild();
-                },
-                icon: const Icon(Icons.person_add_alt_rounded),
-                label: const Text('Ajouter un profil'),
-              ),
+              if (s.repo.canAddProfile)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    await showProfileEditor(context);
+                    if (context.mounted) (context as Element).markNeedsBuild();
+                  },
+                  icon: const Icon(Icons.person_add_alt_rounded),
+                  label: const Text('Ajouter un profil'),
+                ),
             ],
           ),
         ),
@@ -171,6 +282,10 @@ class _ProfileChoiceState extends State<_ProfileChoice> {
 /// delete the profile or create an unrestricted one.
 Future<void> showProfileEditor(BuildContext context, {Profile? profile}) async {
   final s = AppScope.of(context);
+  if (profile == null && !s.repo.canAddProfile) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(profilesFullMessage)));
+    return;
+  }
   if (s.profile.kids && s.settings.parentalEnabled) {
     final pin = await askPin(context, title: 'Modifier les profils', message: 'Tape le code parental.');
     if (pin == null || !context.mounted) return;
@@ -195,9 +310,31 @@ class _ProfileEditor extends StatefulWidget {
 }
 
 class _ProfileEditorState extends State<_ProfileEditor> {
-  late final _name = TextEditingController(text: widget.profile?.name ?? '');
+  // A longer name (older version, another device) is cut here, in sight,
+  // rather than at the first key typed.
+  late final _name = TextEditingController(
+    text: (widget.profile?.name ?? '').characters.take(profileNameMaxLength).toString(),
+  )..addListener(_nameChanged);
   late int _color = widget.profile?.color ?? profileColors[1];
   late bool _kids = widget.profile?.kids ?? false;
+
+  /// Chosen picture: null (initial), `preset:<name>` or [_photo].
+  late String? _avatar = widget.profile?.avatar;
+
+  /// Pictures chosen so far: a photo that finishes processing is selected
+  /// only if nothing was chosen meanwhile.
+  int _choices = 0;
+
+  /// Photo of the profile, kept while the other pictures are tried.
+  late String? _photo = ProfilePhoto.isPhoto(widget.profile?.avatar) ? widget.profile!.avatar : null;
+  bool _importing = false;
+
+  void _nameChanged() => setState(() {}); // the initial in the preview
+
+  void _choose(String? avatar) => setState(() {
+    _avatar = avatar;
+    _choices++;
+  });
 
   @override
   void dispose() {
@@ -205,62 +342,178 @@ class _ProfileEditorState extends State<_ProfileEditor> {
     super.dispose();
   }
 
+  Future<void> _importPhoto() async {
+    final file = await openFile(
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp']),
+      ],
+    );
+    if (file == null || !mounted) return;
+    // What is chosen while the photo is processed stays chosen.
+    final choices = _choices;
+    setState(() => _importing = true);
+    String? photo;
+    try {
+      if (await file.length() <= ProfilePhoto.maxInputBytes) {
+        photo = await ProfilePhoto.fromFile(await file.readAsBytes(), background: _color);
+      }
+    } catch (_) {
+      photo = null;
+    }
+    if (!mounted) return;
+    setState(() {
+      _importing = false;
+      if (photo != null) {
+        _photo = photo;
+        if (_choices == choices) _avatar = photo;
+      }
+    });
+    if (photo == null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Cette image n'a pas pu être lue : essaie une photo JPEG ou PNG.")));
+    }
+  }
+
   void _save() {
+    if (_importing) return;
     final s = AppScope.of(context);
     final name = _name.text.trim();
     if (name.isEmpty) return;
     if (widget.profile == null) {
-      s.repo.createProfile(name: name, color: _color, kids: _kids);
+      // Profiles may have arrived from the account while the editor was open.
+      if (!s.repo.canAddProfile) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(profilesFullMessage)));
+        return;
+      }
+      s.repo.createProfile(name: name, color: _color, kids: _kids, avatar: _avatar);
     } else {
-      s.repo.updateProfile(widget.profile!.id, name: name, color: _color, kids: _kids);
+      s.repo.updateProfile(widget.profile!.id, name: name, color: _color, kids: _kids, avatar: _avatar);
     }
     s.visibilityChanged();
     s.library.userChanged();
     Navigator.of(context).pop();
   }
 
+  /// [avatar] as this profile would look; [kids] off for the tiles of
+  /// pictures, which would all carry the child badge.
+  Widget _avatarOf(String? avatar, double size, {bool? kids}) => AvatarView(
+    avatar: avatar,
+    color: _color,
+    initial: Profile.initialOf(_name.text),
+    kids: kids ?? _kids,
+    size: size,
+  );
+
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final p = widget.profile;
     final canDelete = p != null && s.repo.profiles().length > 1;
+    const tile = 44.0;
     return AlertDialog(
       title: Text(p == null ? 'Nouveau profil' : 'Modifier le profil', style: displayStyle(22)),
       content: SizedBox(
-        width: 420,
+        width: 470,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
-              controller: _name,
-              autofocus: true,
-              decoration: const InputDecoration(labelText: 'Prénom'),
-              onSubmitted: (_) => _save(),
-            ),
-            const SizedBox(height: 18),
-            Text('COULEUR', style: labelStyle()),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 10,
+            Row(
               children: [
-                for (final c in profileColors)
-                  InkWell(
-                    mouseCursor: SystemMouseCursors.click,
-                    borderRadius: BorderRadius.circular(999),
-                    onTap: () => setState(() => _color = c),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Color(c),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: _color == c ? AppColors.text : Colors.transparent, width: 3),
-                      ),
-                    ),
+                _avatarOf(_avatar, 76),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: TextField(
+                    controller: _name,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Prénom'),
+                    inputFormatters: [LengthLimitingTextInputFormatter(profileNameMaxLength)],
+                    onSubmitted: (_) => _save(),
                   ),
+                ),
               ],
             ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Expanded(child: Text('AVATAR', style: labelStyle())),
+                TextButton.icon(
+                  onPressed: _importing ? null : _importPhoto,
+                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                  label: Text(_photo == null ? 'Importer une photo…' : 'Changer de photo…'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                _AvatarChoice(
+                  tooltip: 'Initiale',
+                  selected: _avatar == null,
+                  onTap: () => _choose(null),
+                  child: _avatarOf(null, tile),
+                ),
+                for (final e in profileAvatars.entries)
+                  _AvatarChoice(
+                    tooltip: e.value,
+                    selected: _avatar == presetAvatar(e.key),
+                    onTap: () => _choose(presetAvatar(e.key)),
+                    child: _avatarOf(presetAvatar(e.key), tile, kids: false),
+                  ),
+                _AvatarChoice(
+                  tooltip: _photo == null ? 'Importer une photo' : 'Ta photo',
+                  selected: _photo != null && _avatar == _photo,
+                  onTap: _importing ? null : (_photo == null ? _importPhoto : () => _choose(_photo)),
+                  child: _importing
+                      ? const SizedBox(
+                          width: tile,
+                          height: tile,
+                          child: Center(
+                            child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                        )
+                      : _photo == null
+                      ? Container(
+                          width: tile,
+                          height: tile,
+                          decoration: BoxDecoration(
+                            color: AppColors.surface3,
+                            borderRadius: BorderRadius.circular(tile * 0.23),
+                          ),
+                          child: Icon(Icons.add_photo_alternate_outlined, size: 22, color: AppColors.muted),
+                        )
+                      : _avatarOf(_photo, tile, kids: false),
+                ),
+              ],
+            ),
+            if (_avatar == null) ...[
+              const SizedBox(height: 18),
+              Text('COULEUR', style: labelStyle()),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                children: [
+                  for (final c in profileColors)
+                    InkWell(
+                      mouseCursor: SystemMouseCursors.click,
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: () => setState(() => _color = c),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Color(c),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: _color == c ? AppColors.text : Colors.transparent, width: 3),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
             const SizedBox(height: 12),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
@@ -299,10 +552,53 @@ class _ProfileEditorState extends State<_ProfileEditor> {
             child: Text('Supprimer', style: TextStyle(color: AppColors.live)),
           ),
         TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Annuler')),
-        FilledButton(onPressed: _save, child: const Text('Enregistrer')),
+        FilledButton(onPressed: _importing ? null : _save, child: const Text('Enregistrer')),
       ],
     );
   }
+}
+
+/// One of the pictures offered in the profile editor.
+class _AvatarChoice extends StatelessWidget {
+  const _AvatarChoice({required this.tooltip, required this.selected, required this.onTap, required this.child});
+  final String tooltip;
+  final bool selected;
+  final VoidCallback? onTap;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(milliseconds: 400),
+    child: Semantics(
+      button: true,
+      selected: selected,
+      label: tooltip,
+      child: HoverBuilder(
+        onActivate: onTap,
+        focusRingRadius: 14,
+        builder: (context, hover) => GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: selected
+                    ? AppColors.text
+                    : hover && onTap != null
+                    ? AppColors.borderStrong
+                    : Colors.transparent,
+                width: 2.5,
+              ),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 /// Profile avatar in the top bar: switch profile, unlock protected categories.

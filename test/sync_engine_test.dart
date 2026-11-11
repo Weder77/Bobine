@@ -5,6 +5,7 @@ import 'package:bobine/data/db.dart';
 import 'package:bobine/data/models.dart';
 import 'package:bobine/data/repository.dart';
 import 'package:bobine/data/settings.dart';
+import 'package:bobine/features/profile_photo.dart';
 import 'package:bobine/sync/sync_crypto.dart';
 import 'package:bobine/sync/sync_engine.dart';
 
@@ -675,5 +676,89 @@ void main() {
     remote.duringPush = null;
     expect(a.pending, greaterThan(0));
     expect(remote.items.length, greaterThan(before), reason: 'the server had it; it is sent again, harmlessly');
+  });
+
+  group('profile pictures', () {
+    String? avatarOf(Device d, String name) => d.profile(name).avatar;
+
+    void setAvatar(Device d, String name, String? avatar) {
+      final p = d.profile(name);
+      d.repo.updateProfile(p.id, name: p.name, color: p.color, kids: p.kids, avatar: avatar);
+    }
+
+    test('a bundled picture and a photo follow the profile, and so does going back to the initial', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote), b = Device(remote);
+      a.repo.createProfile(name: 'Léa', color: 0xFF7FA6FF, avatar: 'preset:renard');
+      await a.sync();
+      await b.sync();
+      expect(avatarOf(b, 'Léa'), 'preset:renard');
+
+      // The largest photo kept, with a long name: still one item on the account.
+      final photo = ProfilePhoto.prefix + base64Encode(List.generate(ProfilePhoto.maxBytes, (i) => (i * 7919) % 256));
+      final long = 'Léa ${'é' * 300}';
+      final lea = a.profile('Léa');
+      a.repo.updateProfile(lea.id, name: long, color: lea.color, kids: false, avatar: photo);
+      await _tick();
+      final sent = await a.sync();
+      expect(sent.skipped, 0);
+      await b.sync();
+      expect(avatarOf(b, long), photo);
+
+      setAvatar(a, long, null);
+      await _tick();
+      await a.sync();
+      await b.sync();
+      expect(avatarOf(b, long), isNull);
+    });
+
+    test('a version without pictures changing the profile does not take its picture away', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote), b = Device(remote);
+      a.repo.createProfile(name: 'Léa', color: 0xFF7FA6FF, avatar: 'preset:panda');
+      await a.sync();
+      await b.sync();
+
+      // An older Bobine renames the profile: its record has no picture.
+      final codec = SyncCodec(_keys);
+      String? id;
+      Map<String, Object?>? record;
+      for (final i in remote.items.values) {
+        final r = await codec.open(i.id, i.payload);
+        if (r['t'] == 'profiles' && (r['d'] as Map?)?['name'] == 'Léa') (id, record) = (i.id, r);
+      }
+      final data = Map<String, Object?>.from(record!['d'] as Map)
+        ..remove('avatar')
+        ..['name'] = 'Léa B.';
+      remote.items[id!] = RemoteItem(
+        id: id,
+        modifiedAt: DateTime.now().millisecondsSinceEpoch + 1000,
+        payload: await codec.seal(id, {...record, 'd': data}),
+        rev: ++remote._rev,
+      );
+      await b.sync();
+      expect(b.profile('Léa B.').avatar, 'preset:panda');
+
+      // The picture goes back to the account: a device linking now gets it.
+      await b.sync();
+      final c = Device(remote);
+      await c.sync();
+      expect(c.profile('Léa B.').avatar, 'preset:panda');
+      await a.sync();
+      expect(a.profile('Léa B.').avatar, 'preset:panda');
+      // And it settles: nothing more goes back and forth.
+      await a.sync();
+      await b.sync();
+      expect((await a.sync()).sent + (await b.sync()).sent, 0);
+    });
+
+    test('changing only the picture is a change to send', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote);
+      await a.sync();
+      expect(a.pending, 0);
+      setAvatar(a, 'Moi', 'preset:chat');
+      expect(a.pending, 1);
+    });
   });
 }

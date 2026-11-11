@@ -836,18 +836,34 @@ class Repository {
     return rows.isEmpty ? null : Profile.fromRow(rows.first);
   }
 
-  int createProfile({required String name, required int color, bool kids = false}) {
-    db.execute('INSERT INTO profiles (name, color, kids, created_at) VALUES (?, ?, ?, ?)', [
+  int profileCount() => db.select('SELECT count(*) AS n FROM profiles').first['n'] as int;
+
+  /// Whether one more profile can be created here ([Profile.max] at most).
+  /// Profiles received from the account are never refused: devices that
+  /// each created some can bring the total over it.
+  bool get canAddProfile => profileCount() < Profile.max;
+
+  /// Creates a profile; throws a [StateError] when there are already [Profile.max].
+  int createProfile({required String name, required int color, bool kids = false, String? avatar}) {
+    if (!canAddProfile) throw StateError('${Profile.max} profils au maximum');
+    db.execute('INSERT INTO profiles (name, color, kids, avatar, created_at) VALUES (?, ?, ?, ?, ?)', [
       name,
       color,
       kids ? 1 : 0,
+      avatar,
       _nowSec,
     ]);
     return db.lastInsertRowId;
   }
 
-  void updateProfile(int id, {required String name, required int color, required bool kids}) =>
-      db.execute('UPDATE profiles SET name = ?, color = ?, kids = ? WHERE id = ?', [name, color, kids ? 1 : 0, id]);
+  void updateProfile(int id, {required String name, required int color, required bool kids, required String? avatar}) =>
+      db.execute('UPDATE profiles SET name = ?, color = ?, kids = ?, avatar = ? WHERE id = ?', [
+        name,
+        color,
+        kids ? 1 : 0,
+        avatar,
+        id,
+      ]);
 
   /// Deletes a profile and its favourites, progress and reminders.
   void deleteProfile(int id) => db.execute('DELETE FROM profiles WHERE id = ?', [id]);
