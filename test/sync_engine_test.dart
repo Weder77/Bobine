@@ -630,6 +630,39 @@ void main() {
       expect(b.repo.progress(srcB, ContentKind.movie, '777')!.position, const Duration(minutes: 6));
     });
 
+    test('what a newer Bobine wrote is read once this one is updated', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote);
+      final src = a.xtream();
+      a.repo.toggleFavorite(src, ContentKind.movie, '77');
+      await a.sync();
+      // The favourite as a newer Bobine would write it.
+      final codec = SyncCodec(_keys);
+      final id = await _itemOf(remote, 'favorites');
+      final item = remote.items[id]!;
+      final record = await codec.open(id, item.payload);
+      remote.items[id] = RemoteItem(
+        id: id,
+        modifiedAt: item.modifiedAt,
+        payload: await codec.seal(id, {...record, 'v': 2}),
+        rev: ++remote._rev,
+      );
+
+      final b = Device(remote);
+      await b.sync();
+      final srcB = b.source('Mon IPTV').id;
+      expect(b.repo.isFavorite(srcB, ContentKind.movie, '77'), isFalse, reason: 'version 2 is not read by 1');
+      expect(b.repo.kvGet(SyncEngine.laterKey), '2');
+      await b.sync();
+      expect(b.repo.kvGet(SyncEngine.laterKey), '2', reason: 'still waiting');
+
+      SyncEngine.recordVersion = 2; // the app was updated
+      addTearDown(() => SyncEngine.recordVersion = 1);
+      await b.sync();
+      expect(b.repo.isFavorite(srcB, ContentKind.movie, '77'), isTrue);
+      expect(b.repo.kvGet(SyncEngine.laterKey), isNull);
+    });
+
     test('a record this version cannot apply is skipped, not the ones around it', () async {
       final remote = MemoryRemote();
       final a = Device(remote);

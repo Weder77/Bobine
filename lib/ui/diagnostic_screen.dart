@@ -86,10 +86,8 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
         // The account is checked, not only the answer: an expired one
         // still answers 200.
         final info = await XtreamApi.forSource(src, client: client).authenticate().timeout(const Duration(seconds: 30));
-        final exp = info['exp_date'] as int?;
-        final until = exp == null || exp <= 0
-            ? ''
-            : ' · expire le ${formatDay(DateTime.fromMillisecondsSinceEpoch(exp * 1000))}';
+        final exp = accountExpiry(info['exp_date']);
+        final until = exp == null ? '' : ' · expire le ${formatDay(exp)}';
         result = _SourceTest(true, 'Compte actif · réponse en ${sw.elapsedMilliseconds} ms$until');
       } else if (src.url.startsWith('http')) {
         final res = await openGet(

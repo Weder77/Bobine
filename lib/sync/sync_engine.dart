@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../core/secrets.dart';
@@ -108,7 +109,17 @@ class SyncEngine {
   static const cursorKey = 'sync.cursor';
   static const pageSize = 1000;
   static const batchSize = 500;
-  static const _version = 1;
+
+  /// Version of the records this Bobine writes and reads.
+  static int get _version => recordVersion;
+  @visibleForTesting
+  static int recordVersion = 1;
+
+  /// Highest record version met that this Bobine could not read. The
+  /// cursor goes past such items like any other: once updated, the app
+  /// reads the account again from its start, or they were lost to it.
+  static const laterKey = 'sync.later';
+  int _newerMet = 0;
 
   /// Largest payload the account accepts (`sync_items.payload`). A larger
   /// one makes the server refuse the whole batch it travels in.
@@ -136,8 +147,12 @@ class SyncEngine {
       _seed();
     }
 
-    // Receive.
-    var after = cursor ?? 0;
+    // Receive. Updated since items of a newer Bobine were left aside: all
+    // read again (what is already here is not applied twice).
+    final later = int.tryParse(repo.kvGet(laterKey) ?? '');
+    final rereading = later != null && later <= _version;
+    var after = rereading ? 0 : (cursor ?? 0);
+    _newerMet = 0;
     final received = <RemoteItem>[];
     while (true) {
       final page = await remote.pull(after, limit: pageSize);
@@ -436,7 +451,12 @@ class SyncEngine {
       }
       read++;
       try {
-        if ((record['v'] as int? ?? 0) > _version) continue; // made by a newer Bobine
+        final v = record['v'] as int? ?? 0;
+        if (v > _version) {
+          // Made by a newer Bobine: read once this one is updated.
+          _newerMet = math.max(_newerMet, v);
+          continue;
+        }
         final key = record['k'];
         if (record['t'] is! String || key is! List) continue;
         // A record is only accepted under the id it belongs to.
@@ -587,6 +607,15 @@ class SyncEngine {
       }
       if (cursor != null) {
         _db.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', [cursorKey, '$cursor']);
+        // What could not be read waits for an update; what this version
+        // reads is no longer waiting.
+        final waiting = int.tryParse(repo.kvGet(laterKey) ?? '') ?? 0;
+        final next = math.max(_newerMet, waiting > _version ? waiting : 0);
+        if (next > 0) {
+          _db.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', [laterKey, '$next']);
+        } else {
+          _db.execute('DELETE FROM kv WHERE key = ?', [laterKey]);
+        }
       }
       _db.execute('DELETE FROM sync_mute');
       _db.execute('COMMIT');

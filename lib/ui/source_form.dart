@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/format.dart';
 import '../core/net.dart';
 import '../core/text.dart';
+import '../core/text_decoding.dart';
 import '../core/theme.dart';
 import '../data/import/xtream_api.dart';
 import '../data/models.dart';
@@ -133,17 +134,14 @@ class _SourceFormState extends State<SourceForm> {
         );
         try {
           final info = await api.authenticate();
-          final exp = info['exp_date'] as int?;
+          final exp = accountExpiry(info['exp_date']);
           final parts = [
             'Compte actif',
-            if (exp != null && exp > 0)
-              'expire le ${formatDate(DateTime.fromMillisecondsSinceEpoch(exp * 1000))}'
-            else
-              "pas de date d'expiration",
+            if (exp != null) 'expire le ${formatDate(exp)}' else "pas de date d'expiration",
             if (info['max_connections'] != null) '${info['max_connections']} connexion(s) max',
             if (info['is_trial'] == true) 'essai',
           ];
-          setState(() => _info = '✓ ${parts.join(' · ')}');
+          if (mounted) setState(() => _info = '✓ ${parts.join(' · ')}');
         } finally {
           api.close();
         }
@@ -156,10 +154,7 @@ class _SourceFormState extends State<SourceForm> {
           try {
             final res = await openGet(client, Uri.parse(loc), userAgent: _ua.text.trim());
             // Counted as it arrives: a playlist can weigh hundreds of MB.
-            final text = guardBody(
-              gunzipIfNeeded(res),
-              maxBytes: 1 << 30,
-            ).transform(const Utf8Decoder(allowMalformed: true));
+            final text = decodeText(guardBody(gunzipIfNeeded(res), maxBytes: 1 << 30));
             var n = 0;
             String? first;
             await for (final line in limitLineLength(text).transform(const LineSplitter())) {
@@ -169,14 +164,15 @@ class _SourceFormState extends State<SourceForm> {
             if (n == 0 && !(first ?? '').startsWith('#EXTM3U')) {
               throw NetException("Le fichier reçu n'est pas une playlist M3U.");
             }
-            setState(() => _info = '✓ Playlist valide : ${formatCount(n)} entrées.');
+            if (mounted) setState(() => _info = '✓ Playlist valide : ${formatCount(n)} entrées.');
           } finally {
             client.close(force: true);
           }
         }
       }
     } catch (e) {
-      setState(() => _error = redactCredentials(e.toString()));
+      // The form may have been closed during the test.
+      if (mounted) setState(() => _error = redactCredentials(e.toString()));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

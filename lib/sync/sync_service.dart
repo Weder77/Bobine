@@ -37,6 +37,20 @@ class SyncService extends ChangeNotifier {
     if (_session == null || _keys == null) {
       _session = null;
       _keys = null;
+      if (_repo.kvGet(_sessionKey) != null || _repo.kvGet(_keysKey) != null) {
+        // Saved but unreadable here (encrypted on another computer or
+        // session): the device is signed out, and its next sign-in reads
+        // the account from the start. With the old cursor kept, it skipped
+        // everything sent before it.
+        _repo.write(() {
+          _repo.db.execute('DELETE FROM kv WHERE key IN (?, ?, ?, ?)', [
+            _sessionKey,
+            _keysKey,
+            _lastKey,
+            SyncEngine.cursorKey,
+          ]);
+        });
+      }
     } else {
       status = SyncStatus.idle;
     }

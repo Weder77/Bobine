@@ -77,9 +77,12 @@ class ImportService extends ChangeNotifier {
           final n = await _spawnEpg(path, id, epgDays, send);
           if (n > 0) onEpgChanged(id);
         } catch (e) {
-          // A broken EPG must not fail the whole refresh.
-          debugPrint('EPG import failed: $e');
+          // A broken EPG must not fail the whole refresh, but is said with
+          // its result (it was only in the log).
+          final why = redactCredentials('$e');
+          debugPrint('EPG import failed: $why');
           if (!content) rethrow;
+          lastMessage = '${lastMessage ?? source.name} · guide non mis à jour : $why';
         }
       }
     } catch (e) {

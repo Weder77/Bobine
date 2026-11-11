@@ -314,7 +314,10 @@ class TmdbService {
     } on TmdbException catch (e) {
       return e.message;
     } catch (e) {
-      return 'Connexion impossible : $e';
+      // The error of the connection can carry the address, key included.
+      final k = key.trim();
+      final text = redactCredentials('$e');
+      return 'Connexion impossible : ${k.length < 4 ? text : text.replaceAll(k, '***')}';
     }
   }
 

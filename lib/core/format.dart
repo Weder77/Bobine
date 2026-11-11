@@ -109,3 +109,14 @@ String codecLabel(String c) => switch (c.toLowerCase()) {
   'webvtt' => 'WebVTT',
   final other => other.toUpperCase(),
 };
+
+/// End of a provider's subscription from its `exp_date` (seconds), or
+/// null when there is none or it makes no sense: a date out of range made
+/// the source's card fail to show.
+DateTime? accountExpiry(Object? expDate) {
+  final v = expDate is int ? expDate : int.tryParse('${expDate ?? ''}'.trim());
+  if (v == null || v <= 0) return null;
+  // 2000 to 2200.
+  if (v < 946684800 || v > 7258118400) return null;
+  return DateTime.fromMillisecondsSinceEpoch(v * 1000);
+}

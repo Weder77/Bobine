@@ -986,7 +986,7 @@ class _SourceTile extends StatelessWidget {
     final active = s.settings.activeSourceId == src.id;
     final status = s.imports.status(src.id);
     final info = src.accountInfo;
-    final exp = int.tryParse('${info?['exp_date'] ?? ''}');
+    final exp = accountExpiry(info?['exp_date']);
     final cons = info?['active_cons'];
     final maxCons = info?['max_connections'];
     final figures = <(String, String)>[
@@ -994,7 +994,7 @@ class _SourceTile extends StatelessWidget {
       ('Films', formatCount(s.repo.count(src.id, ContentKind.movie))),
       ('Séries', formatCount(s.repo.count(src.id, ContentKind.series))),
       if (maxCons != null) ('Connexions', '${cons ?? 0} / $maxCons'),
-      if (exp != null && exp > 0) ('Expire le', formatDate(DateTime.fromMillisecondsSinceEpoch(exp * 1000))),
+      if (exp != null) ('Expire le', formatDate(exp)),
     ];
     final (chip, chipBg, chipInk) = status != null
         ? ('Actualisation…', AppColors.accentTint, AppColors.accent)

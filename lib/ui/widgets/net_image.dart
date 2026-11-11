@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
@@ -54,10 +55,17 @@ class ImageFetcher {
     );
   }
 
+  /// A picture kept longer is fetched again (a channel changes its logo,
+  /// a poster its picture); the old one is used if that fails.
+  static const maxAge = Duration(days: 30);
+
   Future<Uint8List> _load(String url) async {
     final file = File('$dir/${stableHash(url)}');
+    Uint8List? stale;
     if (await file.exists()) {
-      return file.readAsBytes();
+      final kept = await file.readAsBytes();
+      if (DateTime.now().difference((await file.stat()).modified) < maxAge) return kept;
+      stale = kept;
     }
     if (_active >= _maxActive) {
       final c = Completer<void>();
@@ -71,12 +79,15 @@ class ImageFetcher {
       // for good, and after a few of them no picture loads any more.
       final guarded = guardBody(res, stall: const Duration(seconds: 20), maxBytes: 8 << 20);
       final bytes = (await guarded.fold(BytesBuilder(copy: false), (b, chunk) => b..add(chunk))).takeBytes();
-      if (bytes.length < 16) throw StateError('empty image');
+      // A web page, an error message or an empty answer sent with 200 was
+      // kept as a picture, for good.
+      if (!looksLikeImage(bytes)) throw StateError('not an image');
       final tmp = File('${file.path}.tmp');
       await tmp.writeAsBytes(bytes, flush: false);
       await tmp.rename(file.path);
       return bytes;
     } catch (e) {
+      if (stale != null) return stale;
       _failed[url] = DateTime.now();
       rethrow;
     } finally {
@@ -166,7 +177,9 @@ class NetImage extends StatelessWidget {
     if (!_isHttp(url)) return SizedBox(width: width, height: height, child: ph);
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final dw = decodeWidth ?? width;
-    final provider = ResizeImage.resizeIfNeeded(dw == null ? null : (dw * dpr).round(), null, DiskCachedImage(url!));
+    // Always decoded at a bounded width: a few hundred KB can announce a
+    // picture of billions of pixels, decoded whole when no width was known.
+    final provider = ResizeImage(DiskCachedImage(url!), width: math.min(((dw ?? 1920) * dpr).round(), 3840));
     return Image(
       image: provider,
       width: width,
@@ -188,4 +201,24 @@ class NetImage extends StatelessWidget {
       },
     );
   }
+}
+
+/// The first bytes are those of a picture format the app decodes (JPEG,
+/// PNG, GIF, WebP, BMP, ICO, AVIF / HEIF).
+bool looksLikeImage(List<int> b) {
+  if (b.length < 16) return false;
+  bool at(int i, List<int> sig) {
+    for (var k = 0; k < sig.length; k++) {
+      if (b[i + k] != sig[k]) return false;
+    }
+    return true;
+  }
+
+  return at(0, [0xFF, 0xD8, 0xFF]) ||
+      at(0, [0x89, 0x50, 0x4E, 0x47]) ||
+      at(0, 'GIF8'.codeUnits) ||
+      (at(0, 'RIFF'.codeUnits) && at(8, 'WEBP'.codeUnits)) ||
+      at(0, 'BM'.codeUnits) ||
+      at(0, [0, 0, 1, 0]) ||
+      at(4, 'ftyp'.codeUnits);
 }

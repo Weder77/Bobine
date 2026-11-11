@@ -13,6 +13,7 @@ import 'package:sqlite3/sqlite3.dart';
 import '../../core/net.dart';
 import '../../core/secrets.dart';
 import '../../core/text.dart';
+import '../../core/text_decoding.dart';
 import '../db.dart';
 import '../models.dart';
 import '../stream_urls.dart';
@@ -311,7 +312,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
         timeout: const Duration(seconds: 60),
       );
     }
-    final text = guardBody(gunzipIfNeeded(bytes), maxBytes: 1 << 30).transform(const Utf8Decoder(allowMalformed: true));
+    final text = decodeText(guardBody(gunzipIfNeeded(bytes), maxBytes: 1 << 30));
     await for (final line in limitLineLength(text).transform(const LineSplitter())) {
       parser.addLine(line);
       if (parser.notAPlaylist) {
@@ -647,7 +648,7 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     // A guide is read as it arrives, so its size costs time, not memory:
     // the bound only stops an endless answer.
     final guarded = guardBody(gunzipIfNeeded(bytes), maxBytes: 4 << 30);
-    await for (final chunk in guarded.transform(const Utf8Decoder(allowMalformed: true))) {
+    await for (final chunk in decodeText(guarded)) {
       parser.add(chunk);
     }
     parser.close();
