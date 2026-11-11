@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -86,6 +87,18 @@ class Repository {
     ).isNotEmpty;
   }
 
+  /// [isLocked] for a recording. A channel that is no longer in the list
+  /// (its address, so its id, changed at the provider) cannot tell whether
+  /// it was locked: its recordings stay out too, until the code is typed.
+  bool isRecordingLocked(int sourceId, String channelExt) {
+    if (!hideLocked) return false;
+    final known = db.select('SELECT 1 FROM channels WHERE source_id = ? AND ext_id = ? LIMIT 1', [
+      sourceId,
+      channelExt,
+    ]).isNotEmpty;
+    return !known || isLocked(sourceId, ContentKind.live, channelExt);
+  }
+
   String? _seriesOfEpisode(int sourceId, String extId) {
     final rows = db.select('SELECT series_ext FROM episodes WHERE source_id = ? AND ext_id = ? LIMIT 1', [
       sourceId,
@@ -97,16 +110,45 @@ class Repository {
   int get _nowSec => DateTime.now().millisecondsSinceEpoch ~/ 1000;
 
   /// Runs a write, retrying later if the database is busy (background import).
-  void write(void Function() action, {int attempt = 0}) {
+  void write(void Function() action, {int attempt = 0, int? profile}) {
+    // Played again later, the write must go to the profile it was made
+    // for, not to the one chosen since.
+    final forProfile = profile ?? profileId;
+    final current = profileId;
+    profileId = forProfile;
     try {
       action();
     } on SqliteException catch (e) {
       final busy = e.extendedResultCode & 0xff == 5 || e.extendedResultCode & 0xff == 6;
-      if (busy && attempt < 8) {
-        Timer(Duration(milliseconds: 400 * (attempt + 1)), () => write(action, attempt: attempt + 1));
+      if (busy && attempt < 40) {
+        // About two minutes in all: a large guide can hold the database
+        // that long while it is written.
+        final wait = Duration(milliseconds: math.min(3000, 400 * (attempt + 1)));
+        Timer(wait, () => write(action, attempt: attempt + 1, profile: forProfile));
       } else {
         debugPrint('DB write failed: $e');
+        onWriteFailed?.call();
       }
+    } finally {
+      profileId = current;
+    }
+  }
+
+  /// Told when a change could not be saved (shown to the user).
+  void Function()? onWriteFailed;
+
+  /// Writes now what the user just did and whose result is needed now (a
+  /// profile, a source, a reminder…): waits up to 5 s for an import that
+  /// holds the database, where the interface otherwise gives up after
+  /// 150 ms and the change was lost without a word.
+  T writeNow<T>(T Function() action) {
+    final before = db.select('PRAGMA busy_timeout').first.columnAt(0) as int;
+    if (before >= 5000) return action();
+    db.execute('PRAGMA busy_timeout = 5000');
+    try {
+      return action();
+    } finally {
+      db.execute('PRAGMA busy_timeout = $before');
     }
   }
 
@@ -129,24 +171,28 @@ class Repository {
     String? userAgent,
     String liveFormat = 'ts',
     int epgOffset = 0,
+    bool acceptInvalidCertificate = false,
   }) {
-    db.execute(
-      'INSERT INTO sources (name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, created_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        name,
-        type.name,
-        Secrets.protect(url),
-        username,
-        Secrets.protect(password),
-        Secrets.protect(_nz(epgUrl)),
-        _nz(userAgent),
-        liveFormat,
-        epgOffset,
-        _nowSec,
-      ],
-    );
-    return db.lastInsertRowId;
+    return writeNow(() {
+      db.execute(
+        'INSERT INTO sources (name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, '
+        'bad_cert_ok, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          name,
+          type.name,
+          Secrets.protect(url),
+          username,
+          Secrets.protect(password),
+          Secrets.protect(_nz(epgUrl)),
+          _nz(userAgent),
+          liveFormat,
+          epgOffset,
+          acceptInvalidCertificate ? 1 : 0,
+          _nowSec,
+        ],
+      );
+      return db.lastInsertRowId;
+    });
   }
 
   void updateSource(
@@ -159,36 +205,45 @@ class Repository {
     String? userAgent,
     String liveFormat = 'ts',
     int epgOffset = 0,
+    bool acceptInvalidCertificate = false,
   }) {
-    db.execute(
-      'UPDATE sources SET name = ?, url = ?, username = ?, password = ?, epg_url = ?, '
-      'user_agent = ?, live_format = ?, epg_offset = ? WHERE id = ?',
-      [
-        name,
-        Secrets.protect(url),
-        username,
-        Secrets.protect(password),
-        Secrets.protect(_nz(epgUrl)),
-        _nz(userAgent),
-        liveFormat,
-        epgOffset,
-        id,
-      ],
-    );
+    writeNow(() {
+      db.execute(
+        'UPDATE sources SET name = ?, url = ?, username = ?, password = ?, epg_url = ?, '
+        'user_agent = ?, live_format = ?, epg_offset = ?, bad_cert_ok = ? WHERE id = ?',
+        [
+          name,
+          Secrets.protect(url),
+          username,
+          Secrets.protect(password),
+          Secrets.protect(_nz(epgUrl)),
+          _nz(userAgent),
+          liveFormat,
+          epgOffset,
+          acceptInvalidCertificate ? 1 : 0,
+          id,
+        ],
+      );
+    });
   }
 
   void deleteSource(int id) {
-    db.execute('BEGIN');
-    try {
-      for (final t in ['epg_programs', 'epg_channels', 'tmdb_cache']) {
-        db.execute('DELETE FROM $t WHERE source_id = ?', [id]);
+    writeNow(() {
+      db.execute('BEGIN');
+      try {
+        for (final t in ['epg_programs', 'epg_channels', 'tmdb_cache']) {
+          db.execute('DELETE FROM $t WHERE source_id = ?', [id]);
+        }
+        // Recordings to come go with the source; those made stay listed,
+        // with their files.
+        db.execute("DELETE FROM recordings WHERE source_id = ? AND status = 'scheduled'", [id]);
+        db.execute('DELETE FROM sources WHERE id = ?', [id]);
+        db.execute('COMMIT');
+      } catch (_) {
+        db.execute('ROLLBACK');
+        rethrow;
       }
-      db.execute('DELETE FROM sources WHERE id = ?', [id]);
-      db.execute('COMMIT');
-    } catch (_) {
-      db.execute('ROLLBACK');
-      rethrow;
-    }
+    });
   }
 
   static String? _nz(String? v) => (v == null || v.trim().isEmpty) ? null : v.trim();
@@ -286,14 +341,18 @@ class Repository {
 
   /// Streams of the same channel in other qualities ("TF1 HD", "TF1 FHD"…),
   /// visible ones only, [c] included.
-  List<Channel> channelVariants(Channel c) => db
-      .select(
-        'SELECT * FROM channels WHERE source_id = ? AND match_key = ? '
-        'AND ${_visible('channels', ContentKind.live, c.sourceId)} ORDER BY position',
-        [c.sourceId, channelMatchKey(c.name)],
-      )
-      .map(Channel.fromRow)
-      .toList();
+  List<Channel> channelVariants(Channel c) {
+    final key = channelMatchKey(c.name);
+    if (key.isEmpty) return [c];
+    return db
+        .select(
+          'SELECT * FROM channels WHERE source_id = ? AND match_key = ? '
+          'AND ${_visible('channels', ContentKind.live, c.sourceId)} ORDER BY position',
+          [c.sourceId, key],
+        )
+        .map(Channel.fromRow)
+        .toList();
+  }
 
   Channel? channelByExt(int sourceId, String extId) {
     final rows = db.select('SELECT * FROM channels WHERE source_id = ? AND ext_id = ? LIMIT 1', [sourceId, extId]);
@@ -545,26 +604,26 @@ class Repository {
   /// series the most recent episode. Films and series of a locked category
   /// stay out while the parental code is required.
   List<ProgressEntry> continueWatching(int sourceId, {int limit = 20}) {
+    // A series is where its last episode watched is: an episode left at
+    // the credits and followed by others seen to the end is not offered
+    // again. Its newest progress decides, finished or not.
     final rows = db.select(
-      'SELECT * FROM progress pr WHERE pr.profile_id = $profileId AND pr.source_id = ? AND pr.finished = 0 '
-      'AND pr.position_ms > 30000 '
+      'SELECT * FROM ('
+      'SELECT pr.*, ROW_NUMBER() OVER (PARTITION BY '
+      "CASE WHEN pr.kind = '${ContentKind.episode.db}' AND pr.series_ext IS NOT NULL "
+      "THEN 's:' || pr.series_ext ELSE pr.kind || ':' || pr.ext_id END "
+      'ORDER BY pr.updated_at DESC) AS newest '
+      'FROM progress pr WHERE pr.profile_id = $profileId AND pr.source_id = ? '
       "AND NOT EXISTS (SELECT 1 FROM movies m WHERE pr.kind = '${ContentKind.movie.db}' "
       'AND m.source_id = pr.source_id AND m.ext_id = pr.ext_id AND ${_lockedOut('m', ContentKind.movie, sourceId)}) '
       "AND NOT EXISTS (SELECT 1 FROM series sr WHERE pr.kind = '${ContentKind.episode.db}' "
       'AND sr.source_id = pr.source_id AND sr.ext_id = pr.series_ext '
-      'AND ${_lockedOut('sr', ContentKind.series, sourceId)}) '
-      'ORDER BY pr.updated_at DESC LIMIT 200',
-      [sourceId],
+      'AND ${_lockedOut('sr', ContentKind.series, sourceId)})'
+      ') WHERE newest = 1 AND finished = 0 AND position_ms > 30000 '
+      'ORDER BY updated_at DESC LIMIT ?',
+      [sourceId, limit],
     );
-    final seenSeries = <String>{};
-    final out = <ProgressEntry>[];
-    for (final r in rows) {
-      final p = ProgressEntry.fromRow(r);
-      if (p.seriesExt != null && !seenSeries.add(p.seriesExt!)) continue;
-      out.add(p);
-      if (out.length >= limit) break;
-    }
-    return out;
+    return rows.map(ProgressEntry.fromRow).toList();
   }
 
   /// Marks a film or an episode as seen (it leaves "Reprendre"), or with
@@ -787,7 +846,20 @@ class Repository {
     () => db.execute('UPDATE category_prefs SET position = NULL WHERE source_id = ? AND kind = ?', [sourceId, kind.db]),
   );
 
-  static final _adult = RegExp(r'adult|xxx|porn|\b18\s*\+|\+\s*18\b|sexy|érotique|erotic|hot\b', caseSensitive: false);
+  /// Names of adult-only categories, read without accents nor case.
+  static final _adult = RegExp(
+    r'\b(?:adult[eo]?s?|xxx+|porno?s?|porn\w*|sexe?s?|sexy|erotique?s?|erotic\w*|eroti[ck]a|charme|hot)\b'
+    r'|\b18\s*\+|\+\s*18\b|(?:^|[\s(\[|])-\s*18\b|\b(?:for|pour)\s+adult',
+  );
+
+  /// Names that look adult but are not ("Adult Swim", young adult books).
+  static final _notAdult = RegExp(r'adult\s*swim|young\s+adults?|jeunes?\s+adultes?');
+
+  @visibleForTesting
+  static bool looksAdult(String name) {
+    final n = searchKey(name);
+    return _adult.hasMatch(n) && !_notAdult.hasMatch(n);
+  }
 
   /// Locks the categories that look adult-only, unless the user already
   /// decided for them. Returns how many were locked.
@@ -800,7 +872,7 @@ class Repository {
       [sourceId],
     );
     for (final r in rows) {
-      if (!_adult.hasMatch(r['name'] as String)) continue;
+      if (!looksAdult(r['name'] as String)) continue;
       write(
         () =>
             _upsertCategoryPref(sourceId, ContentKind.fromDb(r['kind'] as String), r['ext_id'] as String, 'locked', 1),
@@ -845,28 +917,32 @@ class Repository {
 
   /// Creates a profile; throws a [StateError] when there are already [Profile.max].
   int createProfile({required String name, required int color, bool kids = false, String? avatar}) {
-    if (!canAddProfile) throw StateError('${Profile.max} profils au maximum');
-    db.execute('INSERT INTO profiles (name, color, kids, avatar, created_at) VALUES (?, ?, ?, ?, ?)', [
-      name,
-      color,
-      kids ? 1 : 0,
-      avatar,
-      _nowSec,
-    ]);
-    return db.lastInsertRowId;
-  }
-
-  void updateProfile(int id, {required String name, required int color, required bool kids, required String? avatar}) =>
-      db.execute('UPDATE profiles SET name = ?, color = ?, kids = ?, avatar = ? WHERE id = ?', [
+    return writeNow(() {
+      if (!canAddProfile) throw StateError('${Profile.max} profils au maximum');
+      db.execute('INSERT INTO profiles (name, color, kids, avatar, created_at) VALUES (?, ?, ?, ?, ?)', [
         name,
         color,
         kids ? 1 : 0,
         avatar,
-        id,
+        _nowSec,
       ]);
+      return db.lastInsertRowId;
+    });
+  }
+
+  void updateProfile(int id, {required String name, required int color, required bool kids, required String? avatar}) =>
+      writeNow(
+        () => db.execute('UPDATE profiles SET name = ?, color = ?, kids = ?, avatar = ? WHERE id = ?', [
+          name,
+          color,
+          kids ? 1 : 0,
+          avatar,
+          id,
+        ]),
+      );
 
   /// Deletes a profile and its favourites, progress and reminders.
-  void deleteProfile(int id) => db.execute('DELETE FROM profiles WHERE id = ?', [id]);
+  void deleteProfile(int id) => writeNow(() => db.execute('DELETE FROM profiles WHERE id = ?', [id]));
 
   // -------------------------------------------------------------- reminders
 
@@ -885,30 +961,32 @@ class Repository {
 
   /// Adds or removes a reminder; returns whether one is now set.
   bool toggleReminder(Channel channel, Program program) {
-    final start = program.start.millisecondsSinceEpoch ~/ 1000;
-    if (hasReminder(channel.sourceId, channel.extId, program.start)) {
-      db.execute('DELETE FROM reminders WHERE profile_id = ? AND source_id = ? AND channel_ext = ? AND start = ?', [
-        profileId,
-        channel.sourceId,
-        channel.extId,
-        start,
-      ]);
-      return false;
-    }
-    db.execute(
-      'INSERT OR REPLACE INTO reminders (profile_id, source_id, channel_ext, channel_name, title, start, stop) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [
-        profileId,
-        channel.sourceId,
-        channel.extId,
-        channel.name,
-        program.title,
-        start,
-        program.stop.millisecondsSinceEpoch ~/ 1000,
-      ],
-    );
-    return true;
+    return writeNow(() {
+      final start = program.start.millisecondsSinceEpoch ~/ 1000;
+      if (hasReminder(channel.sourceId, channel.extId, program.start)) {
+        db.execute('DELETE FROM reminders WHERE profile_id = ? AND source_id = ? AND channel_ext = ? AND start = ?', [
+          profileId,
+          channel.sourceId,
+          channel.extId,
+          start,
+        ]);
+        return false;
+      }
+      db.execute(
+        'INSERT OR REPLACE INTO reminders (profile_id, source_id, channel_ext, channel_name, title, start, stop) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+          profileId,
+          channel.sourceId,
+          channel.extId,
+          channel.name,
+          program.title,
+          start,
+          program.stop.millisecondsSinceEpoch ~/ 1000,
+        ],
+      );
+      return true;
+    });
   }
 
   void deleteReminder(int id) => write(() => db.execute('DELETE FROM reminders WHERE id = ?', [id]));
@@ -933,22 +1011,24 @@ class Repository {
     RecordingStatus status = RecordingStatus.scheduled,
     String? path,
   }) {
-    db.execute(
-      'INSERT INTO recordings (source_id, channel_ext, channel_name, title, start, stop, path, status, created_at) '
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        sourceId,
-        channelExt,
-        channelName,
-        title,
-        start.millisecondsSinceEpoch ~/ 1000,
-        stop.millisecondsSinceEpoch ~/ 1000,
-        path,
-        status.name,
-        _nowSec,
-      ],
-    );
-    return db.lastInsertRowId;
+    return writeNow(() {
+      db.execute(
+        'INSERT INTO recordings (source_id, channel_ext, channel_name, title, start, stop, path, status, created_at) '
+        'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          sourceId,
+          channelExt,
+          channelName,
+          title,
+          start.millisecondsSinceEpoch ~/ 1000,
+          stop.millisecondsSinceEpoch ~/ 1000,
+          path,
+          status.name,
+          _nowSec,
+        ],
+      );
+      return db.lastInsertRowId;
+    });
   }
 
   void updateRecording(int id, {RecordingStatus? status, String? path, String? error, int? size, DateTime? stop}) {

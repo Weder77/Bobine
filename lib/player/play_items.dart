@@ -61,4 +61,5 @@ PlayItem recordingItem(Recording r) => PlayItem(
   title: r.title,
   subtitle: '${r.channelName} · enregistrement',
   saveProgress: false,
+  localFile: true,
 );

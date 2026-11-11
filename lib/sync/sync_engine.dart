@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../core/secrets.dart';
@@ -108,7 +109,17 @@ class SyncEngine {
   static const cursorKey = 'sync.cursor';
   static const pageSize = 1000;
   static const batchSize = 500;
-  static const _version = 1;
+
+  /// Version of the records this Bobine writes and reads.
+  static int get _version => recordVersion;
+  @visibleForTesting
+  static int recordVersion = 1;
+
+  /// Highest record version met that this Bobine could not read. The
+  /// cursor goes past such items like any other: once updated, the app
+  /// reads the account again from its start, or they were lost to it.
+  static const laterKey = 'sync.later';
+  int _newerMet = 0;
 
   /// Largest payload the account accepts (`sync_items.payload`). A larger
   /// one makes the server refuse the whole batch it travels in.
@@ -129,10 +140,19 @@ class SyncEngine {
   Future<SyncChanges> run() async {
     final changes = SyncChanges();
     final linking = cursor == null;
-    if (linking) _seed();
+    if (linking) {
+      // Another account, or the same one read again from the start.
+      _db.execute('DELETE FROM sync_seen');
+      _dropOfflineDeletions();
+      _seed();
+    }
 
-    // Receive.
-    var after = cursor ?? 0;
+    // Receive. Updated since items of a newer Bobine were left aside: all
+    // read again (what is already here is not applied twice).
+    final later = int.tryParse(repo.kvGet(laterKey) ?? '');
+    final rereading = later != null && later <= _version;
+    var after = rereading ? 0 : (cursor ?? 0);
+    _newerMet = 0;
     final received = <RemoteItem>[];
     while (true) {
       final page = await remote.pull(after, limit: pageSize);
@@ -171,6 +191,9 @@ class SyncEngine {
         final newer = items.isEmpty ? const <RemoteItem>[] : await remote.push(items);
         _alive();
         _acknowledge(sent);
+        for (final b in sent) {
+          _sawVersion(b.id, b.changedAt);
+        }
         changes.sent += sent.length;
         if (newer.isNotEmpty) {
           // The account kept its version of these: its time is later.
@@ -239,6 +262,26 @@ class SyncEngine {
     }
   }
 
+  /// A first sync does not delete from the account what this device removed
+  /// while it was not connected (or before it ever was): other devices may
+  /// still use it, and it comes back here from the account. Dropped before
+  /// receiving, so that the deletion does not win over the account's copy.
+  void _dropOfflineDeletions() {
+    final rows = _db.select('SELECT tbl, key, changed_at FROM sync_log');
+    for (final r in rows) {
+      final table = r['tbl'] as String, key = r['key'] as String;
+      final record = switch (table) {
+        'settings' => null,
+        'sources' => _sourceRecord(key),
+        'profiles' => _profileRecord(key),
+        _ => _rowRecord(table, key),
+      };
+      if (record != null && record['d'] == null) {
+        _db.execute('DELETE FROM sync_log WHERE tbl = ? AND key = ? AND changed_at = ?', [table, key, r['changed_at']]);
+      }
+    }
+  }
+
   /// Columns sent for the rows of each synchronised table.
   static const _dataColumns = {
     'favorites': ['added_at'],
@@ -284,6 +327,9 @@ class SyncEngine {
         continue;
       }
       record['v'] = _version;
+      // The time the server stores in clear, sealed with the content: a
+      // server cannot date a version otherwise to make it win.
+      record['m'] = changedAt;
       final id = codec.itemId(_naturalKey(table, record['k'] as List<Object?>));
       out.add(_Outgoing(table, key, changedAt, id, record));
     }
@@ -316,6 +362,7 @@ class SyncEngine {
           'user_agent': s.userAgent,
           'live_format': s.liveFormat,
           'epg_offset': s.epgOffsetMinutes,
+          if (s.acceptInvalidCertificate) 'bad_cert_ok': true,
         },
     };
   }
@@ -372,6 +419,19 @@ class SyncEngine {
     }
   }
 
+  /// Notes that the version of [id] dated [at] is known here.
+  void _sawVersion(String id, int at) => _db.execute(
+    'INSERT INTO sync_seen (id, modified_at) VALUES (?, ?) '
+    'ON CONFLICT (id) DO UPDATE SET modified_at = max(modified_at, excluded.modified_at)',
+    [id, at],
+  );
+
+  /// The newest version of [id] known here, or null.
+  int? _seenVersion(String id) {
+    final rows = _db.select('SELECT modified_at FROM sync_seen WHERE id = ?', [id]);
+    return rows.isEmpty ? null : rows.first['modified_at'] as int;
+  }
+
   // --------------------------------------------------------------- incoming
 
   /// Decrypts [items]. One that cannot be read (damaged on the account) is
@@ -391,15 +451,30 @@ class SyncEngine {
       }
       read++;
       try {
-        if ((record['v'] as int? ?? 0) > _version) continue; // made by a newer Bobine
+        final v = record['v'] as int? ?? 0;
+        if (v > _version) {
+          // Made by a newer Bobine: read once this one is updated.
+          _newerMet = math.max(_newerMet, v);
+          continue;
+        }
         final key = record['k'];
         if (record['t'] is! String || key is! List) continue;
         // A record is only accepted under the id it belongs to.
         if (codec.itemId(_naturalKey(record['t'] as String, key)) != i.id) continue;
+        // Its time is the sealed one (versions before this one did not
+        // seal it): a server that dates it otherwise altered it.
+        final sealed = record['m'];
+        if (sealed != null && sealed != i.modifiedAt) {
+          changes.skipped++;
+          continue;
+        }
+        // An older version than one already known here: handed back again
+        // (a server replaying what it once stored), not to be followed.
+        final seen = _seenVersion(i.id);
+        if (seen != null && i.modifiedAt < seen) continue;
+        // Deleted is what the sealed content says, not the server's flag.
         final data = record['d'];
-        out.add(
-          _Incoming(record['t'] as String, key, i.deleted || data is! Map ? null : data.cast<String, Object?>(), i),
-        );
+        out.add(_Incoming(record['t'] as String, key, data is! Map ? null : data.cast<String, Object?>(), i));
       } catch (_) {
         changes.skipped++; // readable, but not a record
       }
@@ -487,6 +562,7 @@ class SyncEngine {
         _db.execute('SAVEPOINT sync_item');
         try {
           apply();
+          _sawVersion(i.item.id, i.item.modifiedAt);
         } catch (_) {
           _db.execute('ROLLBACK TO sync_item');
           changes.skipped++;
@@ -531,6 +607,15 @@ class SyncEngine {
       }
       if (cursor != null) {
         _db.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', [cursorKey, '$cursor']);
+        // What could not be read waits for an update; what this version
+        // reads is no longer waiting.
+        final waiting = int.tryParse(repo.kvGet(laterKey) ?? '') ?? 0;
+        final next = math.max(_newerMet, waiting > _version ? waiting : 0);
+        if (next > 0) {
+          _db.execute('INSERT OR REPLACE INTO kv (key, value) VALUES (?, ?)', [laterKey, '$next']);
+        } else {
+          _db.execute('DELETE FROM kv WHERE key = ?', [laterKey]);
+        }
       }
       _db.execute('DELETE FROM sync_mute');
       _db.execute('COMMIT');
@@ -635,6 +720,7 @@ class SyncEngine {
       userAgent: d['user_agent'] as String?,
       liveFormat: (d['live_format'] as String?) ?? 'ts',
       epgOffsetMinutes: (d['epg_offset'] as int?) ?? 0,
+      acceptInvalidCertificate: d['bad_cert_ok'] == true,
     );
   }
 
@@ -675,17 +761,18 @@ class SyncEngine {
       s.userAgent,
       s.liveFormat,
       s.epgOffsetMinutes,
+      s.acceptInvalidCertificate ? 1 : 0,
     ];
     if (id != null) {
       _db.execute(
         'UPDATE sources SET name = ?, url = ?, username = ?, password = ?, epg_url = ?, user_agent = ?, '
-        'live_format = ?, epg_offset = ?, type = ? WHERE id = ?',
+        'live_format = ?, epg_offset = ?, bad_cert_ok = ?, type = ? WHERE id = ?',
         [...values, s.type.name, id],
       );
     } else {
       _db.execute(
-        'INSERT INTO sources (name, url, username, password, epg_url, user_agent, live_format, epg_offset, type, '
-        'created_at, uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO sources (name, url, username, password, epg_url, user_agent, live_format, epg_offset, '
+        'bad_cert_ok, type, created_at, uid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [...values, s.type.name, DateTime.now().millisecondsSinceEpoch ~/ 1000, uid],
       );
       changes.sourcesAdded.add(_db.lastInsertRowId);

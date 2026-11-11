@@ -13,8 +13,10 @@ import 'package:sqlite3/sqlite3.dart';
 import '../../core/net.dart';
 import '../../core/secrets.dart';
 import '../../core/text.dart';
+import '../../core/text_decoding.dart';
 import '../db.dart';
 import '../models.dart';
+import '../stream_urls.dart';
 import 'm3u_parser.dart';
 import 'xmltv_parser.dart';
 import 'xtream_api.dart';
@@ -42,6 +44,12 @@ class ContentImportResult {
 }
 
 int _now() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+/// A `catchup-source` template, unless it names an address that is not a
+/// network stream. A relative one (no "://") is appended to the channel's
+/// own address, already checked.
+String? _catchupSource(String? template) =>
+    template == null || !template.contains('://') || isStreamUrl(template) ? template : null;
 
 Source _loadSource(Database db, int sourceId) {
   final rows = db.select('SELECT * FROM sources WHERE id = ?', [sourceId]);
@@ -177,25 +185,41 @@ void _commit(
 Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? port) async {
   final progress = sinkFor(port);
   final db = openWorkerDatabase(dbPath);
-  final client = createHttpClient();
+  final client = createHttpClient(acceptInvalidCertificate: _acceptsInvalidCertificate(db, sourceId));
   try {
     final source = _loadSource(db, sourceId);
     final batch = _Batch();
     final seenIds = <String>{};
     final seriesByKey = <String, ({String extId, int position})>{};
-    var count = 0;
+    var count = 0, refused = 0;
 
+    // Next suffix to try for a name already seen: counting from 1 again
+    // for each copy made a list of the same entry repeated slow (the
+    // square of its length). The ids are the same as before.
+    final nextSuffix = <String, int>{};
     String uniqueId(String base) {
       var id = stableHash(base);
-      var n = 1;
-      while (!seenIds.add(id)) {
+      if (seenIds.add(id)) return id;
+      var n = nextSuffix[base] ?? 1;
+      do {
         id = stableHash('$base#${n++}');
-      }
+      } while (!seenIds.add(id));
+      nextSuffix[base] = n;
       return id;
     }
 
     final parser = M3uParser((e) {
+      // Only network streams: see [kStreamSchemes].
+      if (!isStreamUrl(e.url)) {
+        refused++;
+        return;
+      }
       count++;
+      if (count > kMaxPlaylistEntries) {
+        throw NetException(
+          'Playlist trop grande (plus de $kMaxPlaylistEntries entrées) : import arrêté, le contenu déjà importé est gardé.',
+        );
+      }
       if (count % 1000 == 0) progress('Analyse', count);
       final kind = classifyEntry(e);
       final group = e.groupTitle;
@@ -213,8 +237,8 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
             asInt(e.attr('tvg-chno') ?? e.attr('channel-number')),
             asInt(e.attr('catchup-days') ?? e.attr('tvg-rec') ?? e.attr('timeshift')) ?? 0,
             e.attr('catchup') ?? e.attr('catchup-type'),
-            e.attr('catchup-source'),
-            channelMatchKey(e.name),
+            _catchupSource(e.attr('catchup-source')),
+            _matchKey(e.name),
             batch.channels.length,
           ]);
         case M3uKind.movie:
@@ -288,7 +312,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
         timeout: const Duration(seconds: 60),
       );
     }
-    final text = guardBody(gunzipIfNeeded(bytes), maxBytes: 1 << 30).transform(const Utf8Decoder(allowMalformed: true));
+    final text = decodeText(guardBody(gunzipIfNeeded(bytes), maxBytes: 1 << 30));
     await for (final line in limitLineLength(text).transform(const LineSplitter())) {
       parser.addLine(line);
       if (parser.notAPlaylist) {
@@ -299,10 +323,24 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
       }
     }
     if (count == 0) {
-      throw NetException("La playlist est vide ou n'est pas au format M3U.");
+      throw NetException(
+        refused > 0
+            ? "Aucune adresse de flux réseau dans la playlist : $refused entrée(s) désignent un fichier ou un "
+                  'protocole non pris en charge.'
+            : "La playlist est vide ou n'est pas au format M3U.",
+      );
     }
     progress('Analyse', count);
-    _commit(db, sourceId, batch, progress, discoveredEpg: parser.epgUrl);
+    _commit(
+      db,
+      sourceId,
+      batch,
+      progress,
+      discoveredEpg: parser.epgUrl,
+      warning: refused == 0
+          ? null
+          : '$refused entrée(s) ignorée(s) : elles désignent un fichier ou un protocole non pris en charge.',
+    );
     return ContentImportResult(live: batch.channels.length, movies: batch.movies.length, series: batch.series.length);
   } finally {
     client.close(force: true);
@@ -315,7 +353,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
 Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? port) async {
   final progress = sinkFor(port);
   final db = openWorkerDatabase(dbPath);
-  final client = createHttpClient();
+  final client = createHttpClient(acceptInvalidCertificate: _acceptsInvalidCertificate(db, sourceId));
   try {
     final source = _loadSource(db, sourceId);
     final api = XtreamApi.forSource(source, client: client);
@@ -359,6 +397,24 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
       safe(api.seriesCategories(), 'Catégories séries', keeps: ContentKind.series),
       safe(api.seriesList(), 'Séries', keeps: ContentKind.series),
     ]);
+    // An empty list in a 200 answer ("[]", null, {"error": …}) is a panel
+    // having a bad moment far more often than a catalogue really emptied:
+    // what the source has is kept, as when the download fails.
+    int had(String table) => db.select('SELECT 1 FROM $table WHERE source_id = ? LIMIT 1', [sourceId]).length;
+    final noChannels = results[1].isEmpty;
+    if (noChannels && (had('channels') > 0 || (results[3].isEmpty && results[5].isEmpty))) {
+      throw NetException(
+        "Le serveur n'a renvoyé aucune chaîne (liste vide) : le contenu déjà importé est gardé. Réessaie plus tard.",
+      );
+    }
+    if (results[3].isEmpty && !failed.contains(ContentKind.movie) && had('movies') > 0) {
+      failed.add(ContentKind.movie);
+      warnings.add('Films : liste vide');
+    }
+    if (results[5].isEmpty && !failed.contains(ContentKind.series) && had('series') > 0) {
+      failed.add(ContentKind.series);
+      warnings.add('Séries : liste vide');
+    }
     // Half a kind is not written: its old content stays whole.
     if (failed.contains(ContentKind.movie)) results[2] = results[3] = const [];
     if (failed.contains(ContentKind.series)) results[4] = results[5] = const [];
@@ -409,7 +465,7 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
     for (final s in results[1]) {
       final id = asString(s['stream_id']);
       if (id == null || !seen.add('l$id')) continue;
-      final name = asString(s['name']) ?? 'Chaîne $id';
+      final name = _name(asString(s['name'])) ?? 'Chaîne $id';
       final archive = asInt(s['tv_archive']) == 1 ? (asInt(s['tv_archive_duration']) ?? 0) : 0;
       batch.channels.add([
         id,
@@ -423,14 +479,14 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
         archive,
         archive > 0 ? 'xc' : null,
         null,
-        channelMatchKey(name),
+        _matchKey(name),
         batch.channels.length,
       ]);
     }
     for (final m in results[3]) {
       final id = asString(m['stream_id']);
       if (id == null || !seen.add('m$id')) continue;
-      final name = asString(m['name']) ?? 'Film $id';
+      final name = _name(asString(m['name'])) ?? 'Film $id';
       batch.movies.add([
         id,
         catKey(ContentKind.movie, m['category_id']),
@@ -448,7 +504,7 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
     for (final s in results[5]) {
       final id = asString(s['series_id']);
       if (id == null || !seen.add('s$id')) continue;
-      final name = asString(s['name']) ?? 'Série $id';
+      final name = _name(asString(s['name'])) ?? 'Série $id';
       final release = asString(s['releaseDate']) ?? asString(s['release_date']);
       final year = (release != null && release.length >= 4) ? int.tryParse(release.substring(0, 4)) : null;
       final backdrop = s['backdrop_path'] is List && (s['backdrop_path'] as List).isNotEmpty
@@ -494,7 +550,7 @@ Future<ContentImportResult> importXtream(String dbPath, int sourceId, SendPort? 
 Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) async {
   final progress = sinkFor(port);
   final db = openWorkerDatabase(dbPath);
-  final client = createHttpClient();
+  final client = createHttpClient(acceptInvalidCertificate: _acceptsInvalidCertificate(db, sourceId));
   try {
     final source = _loadSource(db, sourceId);
     final url = source.effectiveEpgUrl;
@@ -506,9 +562,53 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     final minStop = now - 7 * 86400;
     final maxStart = now + days * 86400;
 
-    final programmes = <List<Object?>>[];
+    // Programmes go to a temporary table of this connection, in batches,
+    // as they are read: the guide is no longer held in memory before it is
+    // written. The source's guide is replaced by it at the end, in one
+    // transaction (the old one stays if anything fails before).
+    db.execute('DROP TABLE IF EXISTS temp.epg_stage');
+    db.execute(
+      'CREATE TEMP TABLE epg_stage (channel TEXT, start INTEGER, stop INTEGER, title TEXT, description TEXT, '
+      'search TEXT, category TEXT)',
+    );
+    final stage = db.prepare('INSERT INTO temp.epg_stage VALUES (?, ?, ?, ?, ?, ?, ?)');
+    final batch = <List<Object?>>[];
+    var kept = 0;
+    void flush() {
+      if (batch.isEmpty) return;
+      db.execute('BEGIN');
+      try {
+        for (final row in batch) {
+          stage.execute(row);
+        }
+        db.execute('COMMIT');
+      } catch (_) {
+        db.execute('ROLLBACK');
+        rethrow;
+      }
+      batch.clear();
+    }
+
     final channelNames = <String, String>{};
     var seen = 0;
+
+    // Only the programmes of the source's channels are kept (by tvg-id, or
+    // by a name of the guide channel): a guide of every channel of a
+    // country held in memory before being written could exhaust it. A
+    // source without channels yet keeps everything, up to a bound.
+    final epgIds = {
+      for (final r in db.select(
+        'SELECT DISTINCT lower(epg_id) AS e FROM channels WHERE source_id = ? AND epg_id IS NOT NULL',
+        [sourceId],
+      ))
+        r['e'] as String,
+    };
+    final matchKeys = {
+      for (final r in db.select('SELECT DISTINCT name FROM channels WHERE source_id = ?', [sourceId]))
+        channelMatchKey(r['name'] as String),
+    }..remove('');
+    final keepAll = epgIds.isEmpty && matchKeys.isEmpty;
+    final known = <String>{...epgIds};
 
     final parser = XmltvParser(
       onProgramme: (channel, rawStart, rawStop, title, desc, category) {
@@ -517,13 +617,21 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
         final start = rawStart + shift;
         final stop = rawStop + shift;
         if (stop < minStop || start > maxStart) return;
-        programmes.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title), category]);
+        if (!keepAll && !known.contains(channel.toLowerCase())) return;
+        if (kept >= kMaxGuideProgrammes) return;
+        kept++;
+        batch.add([channel.toLowerCase(), start, stop, title, desc, searchKey(title), category]);
+        if (batch.length >= 5000) flush();
       },
       onChannel: (id, names) {
         final lid = id.toLowerCase();
         for (final n in [...names, id]) {
           final key = channelMatchKey(n);
-          if (key.isNotEmpty) channelNames.putIfAbsent(key, () => lid);
+          if (key.isEmpty || channelNames.length >= kMaxGuideProgrammes) continue;
+          if (keepAll || matchKeys.contains(key)) {
+            channelNames.putIfAbsent(key, () => lid);
+            known.add(lid);
+          }
         }
       },
     );
@@ -540,26 +648,33 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
     // A guide is read as it arrives, so its size costs time, not memory:
     // the bound only stops an endless answer.
     final guarded = guardBody(gunzipIfNeeded(bytes), maxBytes: 4 << 30);
-    await for (final chunk in guarded.transform(const Utf8Decoder(allowMalformed: true))) {
+    await for (final chunk in decodeText(guarded)) {
       parser.add(chunk);
     }
     parser.close();
+    flush();
+    stage.close();
+    // Nothing read (an empty answer, a web page, an archive this does not
+    // open): the guide the source has is kept, and asked again next time.
+    if (seen == 0) throw NetException('Le guide reçu est vide ou illisible : le guide déjà importé est gardé.');
 
     progress('Enregistrement', 0);
     db.execute('BEGIN IMMEDIATE');
     try {
+      // Deleted while its guide was read: nothing is written under its id,
+      // which the next source may get.
+      if (db.select('SELECT 1 FROM sources WHERE id = ?', [sourceId]).isEmpty) {
+        db.execute('ROLLBACK');
+        return 0;
+      }
       db.execute('DELETE FROM epg_programs WHERE source_id = ?', [sourceId]);
       db.execute('DELETE FROM epg_channels WHERE source_id = ?', [sourceId]);
-      final p = db.prepare(
+      db.execute(
         'INSERT OR REPLACE INTO epg_programs (source_id, channel, start, stop, title, description, search, category) '
-        'VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        'SELECT ?, channel, start, stop, title, description, search, category FROM temp.epg_stage',
+        [sourceId],
       );
-      var i = 0;
-      for (final row in programmes) {
-        p.execute([sourceId, ...row]);
-        if (++i % 5000 == 0) progress('Enregistrement', i);
-      }
-      p.close();
+      progress('Enregistrement', kept);
       final c = db.prepare('INSERT OR IGNORE INTO epg_channels (source_id, name_key, epg_id) VALUES (?, ?, ?)');
       channelNames.forEach((key, id) => c.execute([sourceId, key, id]));
       c.close();
@@ -569,10 +684,10 @@ Future<int> importEpg(String dbPath, int sourceId, int days, SendPort? port) asy
       db.execute('ROLLBACK');
       rethrow;
     }
-    return programmes.length;
+    return kept;
   } finally {
     client.close(force: true);
-    db.close();
+    db.close(); // the temporary table goes with the connection
   }
 }
 
@@ -585,3 +700,25 @@ void recordSourceError(String dbPath, int sourceId, String? message) {
     db.close();
   }
 }
+
+/// The name key stored with a channel, null when it has none: channels
+/// without one must not all look like the same channel.
+String? _matchKey(String name) {
+  final k = channelMatchKey(name);
+  return k.isEmpty ? null : k;
+}
+
+/// A name from the provider, cut to the length of the M3U ones: every name
+/// goes through several expressions, and real ones are far shorter.
+String? _name(String? v) => v == null || v.length <= kMaxEntryName ? v : v.substring(0, kMaxEntryName).trim();
+
+/// Entries read from one playlist at most: all are held in memory before
+/// being written. The largest real ones are a few hundred thousand.
+const int kMaxPlaylistEntries = 1500000;
+
+/// Programmes kept from one guide at most (a bound on the disk it takes).
+const int kMaxGuideProgrammes = 3000000;
+
+/// The source accepts an invalid certificate from its server (its setting).
+bool _acceptsInvalidCertificate(Database db, int sourceId) =>
+    db.select('SELECT bad_cert_ok FROM sources WHERE id = ?', [sourceId]).firstOrNull?['bad_cert_ok'] == 1;

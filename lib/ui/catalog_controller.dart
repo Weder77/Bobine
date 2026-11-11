@@ -28,12 +28,34 @@ class CatalogController extends ChangeNotifier {
   List<CategoryEntry> entries = const [];
   CatalogMode mode = CatalogMode.rows;
   String cat = 'all';
+  final _catIds = <String, int>{};
+
+  /// Row of the chosen category, null for "all" and "fav".
+  int? get categoryId => _catIds[cat];
   late CatalogSort sort;
   String query = '';
 
-  /// Bumped when the content was reloaded (the page reloads its rows).
+  /// Bumped when the content or the user's data changed (the page reloads
+  /// what depends on them).
   int version = 0;
+
+  /// Bumped only when the provider's content was reloaded: the rows and
+  /// the grid made from it are kept across a favourite or a position.
+  int contentVersion = 0;
   int _contentVersion = -1;
+
+  bool _shown = true, _stale = false;
+
+  /// The page is on screen. Hidden, it does not reload at each change (a
+  /// favourite, a position, the end of an import): it does when shown.
+  set shown(bool v) {
+    if (v == _shown) return;
+    _shown = v;
+    if (v && _stale) {
+      _stale = false;
+      _onLibrary();
+    }
+  }
 
   @override
   void dispose() {
@@ -42,6 +64,10 @@ class CatalogController extends ChangeNotifier {
   }
 
   void _onLibrary() {
+    if (!_shown) {
+      _stale = true;
+      return;
+    }
     if (_s.library.content != _contentVersion || source?.id != _s.settings.activeSourceId) {
       reload();
     } else if (source != null) {
@@ -69,11 +95,16 @@ class CatalogController extends ChangeNotifier {
           count: _s.repo.count(src.id, kind),
         ),
         CategoryEntry(id: 'fav', label: 'Mes favoris', count: _s.repo.favoriteKeys(src.id, kind).length),
-        for (final c in cats) CategoryEntry(id: 'c:${c.id}', label: c.name, count: c.count, locked: c.locked),
+        for (final c in cats) CategoryEntry(id: 'x:${c.extId}', label: c.name, count: c.count, locked: c.locked),
       ];
+      // By the provider's id, which an import keeps (see the live list).
+      _catIds
+        ..clear()
+        ..addAll({for (final c in cats) 'x:${c.extId}': c.id});
       if (!entries.any((e) => e.id == cat)) cat = 'all';
     }
     version++;
+    contentVersion++;
     notifyListeners();
   }
 

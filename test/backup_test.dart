@@ -114,4 +114,35 @@ void main() {
     final legacy = {...json, 'format': 'lumen-backup'};
     expect(() => aBackup.restore(legacy), returnsNormally);
   });
+
+  test('a damaged file leaves its bad rows out instead of breaking the app', () {
+    final (a, _, aBackup) = _install();
+    final src = _xtream(a);
+    a.toggleFavorite(src, ContentKind.movie, '7');
+    a.saveProgress(
+      sourceId: src,
+      kind: ContentKind.movie,
+      extId: '1',
+      position: const Duration(minutes: 10),
+      duration: const Duration(minutes: 100),
+      title: 'X',
+    );
+    final json = jsonDecode(jsonEncode(aBackup.build(credentials: true))) as Map<String, Object?>;
+    final progress = (json['progress'] as List).cast<Map<String, Object?>>();
+    progress.add({...progress.single, 'ext_id': '2', 'position_ms': 'abc'});
+    (json['favorites'] as List).add({'kind': 'nope', 'ext_id': '8', 'source_id': 1, 'added_at': 1});
+    (json['favorites'] as List).add('not a row');
+    json['reminders'] = 'not a list';
+
+    final (b, _, bBackup) = _install();
+    final report = bBackup.restore(json);
+    final restored = b.sources().single;
+    expect(b.isFavorite(restored.id, ContentKind.movie, '7'), isTrue);
+    expect(b.progress(restored.id, ContentKind.movie, '1'), isNotNull);
+    expect(b.progress(restored.id, ContentKind.movie, '2'), isNull);
+    expect(report.damaged, 2);
+    expect('$report', contains('2 ligne(s) illisible(s)'));
+
+    expect(() => bBackup.restore({...json, 'version': '1'}), throwsA(isA<BackupException>()));
+  });
 }

@@ -37,6 +37,20 @@ class SyncService extends ChangeNotifier {
     if (_session == null || _keys == null) {
       _session = null;
       _keys = null;
+      if (_repo.kvGet(_sessionKey) != null || _repo.kvGet(_keysKey) != null) {
+        // Saved but unreadable here (encrypted on another computer or
+        // session): the device is signed out, and its next sign-in reads
+        // the account from the start. With the old cursor kept, it skipped
+        // everything sent before it.
+        _repo.write(() {
+          _repo.db.execute('DELETE FROM kv WHERE key IN (?, ?, ?, ?)', [
+            _sessionKey,
+            _keysKey,
+            _lastKey,
+            SyncEngine.cursorKey,
+          ]);
+        });
+      }
     } else {
       status = SyncStatus.idle;
     }
@@ -85,6 +99,23 @@ class SyncService extends ChangeNotifier {
   int _account = 0;
 
   bool get signedIn => _session != null && _keys != null;
+
+  /// Whether [password] is the account's: checked on this device, by the
+  /// keys it gives (no network needed). Used to choose a new parental code
+  /// when it was forgotten.
+  Future<bool> checkPassword(String password) async {
+    final keys = _keys, mail = email;
+    if (keys == null || mail == null || password.isEmpty) return false;
+    final again = await SyncKeys.derive(mail, password);
+    final a = again.encKey, b = keys.encKey;
+    if (a.length != b.length) return false;
+    var diff = 0;
+    for (var i = 0; i < a.length; i++) {
+      diff |= a[i] ^ b[i];
+    }
+    return diff == 0;
+  }
+
   String? get email => _session?.email ?? pendingEmail;
 
   /// Starts the automatic synchronisation (at app start).
@@ -96,8 +127,15 @@ class SyncService extends ChangeNotifier {
 
   DateTime _lastFetch = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// Failures in a row (the account refuses, the service is down): the
+  /// automatic tries wait longer each time, up to half an hour.
+  int _failures = 0;
+  DateTime? _retryAt;
+
   void _tick() {
     if (!signedIn || _running != null) return;
+    final retry = _retryAt;
+    if (retry != null && DateTime.now().isBefore(retry)) return;
     final pending = _repo.db.select('SELECT 1 FROM sync_log LIMIT 1').isNotEmpty;
     if (pending || DateTime.now().difference(_lastFetch) >= fetchEvery) syncSoon(pending ? changeDelay : Duration.zero);
   }
@@ -155,6 +193,8 @@ class SyncService extends ChangeNotifier {
       _repo.kvSet(_lastKey, lastSync!.toIso8601String());
       message = null;
       status = SyncStatus.idle;
+      _failures = 0;
+      _retryAt = null;
       if (changes.received + changes.sent > 0) {
         AppLog.add('Synchro : ${changes.received} reçu(s), ${changes.sent} envoyé(s)');
       }
@@ -177,6 +217,7 @@ class SyncService extends ChangeNotifier {
       } else {
         message = e.message;
         status = SyncStatus.error;
+        _backOff();
       }
     } else if (e is SqliteException) {
       // Busy with an import: next time.
@@ -187,8 +228,15 @@ class SyncService extends ChangeNotifier {
     } else {
       message = 'Synchro impossible : ${redactCredentials('$e')}';
       status = SyncStatus.error;
+      _backOff();
       AppLog.add('Synchro : $e');
     }
+  }
+
+  void _backOff() {
+    _failures++;
+    final seconds = 20 * (1 << (_failures - 1).clamp(0, 7));
+    _retryAt = DateTime.now().add(Duration(seconds: seconds.clamp(20, 1800)));
   }
 
   void _keepSession(SupabaseSession s) {
@@ -218,9 +266,16 @@ class SyncService extends ChangeNotifier {
     _keys = null;
     pendingEmail = null;
     _pendingKeys = null;
-    for (final k in [_sessionKey, _keysKey, _lastKey, SyncEngine.cursorKey]) {
-      _repo.db.execute('DELETE FROM kv WHERE key = ?', [k]);
-    }
+    // Retried when an import holds the database: a sign-out that stayed on
+    // disk signed the device in again at the next start.
+    _repo.write(() {
+      _repo.db.execute('DELETE FROM kv WHERE key IN (?, ?, ?, ?)', [
+        _sessionKey,
+        _keysKey,
+        _lastKey,
+        SyncEngine.cursorKey,
+      ]);
+    });
     lastSync = null;
     this.message = message;
     status = SyncStatus.signedOut;
@@ -246,7 +301,17 @@ class SyncService extends ChangeNotifier {
   Future<void> confirm(String code) async {
     final email = pendingEmail, keys = _pendingKeys;
     if (email == null || keys == null) return;
-    _begin(await _api.verify(email, code), keys);
+    final session = await _api.verify(email, code);
+    // The address may have been signed up before, by someone else with a
+    // password of their own: the code proves the address, and the password
+    // becomes the one chosen here, or theirs would still open the account.
+    try {
+      await _api.setPassword(session, keys.authSecret);
+    } on SyncApiException catch (e) {
+      // The usual case: it already was this one.
+      if (e.code != 'same_password') rethrow;
+    }
+    _begin(session, keys);
   }
 
   Future<void> resendCode() async {
@@ -280,8 +345,11 @@ class SyncService extends ChangeNotifier {
     email = normalizeEmail(email);
     final session = await _api.verify(email, code, type: 'recovery');
     final keys = await SyncKeys.derive(email, password);
-    await _api.setPassword(session, keys.authSecret);
+    // Emptied first: if it fails, the old password still opens what the
+    // old password encrypted. The other way round, a failure left the
+    // account under the new password with data it cannot read.
     await _api.wipe(session);
+    await _api.setPassword(session, keys.authSecret);
     _repo.db.execute('DELETE FROM kv WHERE key = ?', [SyncEngine.cursorKey]);
     _begin(session, keys);
   }

@@ -56,12 +56,20 @@ Uint8List encodeCastMessage(CastMessage m) {
   return b.toBytes();
 }
 
-/// Decodes a protobuf CastMessage (binary payloads are ignored).
+/// Decodes a protobuf CastMessage (binary payloads are ignored). What the
+/// device sends is not trusted: anything malformed (a length that is
+/// negative or runs past the end, a truncated number) is a
+/// [FormatException], never a loop or another error.
 CastMessage decodeCastMessage(Uint8List data) {
   var o = 0;
+  void need(int n) {
+    if (n < 0 || n > data.length - o) throw const FormatException('length');
+  }
+
   int varint() {
     var shift = 0, v = 0;
     while (true) {
+      need(1);
       final byte = data[o++];
       v |= (byte & 0x7f) << shift;
       if (byte & 0x80 == 0) return v;
@@ -78,15 +86,18 @@ CastMessage decodeCastMessage(Uint8List data) {
       case 0:
         varint();
       case 1:
+        need(8);
         o += 8;
       case 2:
+        // A 10-byte length can be negative: it would send [o] backwards.
         final len = varint();
-        if (o + len > data.length) throw const FormatException('length');
+        need(len);
         if (field == 2 || field == 3 || field == 4 || field == 6) {
           strings[field] = utf8.decode(data.sublist(o, o + len), allowMalformed: true);
         }
         o += len;
       case 5:
+        need(4);
         o += 4;
       default:
         throw const FormatException('wire type');
@@ -218,7 +229,8 @@ class ChromecastSession implements CastSession {
     List<CastMessage> messages;
     try {
       messages = _reader.add(chunk);
-    } on FormatException {
+    } catch (_) {
+      // Whatever a device sends that cannot be read ends the connection.
       return _lost();
     }
     for (final m in messages) {

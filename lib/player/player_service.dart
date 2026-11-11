@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit/media_kit.dart';
@@ -9,6 +10,7 @@ import '../core/format.dart';
 import '../core/text.dart';
 import '../data/models.dart';
 import '../data/settings.dart';
+import '../data/stream_urls.dart';
 import 'reconnect.dart';
 
 /// Something the player can open.
@@ -25,6 +27,7 @@ class PlayItem {
     this.seriesExt,
     this.isReplay = false,
     this.saveProgress = true,
+    this.localFile = false,
   });
 
   final ContentKind kind;
@@ -42,6 +45,12 @@ class PlayItem {
 
   /// Whether the position is remembered ("Reprendre"): films and episodes.
   final bool saveProgress;
+
+  /// A file this app wrote (a recording), the only thing played from disk.
+  final bool localFile;
+
+  /// Whether the player may open [url]: a network stream, or a recording.
+  bool get canOpen => localFile || isStreamUrl(url);
 
   bool get isLive => kind == ContentKind.live && !isReplay;
 
@@ -89,6 +98,16 @@ class PlayerService {
   final String cacheDir;
 
   late final Player player;
+
+  /// The local player shows a picture (false before it is ready).
+  bool get isPlaying {
+    try {
+      return player.state.playing;
+    } catch (_) {
+      return false;
+    }
+  }
+
   late final VideoController video;
 
   final ValueNotifier<PlayItem?> current = ValueNotifier(null);
@@ -119,7 +138,15 @@ class PlayerService {
   final List<StreamSubscription> _subs = [];
   Timer? _volumeSave;
 
-  /// Protocols libmpv may open (IPTV streams use most of them).
+  /// Shown instead of opening an address [PlayItem.canOpen] refuses.
+  static const refusedMessage =
+      "Cette adresse n'est pas celle d'un flux réseau (http, rtsp…) : elle n'est pas ouverte. "
+      'La liste du fournisseur désigne un fichier ou un protocole non pris en charge.';
+
+  /// Protocols FFmpeg may open for the segments, keys and sub-streams of a
+  /// stream (IPTV streams use most of them). No `file`: a playlist served
+  /// by the provider could otherwise name files of this computer. The
+  /// recordings are read by mpv itself, not through this list.
   static const protocols = [
     'udp',
     'rtp',
@@ -129,7 +156,6 @@ class PlayerService {
     'tcp',
     'tls',
     'data',
-    'file',
     'http',
     'https',
     'httpproxy',
@@ -226,7 +252,10 @@ class PlayerService {
         'protocol_whitelist=[${protocols.join(',')}]',
     'hls-bitrate': 'max',
     'tls-verify': 'no',
-    'load-unsafe-playlists': 'yes',
+    // A playlist the provider serves may only lead to other network
+    // streams (mpv's default), and no youtube-dl.
+    'load-unsafe-playlists': 'no',
+    'ytdl': 'no',
   };
 
   static final RegExp _fatal = RegExp(
@@ -353,24 +382,45 @@ class PlayerService {
 
   /// Opens [item]. If it is already playing, nothing is reloaded.
   /// [reconnecting]: the automatic reopening of a live stream that stopped.
+  /// Bumped by every [play]: a screen that closes stops the engine only if
+  /// nothing was opened since (by the screen taking its place).
+  int get generation => _generation;
+  int _generation = 0;
+
   Future<void> play(PlayItem item, {Duration? start, bool force = false, bool reconnecting = false}) async {
+    _generation++;
     await ready;
+    // A stream being reconnected (or that failed) is opened again, not
+    // reused: its reconnection is cancelled just below.
+    final broken = (_reconnectTimer?.isActive ?? false) || status.value != null;
     if (!reconnecting) {
       // Something the user opened (another channel, "Réessayer"): the
       // attempts of the previous stream do not count against this one.
       _reconnectTimer?.cancel();
       _reconnect.reset();
     }
-    if (!force && current.value?.url == item.url && player.state.playlist.medias.isNotEmpty) {
+    if (!force && !broken && current.value?.url == item.url && player.state.playlist.medias.isNotEmpty) {
       current.value = item;
+      // "Depuis le début" (or a position) on what already plays here, as
+      // in the mini-player: it goes there.
+      if (start != null && !item.isLive) await player.seek(start);
       if (resumesOnReopen(playing: player.state.playing, completed: player.state.completed)) await player.play();
       return;
     }
     current.value = item;
     status.value = null;
+    if (!item.canOpen) {
+      await player.stop();
+      status.value = refusedMessage;
+      return;
+    }
     final ua = item.userAgent;
     await setProp('user-agent', (ua == null || ua.isEmpty) ? 'libmpv' : ua);
     if (item.isLive) {
+      // A speed chosen on a film does not apply to a live stream: read
+      // faster than it arrives, it buffered again and again, and its
+      // speed menu is hidden.
+      if (player.state.rate != 1.0) await player.setRate(1.0);
       // Live: start as soon as possible; data arrives in real time anyway.
       await setProp('cache-secs', '600');
       await setProp('cache-pause-wait', '1');
@@ -392,8 +442,37 @@ class PlayerService {
     await player.stop();
   }
 
+  /// A film or an episode said to end well before its duration: mpv says
+  /// so when the connection drops. Not an end, a cut.
+  static bool endedEarly({required Duration position, required Duration duration}) {
+    if (duration <= Duration.zero) return false;
+    final margin = Duration(milliseconds: math.max(30000, duration.inMilliseconds ~/ 50));
+    return duration - position > margin;
+  }
+
+  /// The current film or episode ended before its end (see [endedEarly]).
+  bool get cutShort {
+    final item = current.value;
+    return item != null && !item.isLive && endedEarly(position: player.state.position, duration: player.state.duration);
+  }
+
   void _onEnded() {
     final item = current.value;
+    if (item != null && !item.isLive && cutShort) {
+      // Opened again where it stopped, with the attempts of a live stream.
+      final at = player.state.position;
+      final wait = _reconnect.next();
+      if (wait == null) {
+        if (_reconnect.exhausted) status.value = 'Lecture interrompue (coupure réseau). Réessaie.';
+        return;
+      }
+      status.value = 'Reconnexion… (${_reconnect.attempts})';
+      _reconnectTimer = Timer(wait, () {
+        _reconnect.launched();
+        if (current.value?.url == item.url) play(item, force: true, start: at, reconnecting: true);
+      });
+      return;
+    }
     if (item == null || !item.isLive) return;
     // Live streams should never end: reconnect with a back-off. The same
     // failure often arrives as several errors: one attempt at a time.

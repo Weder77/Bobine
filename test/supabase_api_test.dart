@@ -90,6 +90,8 @@ void main() {
         },
       ),
       '/auth/v1/verify' => (200, _session('t1')),
+      // Already this password (Supabase refuses to set the same one).
+      '/auth/v1/user' => (422, {'error_code': 'same_password', 'msg': 'New password should be different'}),
       '/rest/v1/sync_items' => (200, <Object?>[]),
       '/rest/v1/rpc/sync_push' => (200, <Object?>[]),
       _ => (404, null),
@@ -104,6 +106,9 @@ void main() {
 
     await sync.confirm('123456');
     expect((fake.bodies['/auth/v1/verify'] as Map)['token'], '123456');
+    // An address signed up before by someone else: the password becomes this one.
+    expect(fake.requests, contains('PUT /auth/v1/user'));
+    expect(jsonEncode(fake.bodies['/auth/v1/user']), isNot(contains('mot de passe secret')));
     await sync.syncNow();
     expect(sync.status, SyncStatus.idle);
     expect(sync.signedIn, isTrue);
@@ -137,6 +142,33 @@ void main() {
     expect(fake.requests, contains('POST /auth/v1/token?grant_type=refresh_token'));
   });
 
+  test('only a refresh token the service no longer knows ends the session', () async {
+    final api = fake.api();
+    final s = SupabaseSession.fromAuth(_session('t1'));
+    // Too many tries behind a shared address, a proxy in the way: later.
+    for (final (status, body) in [
+      (429, {'error_code': 'over_request_rate_limit', 'msg': 'Too many requests'}),
+      (403, null),
+      (401, {'msg': 'Unauthorized'}),
+    ]) {
+      fake.handler = (r, _) => (status, body);
+      await expectLater(
+        api.refresh(s),
+        throwsA(
+          isA<SyncApiException>()
+              .having((e) => e.sessionLost, 'sessionLost', isFalse)
+              .having((e) => e.network, 'network', isTrue),
+        ),
+        reason: '$status',
+      );
+    }
+    fake.handler = (r, _) => (400, {'error_code': 'refresh_token_not_found', 'msg': 'Invalid Refresh Token'});
+    await expectLater(
+      api.refresh(s),
+      throwsA(isA<SyncApiException>().having((e) => e.sessionLost, 'sessionLost', isTrue)),
+    );
+  });
+
   group('signing out', () {
     (int, Object?) account(HttpRequest r, Object? body) => switch (r.uri.path) {
       '/auth/v1/token' => (200, _session(r.uri.queryParameters['grant_type'] == 'password' ? 't1' : 't2')),
@@ -154,10 +186,14 @@ void main() {
       await sync.signIn('moi@example.com', 'mot de passe secret');
       await sync.syncNow();
       expect(repo.kvGet(SyncEngine.cursorKey), isNotNull);
+      // The password lets a forgotten parental code be changed, checked here.
+      expect(await sync.checkPassword('mot de passe secret'), isTrue);
+      expect(await sync.checkPassword('autre chose'), isFalse);
 
       await sync.signOut();
       expect(fake.requests.last, 'POST /auth/v1/logout?scope=local');
       expect(sync.signedIn, isFalse);
+      expect(await sync.checkPassword('mot de passe secret'), isFalse);
       expect(sync.status, SyncStatus.signedOut);
       for (final key in ['sync.session', 'sync.keys', 'sync.last', SyncEngine.cursorKey]) {
         expect(repo.kvGet(key), isNull, reason: key);

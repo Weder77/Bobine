@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'cast/cast_keep_awake.dart';
 import 'cast/cast_log.dart';
 import 'cast/cast_service.dart';
 import 'core/app_log.dart';
@@ -17,6 +18,7 @@ import 'data/models.dart';
 import 'data/repository.dart';
 import 'data/settings.dart';
 import 'features/backup.dart';
+import 'features/parental.dart';
 import 'features/recording_service.dart';
 import 'features/reminder_service.dart';
 import 'features/tmdb.dart';
@@ -153,7 +155,13 @@ class AppServices {
     final cast = CastService(describe: (item) => services._castTitles(item));
     final tracker = PlaybackTracker(player, repo, onSaved: library.userChanged, cast: cast);
     final pip = PipController(player, cast);
-    final reminders = ReminderService(repo, settings);
+    CastKeepAwake(cast, localPlaying: () => player.isPlaying);
+    final reminders = ReminderService(
+      repo,
+      settings,
+      ready: () => services.profileChosen,
+      hidden: (r) => repo.isRecordingLocked(r.sourceId, r.channelExt),
+    );
     final recordings = RecordingService(repo, settings, onChanged: library.userChanged);
     final sync = SyncService(repo, settings, onChanges: (c) => services._afterSync(c));
 
@@ -182,12 +190,26 @@ class AppServices {
     }
 
     library.addListener(changed);
+    library.addListener(services._trustImageHosts);
+    services._trustImageHosts();
     settings.addListener(changed);
     services._ensureActiveSource();
     services._applyProfile();
     // "Qui regarde ?" is asked once, at start.
     services.profileChosen = !(settings.askProfileAtStart && repo.profiles().length > 1);
     return services;
+  }
+
+  /// Logos and posters of the sources that accept an invalid certificate
+  /// are fetched like their lists.
+  void _trustImageHosts() {
+    ImageFetcher.acceptInvalidFor = {
+      for (final s in repo.sources())
+        if (s.acceptInvalidCertificate) ...[
+          Uri.tryParse(s.isXtream ? s.baseUrl : s.url)?.host ?? '',
+          Uri.tryParse(s.epgUrl ?? '')?.host ?? '',
+        ],
+    }..remove('');
   }
 
   /// The source currently browsed, or null when none is configured.
@@ -213,9 +235,34 @@ class AppServices {
     epg.clear();
     settings.update((s) => s.activeSourceId = id);
     library.contentChanged();
+    // Its content is refreshed when chosen, if it is old.
+    refreshStaleSources();
   }
 
-  void deleteSource(int id) {
+  Timer? _refreshTimer;
+
+  /// Applies the refresh intervals while the app stays open (days on end:
+  /// the guide emptied, nothing being imported again after the start).
+  void startRefreshing() {
+    refreshStaleSources();
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) => refreshStaleSources());
+  }
+
+  /// The app is closing: the position of what plays is saved, recordings
+  /// are stopped with their files kept, the log is written out.
+  Future<void> prepareExit() async {
+    try {
+      tracker.flush();
+    } catch (_) {}
+    await recordings.dispose();
+    await AppLog.flush();
+  }
+
+  Future<void> deleteSource(int id) async {
+    // Its recordings in progress are stopped first: their hidden players
+    // would go on writing until the app closes.
+    await recordings.stopSource(id);
     repo.deleteSource(id);
     _ensureActiveSource();
     epg.clear();
@@ -229,6 +276,7 @@ class AppServices {
   void refreshStaleSources() {
     final now = DateTime.now();
     for (final s in repo.sources()) {
+      if (imports.isBusy(s.id)) continue;
       final contentStale =
           s.contentUpdatedAt == null || now.difference(s.contentUpdatedAt!).inHours >= settings.contentRefreshHours;
       final epgStale =
@@ -247,16 +295,36 @@ class AppServices {
 
   Profile get profile => repo.profile(settings.activeProfileId) ?? repo.profiles().first;
 
+  /// The kids profile in use was deleted (from another device): leaving it
+  /// still asks the parental code, from "Qui regarde ?".
+  bool kidsProfileLost = false;
+  bool _activeIsKids = false;
+
   void _applyProfile() {
-    if (repo.profile(settings.activeProfileId) == null) settings.activeProfileId = repo.profiles().first.id;
+    if (repo.profile(settings.activeProfileId) == null) {
+      // Deleted (by the account): what played was this profile's, and the
+      // profile that takes over is chosen again.
+      if (profileChosen) {
+        unawaited(player.stop());
+        unawaited(pip.close());
+        parentalUnlocked = false;
+        kidsProfileLost = _activeIsKids;
+        profileChosen = false;
+      }
+      settings.update((s) => s.activeProfileId = repo.profiles().first.id);
+    }
     repo.profileId = settings.activeProfileId;
+    _activeIsKids = profile.kids;
     _applyVisibility();
+    reminders.profileChanged();
   }
 
   /// Locked categories are hidden while the parental code was not typed,
   /// and always in a kids profile.
   void _applyVisibility() {
-    repo.hideLocked = settings.parentalEnabled && (!parentalUnlocked || profile.kids);
+    // A kids profile hides them even without a code (one made before the
+    // editor asked for it).
+    repo.hideLocked = profile.kids || (settings.parentalEnabled && !parentalUnlocked);
   }
 
   void switchProfile(int id) {
@@ -269,15 +337,25 @@ class AppServices {
     unawaited(pip.close());
     settings.update((s) => s.activeProfileId = id);
     parentalUnlocked = false;
+    kidsProfileLost = false;
     _applyProfile();
     epg.clear();
     library.contentChanged();
     library.userChanged();
   }
 
+  /// Checks the parental code, with a wait after too many wrong ones.
+  late final parental = ParentalGuard(repo, settings);
+
+  /// Whether [pin] is the parental code (see [ParentalGuard]).
+  bool checkParentalPin(String pin) => parental.check(pin);
+
+  /// What to tell when a code was refused.
+  String get parentalRefusal => parental.refusal;
+
   /// Checks the parental code and shows locked categories until [lockParental].
   bool unlockParental(String pin) {
-    if (!settings.parentalEnabled || pin != settings.parentalPin) return false;
+    if (!settings.parentalEnabled || !checkParentalPin(pin)) return false;
     parentalUnlocked = true;
     _applyVisibility();
     library.contentChanged();
@@ -294,13 +372,20 @@ class AppServices {
   /// Stops what plays (here or on the TV) when it is locked again.
   void _stopLockedPlayback() {
     final item = cast.item.value ?? player.current.value;
-    if (item != null && repo.isLocked(item.sourceId, item.kind, item.extId, seriesExt: item.seriesExt)) {
-      unawaited(pip.close());
-    }
+    if (item == null) return;
+    final rec = item.extId.startsWith('rec:')
+        ? repo.recordings().where((r) => 'rec:${r.id}' == item.extId).firstOrNull
+        : null;
+    final locked = rec != null
+        ? repo.isRecordingLocked(rec.sourceId, rec.channelExt)
+        : repo.isLocked(item.sourceId, item.kind, item.extId, seriesExt: item.seriesExt);
+    if (locked) unawaited(pip.close());
   }
 
   /// Sets (or with null removes) the parental code.
   void setParentalPin(String? pin) {
+    parental.reset();
+    settings.forgetUnreadablePin();
     settings.update((s) => s.parentalPin = pin);
     parentalUnlocked = false;
     for (final src in repo.sources()) {

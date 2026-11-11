@@ -236,6 +236,56 @@ void main() {
     expect(a.pending, 0);
   });
 
+  test('what a device deleted while signed out is not deleted from the account when it signs in again', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote), b = Device(remote);
+    final srcA = a.xtream();
+    a.repo.toggleFavorite(srcA, ContentKind.movie, '1');
+    await a.sync();
+    await b.sync();
+
+    // A signs out, cleans this computer, signs in again.
+    a.repo.kvSet(SyncEngine.cursorKey, null);
+    a.repo.deleteSource(srcA);
+    await _tick();
+    await a.sync();
+    await b.sync();
+    final srcB = b.source('Mon IPTV').id;
+    expect(b.repo.isFavorite(srcB, ContentKind.movie, '1'), isTrue);
+    expect(a.pending, 0);
+    // The account's source comes back here, as on any device linked.
+    expect(a.repo.sources().map((s) => s.name), ['Mon IPTV']);
+
+    // Once linked, a deletion is sent as before.
+    a.repo.deleteSource(a.source('Mon IPTV').id);
+    await _tick();
+    await a.sync();
+    await b.sync();
+    expect(b.repo.sources(), isEmpty);
+  });
+
+  test('accepting an invalid certificate follows the source to the other devices', () async {
+    final remote = MemoryRemote();
+    final a = Device(remote), b = Device(remote);
+    a.repo.insertSource(
+      name: 'Panel',
+      type: SourceType.xtream,
+      url: 'https://tv.example',
+      username: 'bob',
+      password: 'p',
+      acceptInvalidCertificate: true,
+    );
+    await a.sync();
+    await b.sync();
+    expect(b.source('Panel').acceptInvalidCertificate, isTrue);
+    final src = a.source('Panel');
+    a.repo.updateSource(src.id, name: 'Panel', url: src.url, username: 'bob', password: 'p');
+    await _tick();
+    await a.sync();
+    await b.sync();
+    expect(b.source('Panel').acceptInvalidCertificate, isFalse);
+  });
+
   test('the newer of two conflicting changes wins on both devices', () async {
     final remote = MemoryRemote();
     final a = Device(remote), b = Device(remote);
@@ -580,6 +630,39 @@ void main() {
       expect(b.repo.progress(srcB, ContentKind.movie, '777')!.position, const Duration(minutes: 6));
     });
 
+    test('what a newer Bobine wrote is read once this one is updated', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote);
+      final src = a.xtream();
+      a.repo.toggleFavorite(src, ContentKind.movie, '77');
+      await a.sync();
+      // The favourite as a newer Bobine would write it.
+      final codec = SyncCodec(_keys);
+      final id = await _itemOf(remote, 'favorites');
+      final item = remote.items[id]!;
+      final record = await codec.open(id, item.payload);
+      remote.items[id] = RemoteItem(
+        id: id,
+        modifiedAt: item.modifiedAt,
+        payload: await codec.seal(id, {...record, 'v': 2}),
+        rev: ++remote._rev,
+      );
+
+      final b = Device(remote);
+      await b.sync();
+      final srcB = b.source('Mon IPTV').id;
+      expect(b.repo.isFavorite(srcB, ContentKind.movie, '77'), isFalse, reason: 'version 2 is not read by 1');
+      expect(b.repo.kvGet(SyncEngine.laterKey), '2');
+      await b.sync();
+      expect(b.repo.kvGet(SyncEngine.laterKey), '2', reason: 'still waiting');
+
+      SyncEngine.recordVersion = 2; // the app was updated
+      addTearDown(() => SyncEngine.recordVersion = 1);
+      await b.sync();
+      expect(b.repo.isFavorite(srcB, ContentKind.movie, '77'), isTrue);
+      expect(b.repo.kvGet(SyncEngine.laterKey), isNull);
+    });
+
     test('a record this version cannot apply is skipped, not the ones around it', () async {
       final remote = MemoryRemote();
       final a = Device(remote);
@@ -678,6 +761,67 @@ void main() {
     expect(remote.items.length, greaterThan(before), reason: 'the server had it; it is sent again, harmlessly');
   });
 
+  group('an account that cannot be trusted', () {
+    test('the deleted flag in clear deletes nothing, and a date in clear does not win', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote), b = Device(remote);
+      final src = a.xtream();
+      a.repo.toggleFavorite(src, ContentKind.movie, '503');
+      await a.sync();
+      await b.sync();
+      final bSrc = b.source('Mon IPTV').id;
+      expect(b.repo.isFavorite(bSrc, ContentKind.movie, '503'), isTrue);
+
+      // The server marks everything deleted and dated in the future, the
+      // sealed content left as it was.
+      final future = DateTime.now().millisecondsSinceEpoch + 3600000;
+      for (final i in remote.items.values.toList()) {
+        remote.items[i.id] = RemoteItem(
+          id: i.id,
+          modifiedAt: future,
+          deleted: true,
+          payload: i.payload,
+          rev: ++remote._rev,
+        );
+      }
+      final got = await b.sync();
+      expect(b.repo.sources(), hasLength(1), reason: 'nothing deleted');
+      expect(b.repo.isFavorite(bSrc, ContentKind.movie, '503'), isTrue);
+      expect(got.skipped, greaterThan(0), reason: 'the altered items are left aside');
+    });
+
+    test('an older version handed back again is not followed', () async {
+      final remote = MemoryRemote();
+      final a = Device(remote), b = Device(remote);
+      a.settings.update((s) => s.parentalPin = '1234');
+      await a.sync();
+      await b.sync();
+      expect(b.settings.parentalPin, '1234');
+      final codec = SyncCodec(_keys);
+      String? pin;
+      for (final i in remote.items.values) {
+        final r = await codec.open(i.id, i.payload);
+        if (r['t'] == 'settings' && (r['k'] as List).first == 'parentalPin') pin = i.id;
+      }
+      final withCode = remote.items[pin]!;
+
+      // The code changes on A; then the server hands B the old version again.
+      await _tick();
+      a.settings.update((s) => s.parentalPin = '5678');
+      await a.sync();
+      await b.sync();
+      expect(b.settings.parentalPin, '5678');
+      remote.items[pin!] = RemoteItem(
+        id: pin,
+        modifiedAt: withCode.modifiedAt,
+        payload: withCode.payload,
+        rev: ++remote._rev,
+      );
+      await b.sync();
+      expect(b.settings.parentalPin, '5678', reason: 'the old code came back');
+    });
+  });
+
   group('profile pictures', () {
     String? avatarOf(Device d, String name) => d.profile(name).avatar;
 
@@ -733,7 +877,8 @@ void main() {
       remote.items[id!] = RemoteItem(
         id: id,
         modifiedAt: DateTime.now().millisecondsSinceEpoch + 1000,
-        payload: await codec.seal(id, {...record, 'd': data}),
+        // An older Bobine does not seal the time either.
+        payload: await codec.seal(id, {...record, 'd': data}..remove('m')),
         rev: ++remote._rev,
       );
       await b.sync();

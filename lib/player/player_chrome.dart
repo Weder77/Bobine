@@ -349,15 +349,20 @@ class _VodSeekRowState extends State<VodSeekRow> {
                 },
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
+                  // Length not known yet (a replay, some films): every
+                  // place on the bar was 0:00, and a click started over.
                   onTapUp: (d) {
+                    if (_total <= 0) return;
                     widget.onInteraction?.call();
                     widget.onSeek(_at(frac(d.localPosition.dx)));
                   },
                   onHorizontalDragStart: (d) {
+                    if (_total <= 0) return;
                     setState(() => _drag = frac(d.localPosition.dx));
                     _point();
                   },
                   onHorizontalDragUpdate: (d) {
+                    if (_total <= 0) return;
                     widget.onInteraction?.call();
                     setState(() => _drag = frac(d.localPosition.dx));
                     _point();
@@ -421,7 +426,7 @@ class _VodSeekRowState extends State<VodSeekRow> {
         SizedBox(
           width: 72,
           child: Text(
-            '−${playerTime(widget.duration - pos)}',
+            _total <= 0 || pos > widget.duration ? '' : '−${playerTime(widget.duration - pos)}',
             textAlign: TextAlign.right,
             style: darkMono(14, color: DarkColors.textSoft, height: 1),
           ),

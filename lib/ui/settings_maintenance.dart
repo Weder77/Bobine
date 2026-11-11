@@ -2,6 +2,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
 import '../core/open_url.dart';
+import '../core/text.dart';
 import '../core/theme.dart';
 import '../core/version.dart';
 import '../features/backup.dart';
@@ -58,15 +59,7 @@ class BackupSection extends StatelessWidget {
   /// Asks the parental code when one is set; true when it may go on.
   /// A backup "with credentials" holds the code in clear, and restoring a
   /// file replaces it (or removes it) and the locks of the categories.
-  Future<bool> _parentAgrees(BuildContext context, String title) async {
-    final s = AppScope.of(context);
-    if (!s.settings.parentalEnabled) return true;
-    final pin = await askPin(context, title: title, message: 'Tape le code parental.');
-    if (pin == null || !context.mounted) return false;
-    if (pin == s.settings.parentalPin) return true;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
-    return false;
-  }
+  Future<bool> _parentAgrees(BuildContext context, String title) => confirmParent(context, title: title);
 
   Future<void> _export(BuildContext context) async {
     final s = AppScope.of(context);
@@ -131,6 +124,12 @@ class BackupSection extends StatelessWidget {
       }
     } on BackupException catch (e) {
       if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      // Whatever else a damaged file causes, it is said.
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Restauration impossible : ${redactCredentials('$e')}')));
+      }
     }
   }
 }
@@ -208,9 +207,11 @@ class AboutSection extends StatelessWidget {
           children: [
             SettingsOption(
               title: 'Bobine $kAppVersion',
-              subtitle:
-                  'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Toutes les données (sources, favoris, '
-                  'progression) restent sur cet ordinateur.',
+              subtitle: s.sync.signedIn
+                  ? 'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Les données (sources, favoris, '
+                        'progression) sont sur cet ordinateur et, chiffrées, sur ton compte Bobine.'
+                  : 'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Toutes les données (sources, favoris, '
+                        'progression) restent sur cet ordinateur.',
               child: OutlinedButton(
                 onPressed: busy ? null : () => u.check(),
                 child: const Text('Rechercher une mise à jour'),
@@ -237,6 +238,8 @@ class AboutSection extends StatelessWidget {
                     if (u.stage == UpdateStage.downloading) ...[
                       const SizedBox(height: 10),
                       SizedBox(width: 360, child: LinearProgressIndicator(value: u.progress)),
+                      const SizedBox(height: 8),
+                      TextButton(onPressed: u.cancelDownload, child: const Text('Annuler')),
                     ],
                     if (info != null && info.notes != null && info.notes!.isNotEmpty) ...[
                       const SizedBox(height: 10),

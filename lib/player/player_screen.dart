@@ -37,7 +37,12 @@ class PlayerScreen extends StatefulWidget {
   /// multi-view already open (a reminder's "Regarder" over a film): stacked,
   /// they would share one video engine, and leaving the top one would stop
   /// it under the other.
+  /// Players opened so far: a launch that waited for the network can tell
+  /// whether another one started meanwhile.
+  static int opened = 0;
+
   static Future<void> open(BuildContext context, PlayerSession session, {bool replacing = false}) {
+    opened++;
     final nav = Navigator.of(context);
     if (!replacing) return nav.push(route(session));
     // Told before the new screen is built: it must not count itself replaced.
@@ -198,10 +203,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _subs.add(
       _ps.player.stream.playing.listen((p) {
         if (!mounted) return;
-        setState(() {
-          _playing = p;
-          if (p) _error = null;
-        });
+        // The error stays until pictures really come (see _onTick): play /
+        // pause on a dead link took the error card and "Réessayer" away,
+        // leaving a black screen.
+        setState(() => _playing = p);
       }),
     );
     // Playback is starting: no pause screen while it loads. Unless this is
@@ -223,7 +228,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   void dispose() {
     _cast.removeListener(_onCast);
     _s.tracker.flush();
-    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick]) {
+    for (final t in [_hideTimer, _osdTimer, _digitTimer, _tick, _zapTimer]) {
       t?.cancel();
     }
     for (final s in _subs) {
@@ -238,9 +243,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // its own now, whatever it plays (the same channel, for a reminder
     // about the channel being watched).
     final replaced = ps.takeovers != _takeovers;
+    final generation = ps.generation;
     scheduleMicrotask(() {
       if (wasFullscreen && !replaced) AppWindow.setFullscreen(false);
-      if (!keepAlive && !replaced) ps.stop();
+      // Something opened meanwhile (the screen that follows): its stream is
+      // not cut by this one's late stop.
+      if (!keepAlive && !replaced && ps.generation == generation) ps.stop();
     });
     _preview.dispose();
     _focus.dispose();
@@ -350,7 +358,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
     Duration? from;
     if (!_isLive) {
       final here = _casting ? _cast.position : _ps.player.state.position;
-      from = here > Duration.zero ? here : widget.session.start;
+      // The session's start is that of the title it opened with, not of the
+      // next episode played since.
+      final resume = _item.url == widget.session.item.url ? widget.session.start : null;
+      from = here > Duration.zero ? here : resume;
     }
     _s.tracker.flush();
     // The TV takes the connection: the preview gives its own back.
@@ -397,6 +408,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _onCompleted() {
     if (!mounted || _isLive) return;
+    // Cut by the network: the service opens it again where it stopped.
+    if (!_casting && _ps.cutShort) return;
     _s.tracker.markFinished(_item);
     if (_nextEpisode != null && _s.settings.autoNextEpisode && _nextDismissed != _item.extId) {
       _playNextEpisode();
@@ -449,9 +462,37 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return _showControls();
     }
     if (_isLive && seconds < 0) _timeshift = true;
-    _ps.seekBy(Duration(seconds: seconds));
+    final st = _ps.player.state;
+    if (!_isLive && st.completed) {
+      // At the end of a film a relative seek left it "ended": Espace then
+      // started it over from 0:00. A seek to a place does not.
+      final to = st.position + Duration(seconds: seconds);
+      _ps.player.seek(to < Duration.zero ? Duration.zero : (to > st.duration ? st.duration : to));
+    } else {
+      _ps.seekBy(Duration(seconds: seconds));
+    }
     _flash(seconds > 0 ? '+$seconds s' : '$seconds s');
     _showControls();
+  }
+
+  /// Scroll not yet turned into volume (a touchpad sends many small ones).
+  double _wheel = 0;
+
+  /// The wheel changes the volume by 5 % a notch. A touchpad's small
+  /// moves add up to a notch (each one was 5 %), and a sideways scroll does
+  /// nothing (it lowered the volume).
+  void _onWheel(Offset delta) {
+    if (delta.dx.abs() > delta.dy.abs() || delta.dy == 0) return;
+    if (delta.dy.abs() >= 50) {
+      _wheel = 0;
+      return _changeVolume(delta.dy < 0 ? 5 : -5);
+    }
+    if (_wheel != 0 && _wheel.sign != delta.dy.sign) _wheel = 0;
+    _wheel += delta.dy;
+    if (_wheel.abs() >= 50) {
+      _changeVolume(_wheel < 0 ? 5 : -5);
+      _wheel = 0;
+    }
   }
 
   void _changeVolume(double delta) {
@@ -531,14 +572,32 @@ class _PlayerScreenState extends State<PlayerScreen> {
     return _s.repo.channelByExt(_item.sourceId, _item.extId);
   }
 
+  bool _channelLocked(Channel c) => _s.repo.isLocked(c.sourceId, ContentKind.live, c.extId);
+
+  /// Next or previous channel, over those locked since the list was made
+  /// (the code typed, then locked again while the mini-player kept it).
   void _zap(int delta) {
     if (_channels.isEmpty || _source == null) return;
-    _playChannel((_chIndex + delta) % _channels.length);
+    for (var step = 1; step <= _channels.length; step++) {
+      final i = (_chIndex + delta * step) % _channels.length;
+      if (!_channelLocked(_channels[i])) return _playChannel(i, settle: true);
+    }
   }
 
-  void _playChannel(int index) {
+  /// Opening of the stream chosen by zapping, put off a moment.
+  Timer? _zapTimer;
+
+  /// [settle]: a gamepad held on a direction sends a full press every
+  /// 90 ms. The channel shown changes at once, its stream is opened once
+  /// the zapping stops (300 ms): eleven streams a second were asked of the
+  /// provider, and "Récentes" filled with channels passed by.
+  void _playChannel(int index, {bool settle = false}) {
     if (_source == null || index < 0 || index >= _channels.length) return;
     final c = _channels[index];
+    if (_channelLocked(c)) {
+      _flash('Chaîne protégée par le contrôle parental');
+      return;
+    }
     setState(() {
       _chIndex = index;
       _item = channelItem(_source!, c);
@@ -546,21 +605,42 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _timeshift = false;
       _variants = null;
     });
-    _open(_item);
-    _s.repo.touchChannel(c.sourceId, c.extId);
+    _zapTimer?.cancel();
+    void open() {
+      _open(_item);
+      _s.repo.touchChannel(c.sourceId, c.extId);
+    }
+
+    if (settle) {
+      final item = _item;
+      _zapTimer = Timer(const Duration(milliseconds: 300), () {
+        if (mounted && identical(_item, item)) open();
+      });
+    } else {
+      open();
+    }
     _flash('${c.number ?? index + 1}  ${_s.channelName(c)}');
     _showControls();
   }
 
   void _typeDigit(String d) {
     _digitTimer?.cancel();
-    setState(() => _digits = (_digits + d).substring(_digits.length >= 4 ? 1 : 0));
+    // Up to 6 digits: providers number channels beyond 9999.
+    setState(() => _digits = (_digits + d).substring(_digits.length >= 6 ? 1 : 0));
     _digitTimer = Timer(const Duration(milliseconds: 1400), () {
       final n = int.tryParse(_digits);
       setState(() => _digits = '');
       if (n == null || _channels.isEmpty) return;
-      var idx = _channels.indexWhere((c) => c.number == n);
-      if (idx < 0 && n >= 1 && n <= _channels.length) idx = n - 1;
+      // The number shown for each channel (its own, else its place in the
+      // list), as in the lists: the place alone could pick a channel that
+      // shows another number.
+      var idx = -1;
+      for (var i = 0; i < _channels.length; i++) {
+        if ((_channels[i].number ?? i + 1) == n) {
+          idx = i;
+          break;
+        }
+      }
       if (idx >= 0) {
         _playChannel(idx);
       } else {
@@ -628,6 +708,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   void _playEpisode(Episode e) {
     if (_source == null) return;
+    if (_s.repo.isLocked(_item.sourceId, ContentKind.episode, e.extId, seriesExt: e.seriesExt)) {
+      _flash('Série protégée par le contrôle parental');
+      return;
+    }
     _s.tracker.flush();
     final p = _s.repo.progress(_item.sourceId, ContentKind.episode, e.extId);
     // Another episode: the preview of the previous one is given back.
@@ -777,9 +861,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
         onKeyEvent: _onKey,
         child: Listener(
           onPointerSignal: (e) {
-            if (e is PointerScrollEvent && _panel == _Panel.none) {
-              _changeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
-            }
+            if (e is PointerScrollEvent && _panel == _Panel.none) _onWheel(e.scrollDelta);
           },
           child: MouseRegion(
             cursor: vis ? SystemMouseCursors.basic : SystemMouseCursors.none,

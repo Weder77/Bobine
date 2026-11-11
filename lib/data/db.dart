@@ -1,10 +1,13 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:sqlite3/sqlite3.dart';
 
 import '../core/secrets.dart';
+import '../core/text.dart';
 
 /// Schema version, bump when adding migrations in [_migrate].
-const int kSchemaVersion = 6;
+const int kSchemaVersion = 11;
 
 /// Opens the main (UI isolate) connection and applies migrations.
 ///
@@ -13,10 +16,21 @@ const int kSchemaVersion = 6;
 /// asynchronously by the repository instead.
 Database openAppDatabase(String path) {
   final db = sqlite3.open(path);
+  _ownerOnly(path);
   _configure(db, busyTimeoutMs: 150);
   _migrate(db);
   _protectLegacySecrets(db);
   return db;
+}
+
+/// Outside Windows the secrets are not encrypted in the file (see
+/// [Secrets]): it is made readable by this user account only. SQLite gives
+/// its -wal and -shm files the same rights.
+void _ownerOnly(String path) {
+  if (Platform.isWindows || !File(path).existsSync()) return;
+  try {
+    Process.runSync('chmod', ['600', path]);
+  } catch (_) {}
 }
 
 /// Opens a connection for a background isolate (imports).
@@ -44,8 +58,20 @@ void _configure(Database db, {required int busyTimeoutMs}) {
   db.execute('PRAGMA busy_timeout = $busyTimeoutMs');
 }
 
+/// The database was made by a newer Bobine: this one does not know its
+/// tables, and writing to it could break it for the newer one.
+class NewerDatabaseException implements Exception {
+  @override
+  String toString() =>
+      "Les données ont été créées par une version plus récente de Bobine : installe la dernière version.";
+}
+
 void _migrate(Database db) {
   final version = db.select('PRAGMA user_version').first.columnAt(0) as int;
+  if (version > kSchemaVersion) {
+    db.close();
+    throw NewerDatabaseException();
+  }
   if (version >= kSchemaVersion) return;
   db.execute('BEGIN');
   try {
@@ -62,6 +88,11 @@ void _migrate(Database db) {
     }
     if (version < 5) _migrateV5(db);
     if (version < 6) _migrateV6(db);
+    if (version < 7) _migrateV7(db);
+    if (version < 8) _migrateV8(db);
+    if (version < 9) _migrateV9(db);
+    if (version < 10) _migrateV10(db);
+    if (version < 11) _migrateV11(db);
     db.execute('PRAGMA user_version = $kSchemaVersion');
     db.execute('COMMIT');
   } catch (_) {
@@ -281,6 +312,7 @@ void _migrateV5(Database db) {
   // Sources and profiles: a uid is given to new rows, and logged under it.
   const syncedColumns = {
     'sources': 'name, type, url, username, password, epg_url, user_agent, live_format, epg_offset, uid',
+    // bad_cert_ok (v10) is added to the sources trigger by its migration.
     'profiles': 'name, color, kids, uid',
   };
   // Where the source / profile id sits in the log keys of the other tables.
@@ -335,6 +367,95 @@ void _migrateV6(Database db) {
   db.execute(
     'CREATE TRIGGER sync_profiles_upd AFTER UPDATE OF name, color, kids, avatar, uid ON profiles '
     'WHEN NEW.uid IS NOT NULL AND $_syncLive BEGIN ${_syncLogSql('profiles', 'NEW.uid')} END',
+  );
+}
+
+/// v7: the newest version of each item received from or sent to the
+/// account, by item id. An account (or a server) that hands back an older
+/// version of an item than one already seen here is not followed: it could
+/// otherwise bring back, say, a parental code removed since.
+void _migrateV7(Database db) {
+  db.execute('CREATE TABLE sync_seen (id TEXT PRIMARY KEY, modified_at INTEGER NOT NULL) WITHOUT ROWID');
+}
+
+/// v8: channel name keys keep other alphabets and are null when nothing is
+/// left to tell a channel by (see [channelMatchKey]). Guides are imported
+/// again at the next start, to be stored with the same keys.
+void _migrateV8(Database db) {
+  final rows = db.select('SELECT id, name FROM channels');
+  final update = db.prepare('UPDATE channels SET match_key = ? WHERE id = ?');
+  for (final r in rows) {
+    final key = channelMatchKey(r['name'] as String);
+    update.execute([key.isEmpty ? null : key, r['id']]);
+  }
+  update.close();
+  db.execute('UPDATE sources SET epg_updated_at = NULL');
+}
+
+/// v9: recordings are no longer deleted with their source: the files stay
+/// on the disk, and the list is the only way to find and play them.
+void _migrateV9(Database db) {
+  db.execute('''
+    CREATE TABLE recordings_v9 (
+      id INTEGER PRIMARY KEY,
+      source_id INTEGER NOT NULL,
+      channel_ext TEXT NOT NULL,
+      channel_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      start INTEGER NOT NULL,
+      stop INTEGER NOT NULL,
+      path TEXT,
+      status TEXT NOT NULL,
+      error TEXT,
+      size INTEGER,
+      created_at INTEGER NOT NULL
+    )''');
+  db.execute(
+    'INSERT INTO recordings_v9 SELECT id, source_id, channel_ext, channel_name, title, start, stop, path, status, '
+    'error, size, created_at FROM recordings',
+  );
+  db.execute('DROP TABLE recordings');
+  db.execute('ALTER TABLE recordings_v9 RENAME TO recordings');
+}
+
+/// v10: certificates of https providers are checked; a source can accept
+/// an invalid one (`bad_cert_ok`). It follows the account like the rest of
+/// the source.
+void _migrateV10(Database db) {
+  db.execute('ALTER TABLE sources ADD COLUMN bad_cert_ok INTEGER NOT NULL DEFAULT 0');
+  // Sources already in https keep working as before (any certificate was
+  // accepted until now): the option is on for them, and can be turned off
+  // in the source. Done before the trigger below includes the column, so
+  // each device decides for its own sources.
+  for (final r in db.select('SELECT id, url, epg_url FROM sources')) {
+    bool https(Object? v) => (Secrets.reveal(v as String?) ?? '').trim().toLowerCase().startsWith('https://');
+    if (https(r['url']) || https(r['epg_url'])) {
+      db.execute('UPDATE sources SET bad_cert_ok = 1 WHERE id = ?', [r['id']]);
+    }
+  }
+  db.execute('DROP TRIGGER sync_sources_upd');
+  db.execute(
+    'CREATE TRIGGER sync_sources_upd AFTER UPDATE OF name, type, url, username, password, epg_url, user_agent, '
+    'live_format, epg_offset, bad_cert_ok, uid ON sources '
+    'WHEN NEW.uid IS NOT NULL AND $_syncLive BEGIN ${_syncLogSql('sources', 'NEW.uid')} END',
+  );
+}
+
+/// v11: the id of a deleted profile or source is given again to the next
+/// one: what was kept under it goes with it, however it is deleted (here,
+/// by the account, by a restore). A new profile got the last searches of
+/// the one deleted, a new source its guide.
+void _migrateV11(Database db) {
+  db.execute(
+    "CREATE TRIGGER profiles_forget AFTER DELETE ON profiles BEGIN "
+    "DELETE FROM kv WHERE key = 'search_recent_' || OLD.id; END",
+  );
+  db.execute(
+    'CREATE TRIGGER sources_forget AFTER DELETE ON sources BEGIN '
+    'DELETE FROM epg_programs WHERE source_id = OLD.id; '
+    'DELETE FROM epg_channels WHERE source_id = OLD.id; '
+    'DELETE FROM tmdb_cache WHERE source_id = OLD.id; '
+    "DELETE FROM kv WHERE key = 'live.cat.' || OLD.id; END",
   );
 }
 

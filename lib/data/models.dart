@@ -39,11 +39,17 @@ class Source {
     this.accountInfo,
     this.lastError,
     this.epgOffsetMinutes = 0,
+    this.acceptInvalidCertificate = false,
   });
 
   final int id;
   final String name;
   final SourceType type;
+
+  /// The provider's https server is reached even when its certificate is
+  /// not valid (self-signed, expired): asked for in the source's settings,
+  /// since anyone on the network could then read the account.
+  final bool acceptInvalidCertificate;
 
   /// M3U: playlist URL or local file path. Xtream: server base URL.
   final String url;
@@ -94,6 +100,7 @@ class Source {
     epgUrl: Secrets.reveal(r['epg_url'] as String?),
     userAgent: r['user_agent'] as String?,
     liveFormat: (r['live_format'] as String?) ?? 'ts',
+    acceptInvalidCertificate: r['bad_cert_ok'] == 1,
     contentUpdatedAt: _date(r['content_updated_at']),
     epgUpdatedAt: _date(r['epg_updated_at']),
     accountInfo: r['account_info'] == null

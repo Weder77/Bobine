@@ -102,7 +102,9 @@ class _EpgGridState extends State<EpgGrid> {
       if (mounted) _updateDay();
     });
     _clock = Timer.periodic(const Duration(minutes: 1), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      _followDate();
+      setState(() {});
     });
   }
 
@@ -128,6 +130,20 @@ class _EpgGridState extends State<EpgGrid> {
   double get _maxMinutes => (1 + _s.settings.epgDays) * 24 * 60.0 - _gridW / _px;
 
   /// "Now" 160 px from the left edge of the time line.
+  /// The guide starts the day before today: after midnight its start
+  /// moves one day on, the same time staying in view. Fixed at opening,
+  /// "now" left the guide when it stayed open overnight, and its last day
+  /// could no longer be reached.
+  void _followDate() {
+    final now = DateTime.now();
+    final origin = DateTime(now.year, now.month, now.day - 1);
+    if (origin == _origin) return;
+    final shift = origin.difference(_origin).inMinutes.toDouble();
+    _origin = origin;
+    _cache.clear();
+    _set(_offset.value - shift);
+  }
+
   double _nowOffset() => DateTime.now().difference(_origin).inSeconds / 60 - 160 / _px;
 
   void _set(double minutes) => _offset.value = minutes.clamp(0.0, math.max(0.0, _maxMinutes));
@@ -161,13 +177,7 @@ class _EpgGridState extends State<EpgGrid> {
   DateTime get _anchor => _origin.add(Duration(minutes: (_offset.value + 160 / _px).round()));
 
   void _updateDay() {
-    final today = DateTime.now();
-    final v = _anchor;
-    widget.controller?.day.value = DateTime(
-      v.year,
-      v.month,
-      v.day,
-    ).difference(DateTime(today.year, today.month, today.day)).inDays;
+    widget.controller?.day.value = daysBetween(DateTime.now(), _anchor);
   }
 
   List<Program> _programs(Channel c) => _cache.putIfAbsent(
@@ -408,6 +418,9 @@ class _EpgGridState extends State<EpgGrid> {
       if (w < 2) continue;
       blocks.add(
         Positioned(
+          // One key per programme: without it the keyboard focus stayed on
+          // the place, and after a scroll Entrée acted on another one.
+          key: ValueKey(p.start.millisecondsSinceEpoch),
           left: x,
           width: w,
           top: 5,

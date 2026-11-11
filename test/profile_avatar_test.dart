@@ -214,12 +214,21 @@ void main() {
       a.profileId = a.createProfile(name: 'Léa', color: 1, avatar: 'preset:chat');
       a.toggleFavorite(src, ContentKind.movie, 'film');
       final json = jsonDecode(jsonEncode(aBackup.build(credentials: true))) as Map<String, Object?>;
-      // A damaged row, after the profile and the source.
-      json['progress'] = [
-        {'profile_id': a.profileId, 'source_id': src, 'kind': 'movie', 'ext_id': 'x', 'position_ms': 1},
+      // A write that fails, after the profile and the source.
+      json['reminders'] = [
+        {
+          'profile_id': a.profileId,
+          'source_id': src,
+          'channel_ext': 'c',
+          'channel_name': 'C',
+          'title': 'T',
+          'start': 1,
+          'stop': 2,
+        },
       ];
 
       final (b, bBackup) = install();
+      b.db.execute('DROP TABLE reminders');
       expect(() => bBackup.restore(json), throwsA(isA<BackupException>()));
       expect(b.profiles().map((p) => p.name), ['Moi']);
       expect(b.sources(), isEmpty);

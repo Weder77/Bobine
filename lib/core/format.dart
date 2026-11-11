@@ -20,6 +20,8 @@ String formatRuntime(int? seconds) {
 
 /// "2 h 30", "1 h 02", "45 min" (the design's way of writing a length).
 String formatSpan(Duration d) {
+  // Negative (a programme already over, a clock behind): its sign was lost.
+  if (d.isNegative) return '-${formatSpan(-d)}';
   final total = d.inMinutes < 1 && d.inSeconds > 0 ? 1 : d.inMinutes;
   final h = total ~/ 60;
   final m = total % 60;
@@ -30,11 +32,14 @@ String formatSpan(Duration d) {
 const _days = ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'];
 const _months = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
 
+/// Calendar days from [from] to [to] (their dates only). Counted on UTC
+/// dates: the day the clocks change has 23 or 25 hours, and "Demain" was
+/// "Aujourd'hui" that day.
+int daysBetween(DateTime from, DateTime to) =>
+    DateTime.utc(to.year, to.month, to.day).difference(DateTime.utc(from.year, from.month, from.day)).inDays;
+
 String formatDay(DateTime t) {
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final day = DateTime(t.year, t.month, t.day);
-  final diff = day.difference(today).inDays;
+  final diff = daysBetween(DateTime.now(), t);
   if (diff == 0) return "Aujourd'hui";
   if (diff == 1) return 'Demain';
   if (diff == -1) return 'Hier';
@@ -109,3 +114,14 @@ String codecLabel(String c) => switch (c.toLowerCase()) {
   'webvtt' => 'WebVTT',
   final other => other.toUpperCase(),
 };
+
+/// End of a provider's subscription from its `exp_date` (seconds), or
+/// null when there is none or it makes no sense: a date out of range made
+/// the source's card fail to show.
+DateTime? accountExpiry(Object? expDate) {
+  final v = expDate is int ? expDate : int.tryParse('${expDate ?? ''}'.trim());
+  if (v == null || v <= 0) return null;
+  // 2000 to 2200.
+  if (v < 946684800 || v > 7258118400) return null;
+  return DateTime.fromMillisecondsSinceEpoch(v * 1000);
+}

@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../core/format.dart';
 import '../core/open_url.dart';
 import '../core/theme.dart';
-import '../data/import/xtream_api.dart';
 import '../data/models.dart';
+import '../player/player_screen.dart';
 import '../services.dart';
 import 'launch.dart';
 import 'multi_view_screen.dart';
@@ -127,30 +127,30 @@ Future<void> showMovieActions(BuildContext context, Movie m, Offset at) {
 }
 
 /// Episodes of [sr]: from the cache, else asked to the Xtream server.
-Future<List<Episode>> _loadEpisodes(AppServices s, Series sr) async {
-  final cached = s.repo.episodes(sr.sourceId, sr.extId);
-  if (cached.isNotEmpty) return cached;
-  final src = s.repo.source(sr.sourceId);
-  if (src == null || !src.isXtream) return const [];
-  final api = XtreamApi.forSource(src);
-  try {
-    final d = await api.seriesInfo(sr.sourceId, sr.extId);
-    s.repo.replaceEpisodes(sr.sourceId, sr.extId, d.episodes);
-    return d.episodes;
-  } catch (_) {
-    return const [];
-  } finally {
-    api.close();
-  }
-}
+Future<List<Episode>> _loadEpisodes(AppServices s, Series sr) => loadEpisodes(s.repo, sr);
+
+bool _seriesStarting = false;
 
 /// Plays a series where the profile left it (or its first episode),
 /// loading the episodes from the server when needed.
 Future<void> playSeries(BuildContext context, Series sr) async {
+  // The episodes may take a few seconds to come: a second click meanwhile
+  // opened a second player on the same engine.
+  if (_seriesStarting) return;
   final s = AppScope.of(context);
-  final all = await _loadEpisodes(s, sr);
+  final opened = PlayerScreen.opened;
+  final route = ModalRoute.of(context);
+  final List<Episode> all;
+  _seriesStarting = true;
+  try {
+    all = await _loadEpisodes(s, sr);
+  } finally {
+    _seriesStarting = false;
+  }
   final t = seriesTarget(all, s.repo.lastEpisodeProgress(sr.sourceId, sr.extId));
-  if (!context.mounted) return;
+  // Something else was opened while they loaded, or the screen changed:
+  // the episode is not pushed over it.
+  if (!context.mounted || PlayerScreen.opened != opened || !(route?.isCurrent ?? true)) return;
   if (t == null) return Launch.openSeries(context, sr);
   await Launch.episode(context, sr, t.$1, all);
 }
@@ -234,9 +234,11 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
   Future<void> restart() async {
     if (movie != null) return Launch.movie(context, movie, restart: true, image: p.image);
     if (series == null) return;
-    final all = s.repo.episodes(p.sourceId, p.seriesExt!);
+    final all = await loadEpisodes(s.repo, series);
     final e = all.where((x) => x.extId == p.extId).firstOrNull;
-    if (e != null) await Launch.episode(context, series, e, all, restart: true);
+    if (!context.mounted) return;
+    if (e != null) return Launch.episode(context, series, e, all, restart: true);
+    _toast(context, 'Cet épisode n’est plus proposé par la source.');
   }
 
   void remove() {

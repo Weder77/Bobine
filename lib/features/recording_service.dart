@@ -10,6 +10,7 @@ import '../data/models.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
 import '../data/stream_urls.dart';
+import '../player/player_service.dart';
 
 /// Records live channels to files, now or at a programme's time.
 ///
@@ -19,10 +20,18 @@ import '../data/stream_urls.dart';
 /// limited to one connection cannot record and watch at the same time.
 class RecordingService {
   RecordingService(this._repo, this._settings, {required this.onChanged}) {
-    // Recordings cut by a crash or by closing the app.
+    // Recordings cut by a crash or by closing the app: what was written
+    // can still be watched.
     for (final r in _repo.recordings()) {
       if (r.status == RecordingStatus.recording) {
-        _repo.updateRecording(r.id, status: RecordingStatus.failed, error: "Interrompu (l'app a été fermée)");
+        final size = _sizeOf(r.path);
+        final ok = size != null && size > _minSize;
+        _repo.updateRecording(
+          r.id,
+          status: ok ? RecordingStatus.done : RecordingStatus.failed,
+          size: size ?? 0,
+          error: ok ? "Partiel : interrompu (l'app a été fermée)" : "Interrompu (l'app a été fermée)",
+        );
       }
     }
     _timer = Timer.periodic(const Duration(seconds: 15), (_) => _tick());
@@ -34,6 +43,23 @@ class RecordingService {
   final VoidCallback onChanged;
   Timer? _timer;
   final Map<int, Player> _active = {};
+  final Map<int, List<StreamSubscription<Object?>>> _watch = {};
+
+  /// Size of each active file at its last growth, and when that was.
+  final Map<int, (int, DateTime)> _growth = {};
+
+  /// Times a recording was started again after a cut (by the id of the
+  /// latest part).
+  final Map<int, int> _restarts = {};
+
+  /// Smallest file taken for a recording (less: nothing was received).
+  static const _minSize = 64 * 1024;
+
+  /// A file that has not grown for this long: the stream is gone.
+  static const stalled = Duration(seconds: 60);
+
+  /// Parts started again after cuts, at most, for one programme.
+  static const maxRestarts = 5;
 
   /// Recordings being started (their status is still "scheduled" until the
   /// player is ready): a second pass must not start them again.
@@ -56,15 +82,26 @@ class RecordingService {
 
   bool isActive(int id) => _active.containsKey(id);
 
+  /// Longest recording: a guide entry of several days (a "programme" that
+  /// is the whole night, a broken guide) filled the disk.
+  static const maxLength = Duration(hours: 6);
+
+  /// Largest file: the recording stops there (about 6 h of 4K).
+  static const maxBytes = 40 << 30;
+
+  static DateTime _capped(DateTime start, DateTime stop) =>
+      stop.difference(start) > maxLength ? start.add(maxLength) : stop;
+
   /// Records [p] on [c] (starts right away if it already began).
   int schedule(Channel c, Program prog) {
+    final start = prog.start.subtract(_before);
     final id = _repo.addRecording(
       sourceId: c.sourceId,
       channelExt: c.extId,
       channelName: c.name,
       title: prog.title,
-      start: prog.start.subtract(_before),
-      stop: prog.stop.add(_after),
+      start: start,
+      stop: _capped(start, prog.stop.add(_after)),
     );
     onChanged();
     _tick();
@@ -80,7 +117,10 @@ class RecordingService {
       channelName: c.name,
       title: current?.title ?? c.name,
       start: now,
-      stop: current != null && current.stop.isAfter(now) ? current.stop.add(_after) : now.add(const Duration(hours: 2)),
+      stop: _capped(
+        now,
+        current != null && current.stop.isAfter(now) ? current.stop.add(_after) : now.add(const Duration(hours: 2)),
+      ),
     );
     onChanged();
     _tick();
@@ -129,13 +169,71 @@ class RecordingService {
           }
           changed = true;
         }
-      } else if (r.status == RecordingStatus.recording && _active.containsKey(r.id) && !now.isBefore(r.stop)) {
-        await _finish(r.id);
-        changed = true;
+      } else if (r.status == RecordingStatus.recording && _active.containsKey(r.id)) {
+        if (!now.isBefore(r.stop)) {
+          await _finish(r.id);
+          changed = true;
+        } else if (_repo.source(r.sourceId) == null) {
+          // Source deleted (here or on another device): stopped, kept.
+          await _finish(r.id, note: 'Partiel : source supprimée');
+          changed = true;
+        } else if ((_sizeOf(r.path) ?? 0) > maxBytes) {
+          await _finish(r.id, note: 'Partiel : taille maximale atteinte');
+          changed = true;
+        } else if (_stalled(r, now)) {
+          await _cut(r.id);
+          changed = true;
+        }
       }
     }
     if (changed) onChanged();
   }
+
+  bool _stalled(Recording r, DateTime now) {
+    final size = _sizeOf(r.path) ?? 0;
+    final last = _growth[r.id];
+    if (last == null || size > last.$1) {
+      _growth[r.id] = (size, now);
+      return false;
+    }
+    return now.difference(last.$2) >= stalled;
+  }
+
+  /// The stream of [id] stopped before the end: what was written is kept,
+  /// and the rest is recorded in a new part.
+  Future<void> _cut(int id) async {
+    if (!_active.containsKey(id)) return;
+    final r = _repo.recording(id);
+    await _finish(id, note: 'Partiel : flux coupé à ${_clock(DateTime.now())}');
+    if (r == null) return;
+    final now = DateTime.now();
+    final tries = _restarts.remove(id) ?? 0;
+    if (tries >= maxRestarts || !now.add(const Duration(minutes: 1)).isBefore(r.stop)) return;
+    final next = _repo.addRecording(
+      sourceId: r.sourceId,
+      channelExt: r.channelExt,
+      channelName: r.channelName,
+      title: r.title.endsWith(' (suite)') ? r.title : '${r.title} (suite)',
+      start: now.add(const Duration(seconds: 10)),
+      stop: r.stop,
+    );
+    _restarts[next] = tries + 1;
+    onChanged();
+  }
+
+  /// Stops every recording of [sourceId] (the source is being deleted).
+  Future<void> stopSource(int sourceId) async {
+    for (final r in _repo.recordings()) {
+      if (r.sourceId == sourceId && _active.containsKey(r.id)) {
+        await _finish(r.id, note: 'Partiel : source supprimée');
+      }
+    }
+    onChanged();
+  }
+
+  /// Recordings in progress of [sourceId].
+  int activeFor(int sourceId) =>
+      _repo.recordings().where((r) => r.sourceId == sourceId && _active.containsKey(r.id)).length;
 
   Future<void> _start(Recording r) async {
     final source = _repo.source(r.sourceId);
@@ -151,6 +249,8 @@ class RecordingService {
           '${r.start.year}-${_two(r.start.month)}-${_two(r.start.day)} ${_two(r.start.hour)}h${_two(r.start.minute)}';
       final name = safeFileName('${r.channelName} - ${r.title} - $stamp');
       final path = freeFilePath(dir.path, name, 'ts');
+      // A folder that cannot be written to is said now, not at the end.
+      File(path).writeAsBytesSync(const []);
       final player = Player(
         configuration: const PlayerConfiguration(
           title: 'Bobine (enregistrement)',
@@ -176,10 +276,21 @@ class RecordingService {
       }.entries) {
         await native.setProperty(e.key, e.value);
       }
+      final url = StreamUrls.live(source, channel);
+      if (!isStreamUrl(url)) throw StateError("Cette chaîne n'a pas d'adresse de flux réseau.");
       _active[r.id] = player;
       activeCount.value = _active.length;
       _repo.updateRecording(r.id, status: RecordingStatus.recording, path: path);
-      await player.open(Media(StreamUrls.live(source, channel)), play: true);
+      // The end of the stream or a loading error: the stream is gone.
+      _watch[r.id] = [
+        player.stream.completed.listen((done) {
+          if (done) unawaited(_cut(r.id).then((_) => onChanged()));
+        }),
+        player.stream.error.listen((e) {
+          if (PlayerService.isFatalError(e)) unawaited(_cut(r.id).then((_) => onChanged()));
+        }),
+      ];
+      await player.open(Media(url), play: true);
     } catch (e) {
       debugPrint('Recording failed: ${redactCredentials('$e')}');
       _active.remove(r.id)?.dispose();
@@ -188,9 +299,13 @@ class RecordingService {
     }
   }
 
-  Future<void> _finish(int id) async {
+  Future<void> _finish(int id, {String? note}) async {
     final player = _active.remove(id);
     activeCount.value = _active.length;
+    _growth.remove(id);
+    for (final s in _watch.remove(id) ?? const <StreamSubscription<Object?>>[]) {
+      await s.cancel();
+    }
     if (player != null) {
       try {
         await (player.platform as NativePlayer).setProperty('stream-record', '');
@@ -199,26 +314,34 @@ class RecordingService {
       await player.dispose();
     }
     final r = _repo.recording(id);
-    int? size;
-    try {
-      if (r?.path != null) size = File(r!.path!).lengthSync();
-    } catch (_) {}
-    final ok = size != null && size > 64 * 1024;
+    if (r == null) return;
+    final size = _sizeOf(r.path);
+    final ok = size != null && size > _minSize;
     _repo.updateRecording(
       id,
       status: ok ? RecordingStatus.done : RecordingStatus.failed,
       size: size ?? 0,
-      stop: DateTime.now().isBefore(r?.stop ?? DateTime.now()) ? DateTime.now() : null,
-      error: ok ? null : 'Aucune vidéo reçue (abonnement limité à une connexion ?)',
+      stop: DateTime.now().isBefore(r.stop) ? DateTime.now() : null,
+      error: ok ? note : 'Aucune vidéo reçue (abonnement limité à une connexion ?)',
     );
   }
 
+  static int? _sizeOf(String? path) {
+    if (path == null) return null;
+    try {
+      return File(path).lengthSync();
+    } catch (_) {
+      return null;
+    }
+  }
+
   static String _two(int v) => v.toString().padLeft(2, '0');
+  static String _clock(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
 
   Future<void> dispose() async {
     _timer?.cancel();
     for (final id in _active.keys.toList()) {
-      await _finish(id);
+      await _finish(id, note: "Partiel : arrêté à la fermeture de l'app");
     }
   }
 }

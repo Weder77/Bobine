@@ -14,6 +14,7 @@ import 'settings_tmdb.dart';
 import 'source_form.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
+import 'widgets/pin_dialog.dart';
 
 /// Page asked for when the settings open ("Gérer les profils" → 'profils').
 final settingsPageRequest = ValueNotifier<String?>(null);
@@ -37,6 +38,20 @@ class _Page {
 class _SettingsScreenState extends State<SettingsScreen> {
   String _page = 'sources';
   final _scroll = ScrollController();
+
+  /// Pages a kids profile opens only with the parental code: they show the
+  /// sources' identifiers, or can undo the parental control (another
+  /// account, a source deleted and added again, a backup, the categories).
+  static const _protected = {'compte', 'sources', 'parental', 'sauvegarde', 'enregistrements', 'tmdb'};
+
+  /// Profile for which the code was typed (until another profile is used).
+  int? _unlockedFor;
+
+  Future<void> _unlock() async {
+    final s = AppScope.of(context);
+    final id = s.profile.id;
+    if (await confirmParent(context, title: 'Paramètres protégés') && mounted) setState(() => _unlockedFor = id);
+  }
 
   @override
   void initState() {
@@ -411,7 +426,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       const SizedBox(height: 10),
                       Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
                       const SizedBox(height: 30),
-                      ...page.build(context),
+                      // A kids profile with no code at all (made before the
+                      // editor asked for one): the page stays closed, it
+                      // showed the locked categories and let them be opened.
+                      if (_protected.contains(page.id) && s.profile.kids && _unlockedFor != s.profile.id)
+                        _ProtectedPage(onUnlock: s.settings.parentalEnabled ? _unlock : null)
+                      else
+                        ...page.build(context),
                     ],
                   ),
                 ),
@@ -885,6 +906,49 @@ String maskedHost(String url) {
   return uri.hasPort ? '$host:${uri.port}' : host;
 }
 
+/// In place of a page a kids profile opens only with the parental code.
+class _ProtectedPage extends StatelessWidget {
+  const _ProtectedPage({required this.onUnlock});
+
+  /// Null when no parental code is set: an adult profile is needed.
+  final VoidCallback? onUnlock;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(28),
+    decoration: BoxDecoration(
+      color: AppColors.surface2,
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(color: AppColors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.lock_rounded, color: AppColors.accent, size: 28),
+        const SizedBox(height: 14),
+        const Text('Page protégée', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text(
+          onUnlock == null
+              ? "Dans un profil enfant, cette page n'est ouverte qu'avec le code parental, et aucun n'est choisi : "
+                    "passe à un profil adulte pour en choisir un."
+              : 'Dans un profil enfant, cette page demande le code parental.',
+          style: TextStyle(fontSize: 14, height: 1.5, color: AppColors.muted),
+        ),
+        if (onUnlock != null) ...[
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            autofocus: true,
+            onPressed: onUnlock,
+            icon: const Icon(Icons.pin_outlined, size: 18),
+            label: const Text('Taper le code'),
+          ),
+        ],
+      ],
+    ),
+  );
+}
+
 /// Card of a source: name, server, state, figures and actions.
 class _SourceTile extends StatelessWidget {
   const _SourceTile({required this.source});
@@ -892,11 +956,16 @@ class _SourceTile extends StatelessWidget {
 
   Future<void> _delete(BuildContext context, AppServices s) async {
     final src = source;
+    // The locks and hidden categories of the source go with it.
+    if (!await confirmParent(context, title: 'Supprimer la source') || !context.mounted) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Supprimer « ${src.name} » ?'),
-        content: const Text('Les chaînes, favoris et la progression de lecture de cette source seront supprimés.'),
+        content: Text(
+          'Les chaînes, favoris et la progression de lecture de cette source seront supprimés.'
+          '${s.recordings.activeFor(src.id) > 0 ? ' Ses enregistrements en cours seront arrêtés (les fichiers sont gardés).' : ''}',
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Annuler')),
           FilledButton(
@@ -907,7 +976,7 @@ class _SourceTile extends StatelessWidget {
         ],
       ),
     );
-    if (ok == true) s.deleteSource(src.id);
+    if (ok == true) await s.deleteSource(src.id);
   }
 
   @override
@@ -917,7 +986,7 @@ class _SourceTile extends StatelessWidget {
     final active = s.settings.activeSourceId == src.id;
     final status = s.imports.status(src.id);
     final info = src.accountInfo;
-    final exp = int.tryParse('${info?['exp_date'] ?? ''}');
+    final exp = accountExpiry(info?['exp_date']);
     final cons = info?['active_cons'];
     final maxCons = info?['max_connections'];
     final figures = <(String, String)>[
@@ -925,7 +994,7 @@ class _SourceTile extends StatelessWidget {
       ('Films', formatCount(s.repo.count(src.id, ContentKind.movie))),
       ('Séries', formatCount(s.repo.count(src.id, ContentKind.series))),
       if (maxCons != null) ('Connexions', '${cons ?? 0} / $maxCons'),
-      if (exp != null && exp > 0) ('Expire le', formatDate(DateTime.fromMillisecondsSinceEpoch(exp * 1000))),
+      if (exp != null) ('Expire le', formatDate(exp)),
     ];
     final (chip, chipBg, chipInk) = status != null
         ? ('Actualisation…', AppColors.accentTint, AppColors.accent)

@@ -28,7 +28,8 @@ class MdBlock {
 final _heading = RegExp(r'^(#{1,6})\s+(.*?)\s*#*\s*$');
 final _rule = RegExp(r'^\s{0,3}([-*_])(\s*\1){2,}\s*$');
 final _bullet = RegExp(r'^(\s*)[-*+]\s+(.*)$');
-final _numbered = RegExp(r'^(\s*)(\d+)[.)]\s+(.*)$');
+// Up to 9 digits: a longer number is text, it made the notes fail to show.
+final _numbered = RegExp(r'^(\s*)(\d{1,9})[.)]\s+(.*)$');
 final _quote = RegExp(r'^\s{0,3}>\s?(.*)$');
 final _fence = RegExp(r'^\s{0,3}(```|~~~)');
 
@@ -200,6 +201,16 @@ class MarkdownText extends StatefulWidget {
 class _MarkdownTextState extends State<MarkdownText> {
   final List<TapGestureRecognizer> _taps = [];
 
+  /// Parsed once per text, not at every rebuild (the progress of a
+  /// download rebuilds the page many times a second).
+  late List<MdBlock> _blocks = parseMarkdown(widget.data);
+
+  @override
+  void didUpdateWidget(MarkdownText old) {
+    super.didUpdateWidget(old);
+    if (old.data != widget.data) _blocks = parseMarkdown(widget.data);
+  }
+
   @override
   void dispose() {
     _clearTaps();
@@ -245,7 +256,7 @@ class _MarkdownTextState extends State<MarkdownText> {
     _clearTaps();
     final base = DefaultTextStyle.of(context).style
         .merge(widget.style ?? TextStyle(fontSize: 14, height: 1.5, color: AppColors.textSoft));
-    final blocks = parseMarkdown(widget.data);
+    final blocks = _blocks;
     final children = <Widget>[];
     MdBlockType? previous;
     for (final b in blocks) {

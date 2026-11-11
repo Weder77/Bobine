@@ -32,7 +32,11 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
     epgDays = (json['epgDays'] as int?) ?? 3;
     volume = (json['volume'] as num?)?.toDouble() ?? 100;
     activeProfileId = (json['activeProfileId'] as int?) ?? 1;
-    parentalPin = Secrets.reveal(json['parentalPin'] as String?);
+    final storedPin = json['parentalPin'] as String?;
+    parentalPin = Secrets.reveal(storedPin);
+    // Encrypted on another computer or Windows account: it cannot be read
+    // here, but it was set. The control stays on until a new code is chosen.
+    _unreadablePin = storedPin != null && storedPin.isNotEmpty && parentalPin == null ? storedPin : null;
     tmdbKey = Secrets.reveal(json['tmdbKey'] as String?);
     recordingsDir = json['recordingsDir'] as String?;
     reminderLeadMinutes = (json['reminderLeadMinutes'] as int?) ?? 2;
@@ -83,7 +87,17 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
   /// Parental code (4 digits) or null when parental control is off. Stored
   /// encrypted on Windows like the source passwords.
   String? parentalPin;
-  bool get parentalEnabled => parentalPin != null && parentalPin!.isNotEmpty;
+  bool get parentalEnabled => (parentalPin != null && parentalPin!.isNotEmpty) || parentalPinUnreadable;
+
+  /// A code was set but cannot be read on this computer (see [_read]).
+  bool get parentalPinUnreadable => _unreadablePin != null && (parentalPin == null || parentalPin!.isEmpty);
+  String? _unreadablePin;
+
+  /// Forgets a code that cannot be read, before a new one (or none) is set.
+  void forgetUnreadablePin() => _unreadablePin = null;
+
+  /// What a parental code must look like: what the code dialog accepts.
+  static bool validPin(Object? v) => v == null || (v is String && (v.isEmpty || RegExp(r'^\d{4}$').hasMatch(v)));
 
   /// The Movie Database key (v3 key or v4 read token), or null.
   String? tmdbKey;
@@ -166,7 +180,11 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
     final j = _json()
       ..['parentalPin'] = parentalPin
       ..['tmdbKey'] = tmdbKey;
-    return {for (final k in syncedKeys) k: j[k]};
+    return {
+      for (final k in syncedKeys)
+        // An unreadable code is not "no code": it is not sent at all.
+        if (!(k == 'parentalPin' && parentalPinUnreadable)) k: j[k],
+    };
   }
 
   @override
@@ -181,12 +199,15 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
   /// the [allowed] keys; a malformed value leaves everything as it was.
   void _merge(Map<String, Object?> values, Set<String> allowed) {
     final current = _json()
-      ..['parentalPin'] = parentalPin
+      // An unreadable code stays as it is stored, so it stays unreadable.
+      ..['parentalPin'] = parentalPinUnreadable ? _unreadablePin : parentalPin
       ..['tmdbKey'] = tmdbKey;
     final merged = {
       ...current,
       for (final e in values.entries)
-        if (allowed.contains(e.key) && current.containsKey(e.key)) e.key: e.value,
+        if (allowed.contains(e.key) && current.containsKey(e.key))
+          // A code that could not be typed would lock everyone out.
+          if (e.key != 'parentalPin' || validPin(e.value)) e.key: e.value,
     };
     try {
       _read(merged);
@@ -213,7 +234,7 @@ class AppSettings extends ChangeNotifier implements SyncedSettings {
     'epgDays': epgDays,
     'volume': volume,
     'activeProfileId': activeProfileId,
-    'parentalPin': Secrets.protect(parentalPin),
+    'parentalPin': parentalPinUnreadable ? _unreadablePin : Secrets.protect(parentalPin),
     'tmdbKey': Secrets.protect(tmdbKey),
     'recordingsDir': recordingsDir,
     'reminderLeadMinutes': reminderLeadMinutes,

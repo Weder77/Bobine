@@ -85,4 +85,18 @@ void main() {
       }
     });
   });
+
+  test('a film that stops long before its end was cut, not finished', () {
+    const film = Duration(minutes: 100);
+    expect(PlayerService.endedEarly(position: const Duration(minutes: 40), duration: film), isTrue);
+    expect(PlayerService.endedEarly(position: const Duration(minutes: 99, seconds: 50), duration: film), isFalse);
+    expect(PlayerService.endedEarly(position: film, duration: film), isFalse);
+    // Unknown length: nothing to compare with.
+    expect(PlayerService.endedEarly(position: Duration.zero, duration: Duration.zero), isFalse);
+    // A short clip: half a minute of margin.
+    expect(
+      PlayerService.endedEarly(position: const Duration(seconds: 50), duration: const Duration(minutes: 1)),
+      isFalse,
+    );
+  });
 }

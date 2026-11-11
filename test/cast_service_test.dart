@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:bobine/cast/cast_device.dart';
+import 'package:bobine/cast/cast_keep_awake.dart';
 import 'package:bobine/cast/cast_media.dart';
 import 'package:bobine/cast/cast_service.dart';
 import 'package:bobine/cast/cast_session.dart';
@@ -32,8 +33,14 @@ class FakeSession implements CastSession {
 
   void push(RemoteStatus s) => _updates.add(next = s);
 
+  /// When set, the connection waits for it.
+  Completer<void>? connectGate;
+
   @override
-  Future<void> connect() async => actions.add('connect');
+  Future<void> connect() async {
+    actions.add('connect');
+    await connectGate?.future;
+  }
 
   @override
   List<String> contentTypesFor(String url, {required bool live}) =>
@@ -81,7 +88,7 @@ class FakeSession implements CastSession {
 const _tv = CastDevice(id: 'tv', name: 'Salon', protocol: CastProtocol.chromecast, host: '127.0.0.1', port: 8009);
 const _dlna = CastDevice(id: 'lg', name: 'Chambre', protocol: CastProtocol.dlna, host: '127.0.0.1', port: 1400);
 
-PlayItem _movie({String url = 'http://host:8080/movie/u/p/9.mkv'}) => PlayItem(
+PlayItem _movie({String url = 'http://host:8080/movie/u/p/9.mkv', bool localFile = false}) => PlayItem(
   kind: ContentKind.movie,
   sourceId: 1,
   extId: '9',
@@ -90,6 +97,7 @@ PlayItem _movie({String url = 'http://host:8080/movie/u/p/9.mkv'}) => PlayItem(
   subtitle: '2024',
   image: 'http://img/p.jpg',
   userAgent: 'VLC/3.0',
+  localFile: localFile,
 );
 
 PlayItem _channel() => const PlayItem(
@@ -227,6 +235,30 @@ void main() {
       expect(seenAgents.where((a) => a == 'VLC/3.0').length, greaterThanOrEqualTo(2));
     });
 
+    test('HLS: the TV never sees the provider addresses, and the token fetches nothing else', () async {
+      final link = await relay.publish(up('/hls/index.m3u8'), host: InternetAddress.loopbackIPv4, userAgent: 'VLC/3.0');
+      final body = utf8.decode((await _get(link)).$3);
+      // Neither the provider's host and port nor any of its paths (where an
+      // Xtream panel puts the login and password), in clear or encoded.
+      expect(body, isNot(contains('${upstream.port}')));
+      expect(body, isNot(contains('other')));
+      final links = body.split('\n').where((l) => l.isNotEmpty && !l.startsWith('#')).toList();
+      for (final l in links) {
+        expect(Uri.parse(l).pathSegments[3], matches(RegExp(r'^[0-9a-z]{1,4}$')));
+      }
+      // The same address keeps its id when the playlist is read again.
+      expect(utf8.decode((await _get(link)).$3), body);
+
+      // Whoever knows the token (the TV tells it) asks for another address:
+      // this computer, the router, a host only the VPN reaches.
+      final token = Uri.parse(link).pathSegments[1];
+      final origin = link.substring(0, link.indexOf('/c/'));
+      final other = base64Url.encode(utf8.encode(up('/movie.mp4'))).replaceAll('=', '');
+      for (final path in ['/c/$token/u/$other/x.mp4', '/c/$token/u/zz/x.ts', '/c/$token/u/-1/x.ts']) {
+        expect((await _get('$origin$path')).$1, 404, reason: path);
+      }
+    });
+
     test('HEAD refused by the provider; the TV gets the type it was told', () async {
       final link = await relay.publish(
         up('/nohead.mkv'),
@@ -275,7 +307,7 @@ void main() {
       expect((await _get('$origin/c/0000/m/x.ts')).$1, 404);
       // A file route cannot be used to fetch other addresses.
       final token = Uri.parse(link).pathSegments[1];
-      expect((await _get('$origin/c/$token/u/${encodeLink(Uri.parse(up('/live.ts')))}/x')).$1, 404);
+      expect((await _get('$origin/c/$token/u/0/x')).$1, 404);
       relay.clear();
       expect((await _get(link)).$1, 404);
       await dir.delete(recursive: true);
@@ -410,6 +442,19 @@ void main() {
       await none.stop();
     });
 
+    test('the computer is kept awake while the TV plays, and let sleep after', () async {
+      final calls = <bool>[];
+      final awake = CastKeepAwake(cast, localPlaying: () => false, toggle: (on) async => calls.add(on));
+      addTearDown(awake.dispose);
+      await cast.start(_tv, _movie());
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(awake.on, isTrue);
+      expect(calls, [true]);
+      await cast.stop();
+      expect(awake.on, isFalse);
+      expect(calls, [true, false]);
+    });
+
     test('search lists the devices by name', () async {
       await cast.scan();
       expect(cast.devices.value.map((d) => d.name), ['Chambre', 'Salon']);
@@ -484,9 +529,15 @@ void main() {
 
     test('recordings always go through the relay', () async {
       cast.setDirect(_dlna, true);
-      await cast.start(_dlna, _movie(url: r'C:\Videos\Bobine\film.ts'));
+      await cast.start(_dlna, _movie(url: r'C:\Videos\Bobine\film.ts', localFile: true));
       expect(session.loaded.single.$1.url, contains('/c/'));
       expect(cast.viaRelay, isTrue);
+    });
+
+    test('a file named by a playlist is not sent to the TV', () async {
+      await cast.start(_dlna, _movie(url: r'C:\Users\moi\bobine.db'));
+      expect(session.loaded, isEmpty);
+      expect(cast.error, PlayerService.refusedMessage);
     });
 
     test('controls, position between updates, and stop', () async {
@@ -569,6 +620,47 @@ void main() {
       // A film sent from its beginning to a TV that never started: no position.
       await slow.start(_tv, _movie());
       expect(await slow.stop(), isNull);
+    });
+
+    test('zapping while the TV connects: the last channel asked is the one played', () async {
+      final gate = Completer<void>();
+      final zapping = CastService(sessionFactory: (d) => session = FakeSession(d)..connectGate = gate);
+      addTearDown(zapping.stop);
+      final starting = zapping.start(_tv, _channel());
+      await Future<void>.delayed(Duration.zero);
+      await zapping.load(_movie());
+      expect(zapping.error, isNull);
+      expect(zapping.item.value!.extId, '9');
+      gate.complete();
+      await starting;
+      expect(session.loaded, hasLength(1));
+      expect(session.loaded.single.$1.title, 'Le film');
+      expect(zapping.error, isNull);
+    });
+
+    test('another device announced under the name of the TV takes nothing from it', () async {
+      const impostor = CastDevice(
+        id: 'tv',
+        name: 'Salon',
+        protocol: CastProtocol.chromecast,
+        host: '10.6.6.6',
+        port: 8009,
+      );
+      final scan = CastService(
+        sessionFactory: (d) => session = FakeSession(d),
+        browsers: [
+          (t, add) async {
+            add(_tv);
+            add(impostor);
+          },
+        ],
+      );
+      await scan.scan();
+      expect(scan.devices.value.single.host, '127.0.0.1');
+      // Direct mode chosen for the TV is not the impostor's.
+      scan.setDirect(_tv, true);
+      expect(scan.relayFor(_tv), isFalse);
+      expect(scan.relayFor(impostor), isTrue);
     });
 
     test('zapping loads the new channel on the same connection', () async {

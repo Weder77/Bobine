@@ -30,17 +30,24 @@ class ImportService extends ChangeNotifier {
   final Map<int, Future<void>> _chains = {};
   String? lastMessage;
 
-  bool isBusy(int sourceId) => _running.containsKey(sourceId);
   ImportStatus? status(int sourceId) => _running[sourceId];
   Iterable<ImportStatus> get running => _running.values;
 
   /// Refreshes content and/or EPG for [source]. Calls are serialised per source.
   Future<void> refresh(Source source, {bool content = true, bool epg = true, int epgDays = 3}) {
     final previous = _chains[source.id] ?? Future.value();
-    final next = previous.then((_) => _run(source, content: content, epg: epg, epgDays: epgDays));
+    _queued[source.id] = (_queued[source.id] ?? 0) + 1;
+    final next = previous
+        .then((_) => _run(source, content: content, epg: epg, epgDays: epgDays))
+        .whenComplete(() => _queued[source.id] = _queued[source.id]! - 1);
     _chains[source.id] = next.catchError((_) {});
     return next;
   }
+
+  final Map<int, int> _queued = {};
+
+  /// An import of [sourceId] is running or waiting its turn.
+  bool isBusy(int sourceId) => (_queued[sourceId] ?? 0) > 0;
 
   Future<void> _run(Source source, {required bool content, required bool epg, required int epgDays}) async {
     final id = source.id;
@@ -70,9 +77,12 @@ class ImportService extends ChangeNotifier {
           final n = await _spawnEpg(path, id, epgDays, send);
           if (n > 0) onEpgChanged(id);
         } catch (e) {
-          // A broken EPG must not fail the whole refresh.
-          debugPrint('EPG import failed: $e');
+          // A broken EPG must not fail the whole refresh, but is said with
+          // its result (it was only in the log).
+          final why = redactCredentials('$e');
+          debugPrint('EPG import failed: $why');
           if (!content) rethrow;
+          lastMessage = '${lastMessage ?? source.name} · guide non mis à jour : $why';
         }
       }
     } catch (e) {

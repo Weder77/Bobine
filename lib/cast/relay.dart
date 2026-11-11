@@ -19,6 +19,10 @@ import 'cast_media.dart';
 /// the relay as well.
 ///
 /// Only addresses published with [publish] are served, under a random token.
+/// The addresses of a rewritten playlist are served under short ids the
+/// relay hands out itself: the TV never sees them (they hold the account's
+/// identifiers), and the token, which the TV tells to any device that asks
+/// what it plays, cannot be used to fetch any other address.
 class CastRelay {
   CastRelay({HttpClient? client, this.onRequest})
     : _client =
@@ -31,6 +35,10 @@ class CastRelay {
             ..badCertificateCallback = (_, _, _) => true);
 
   final HttpClient _client;
+
+  /// One server per local address it is reached at (the one facing the
+  /// TV), not on every interface of the computer.
+  final Map<String, HttpServer> _servers = {};
   HttpServer? _server;
   final _routes = <String, _Route>{};
   final _random = Random.secure();
@@ -54,7 +62,8 @@ class CastRelay {
   /// [contentType] is the type announced to the TV; the main address is
   /// served with it.
   Future<String> publish(String target, {required InternetAddress host, String? userAgent, String? contentType}) async {
-    final server = _server ??= await _start();
+    final server = _servers[host.address] ??= await _start(host);
+    _server = server;
     final token = List.generate(16, (_) => _random.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
     final origin = 'http://${host.address}:${server.port}';
     final file = isLocalMedia(target);
@@ -71,8 +80,20 @@ class CastRelay {
   /// Forgets every published address (requests already running finish).
   void clear() => _routes.clear();
 
-  Future<HttpServer> _start() async {
-    final server = await HttpServer.bind(InternetAddress.anyIPv4, 0);
+  /// The cast ended: nothing is served any more until the next one (the
+  /// servers stayed open until the app closed).
+  Future<void> stopServing() async {
+    _routes.clear();
+    final servers = _servers.values.toList();
+    _servers.clear();
+    _server = null;
+    for (final s in servers) {
+      await s.close();
+    }
+  }
+
+  Future<HttpServer> _start(InternetAddress host) async {
+    final server = await HttpServer.bind(host, 0);
     server.idleTimeout = const Duration(seconds: 30);
     server.listen((req) {
       _handle(req).catchError((Object e) {
@@ -88,7 +109,10 @@ class CastRelay {
 
   Future<void> close() async {
     _routes.clear();
-    await _server?.close(force: true);
+    for (final s in _servers.values) {
+      await s.close(force: true);
+    }
+    _servers.clear();
     _server = null;
     _client.close(force: true);
   }
@@ -106,11 +130,7 @@ class CastRelay {
     if (route != null && seg[2] == 'm') {
       target = route.target;
     } else if (route != null && seg[2] == 'u' && seg.length >= 4 && !route.file) {
-      try {
-        target = utf8.decode(base64Url.decode(base64Url.normalize(seg[3])));
-      } on FormatException {
-        target = null;
-      }
+      target = route.links[seg[3]];
     }
     if (route != null) hits++;
     if (route == null || target == null || (req.method != 'GET' && req.method != 'HEAD')) {
@@ -171,7 +191,7 @@ class CastRelay {
           rewritePlaylist(
             text,
             finalUri,
-            (abs) => '${route.origin}/c/$token/u/${encodeLink(abs)}/${linkName(abs.toString())}',
+            (abs) => '${route.origin}/c/$token/u/${route.link(abs)}/${linkName(abs.toString())}',
           ),
         );
         res.statusCode = HttpStatus.ok;
@@ -379,6 +399,29 @@ class _Route {
   final String origin;
   final String userAgent;
   final String? contentType;
+
+  /// Addresses of the playlists rewritten for this route, by id.
+  final links = <String, String>{};
+  final _ids = <String, String>{};
+  var _next = 0;
+
+  /// Most addresses kept: a live playlist names new segments every few
+  /// seconds, the oldest ones are long played.
+  static const maxLinks = 4096;
+
+  /// The id [address] is served under.
+  String link(Uri address) {
+    final key = address.toString();
+    final known = _ids[key];
+    if (known != null) return known;
+    final id = (_next++).toRadixString(36);
+    _ids[key] = id;
+    links[id] = key;
+    while (links.length > maxLinks) {
+      _ids.remove(links.remove(links.keys.first));
+    }
+    return id;
+  }
 }
 
 /// Rewrites the addresses of an HLS playlist with [link] (absolute address
@@ -409,9 +452,6 @@ String rewritePlaylist(String text, Uri base, String Function(Uri absolute) link
   }
   return out.toString();
 }
-
-/// URL-safe form of an address, for the relay path.
-String encodeLink(Uri u) => base64Url.encode(utf8.encode(u.toString())).replaceAll('=', '');
 
 /// Last part of the address ("1234.ts"), kept so devices see the extension.
 String linkName(String target) {

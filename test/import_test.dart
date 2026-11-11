@@ -11,6 +11,7 @@ import 'package:bobine/data/import/xtream_api.dart';
 import 'package:bobine/data/models.dart';
 import 'package:bobine/data/repository.dart';
 import 'package:bobine/data/stream_urls.dart';
+import 'package:bobine/ui/launch.dart';
 
 String _xmltvTime(DateTime t) {
   final u = t.toUtc();
@@ -32,6 +33,9 @@ void main() {
   final now = DateTime.now();
   // Xtream actions answered with an error, and "the playlist is a web page".
   final broken = <String>{};
+  // Xtream actions answered 200 with an empty list, and an empty guide.
+  final emptied = <String>{};
+  var emptyGuide = false;
   var portal = false;
 
   setUpAll(() async {
@@ -73,6 +77,10 @@ void main() {
           }
           if (broken.contains(q['action'])) {
             res.statusCode = 500;
+            break;
+          }
+          if (emptied.contains(q['action'])) {
+            res.write('[]');
             break;
           }
           final data = switch (q['action']) {
@@ -124,14 +132,29 @@ void main() {
                 'backdrop_path': ['http://img/dark_b.jpg'],
               },
             ],
+            'get_series_info' => {
+              'info': {'name': 'Dark'},
+              'episodes': {
+                '1': [
+                  {'id': '7701', 'episode_num': 1, 'title': 'Secrets', 'container_extension': 'mkv'},
+                  {'id': '7702', 'episode_num': 2, 'title': 'Mensonges', 'container_extension': 'mkv'},
+                ],
+              },
+            },
             _ => <Object>[],
           };
           res.write(jsonEncode(data));
         case '/xmltv.php':
+          if (emptyGuide) {
+            res.write('<?xml version="1.0"?><tv></tv>');
+            break;
+          }
           final xml = StringBuffer('<?xml version="1.0"?><tv>');
           xml.write('<channel id="CH0"><display-name>Chaîne 0</display-name></channel>');
           xml.write('<channel id="ch1"><display-name>Chaîne 1</display-name></channel>');
-          for (final id in ['CH0', 'ch1']) {
+          // A channel the source does not have.
+          xml.write('<channel id="zz"><display-name>Ailleurs</display-name></channel>');
+          for (final id in ['CH0', 'ch1', 'zz']) {
             var t = now.subtract(const Duration(hours: 3));
             for (var i = 0; i < 24; i++) {
               final e = t.add(const Duration(minutes: 30));
@@ -182,6 +205,9 @@ void main() {
 
     final kept = await importEpg(path, id, 3, null);
     expect(kept, greaterThan(20));
+    // The programmes of a channel this source does not have are not kept.
+    expect(repo.db.select("SELECT 1 FROM epg_programs WHERE channel = 'zz'"), isEmpty);
+    expect(repo.db.select("SELECT 1 FROM epg_programs WHERE channel = 'ch0'"), isNotEmpty);
 
     final epg = EpgCache(repo);
     final channels = repo.channels(id);
@@ -246,6 +272,66 @@ void main() {
     final list = repo.channels(id);
     expect(epg.now(list[0]), isNotNull);
     expect(epg.now(list[1]), isNotNull);
+  });
+
+  test('after an Xtream refresh, the episodes of a series are asked again to resume', () async {
+    final path = '${tmp.path}/episodes.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'X', type: SourceType.xtream, url: base, username: 'u', password: 'p');
+    await importXtream(path, id, null);
+    final dark = repo.seriesByExt(id, '77')!;
+    // Opened once: the episodes are kept. A refresh empties them again.
+    expect((await loadEpisodes(repo, dark)).map((e) => e.extId), ['7701', '7702']);
+    await importXtream(path, id, null);
+    expect(repo.episodes(id, '77'), isEmpty);
+    final again = await loadEpisodes(repo, dark);
+    expect(again.map((e) => e.extId), ['7701', '7702']);
+    expect(repo.episodes(id, '77'), hasLength(2));
+  });
+
+  test('an empty list in a good answer does not empty the source', () async {
+    final path = '${tmp.path}/emptied.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'XT', type: SourceType.xtream, url: '$base/', username: 'u', password: 'p');
+    await importXtream(path, id, null);
+    addTearDown(emptied.clear);
+
+    // "[]" for the channels: nothing is touched, and it is said.
+    emptied.add('get_live_streams');
+    await expectLater(importXtream(path, id, null), throwsA(predicate((e) => '$e'.contains('aucune chaîne'))));
+    expect(repo.channels(id), hasLength(300));
+    expect(repo.movies(id), hasLength(2));
+
+    // "[]" for the films or the series: they stay, the rest is refreshed.
+    emptied
+      ..clear()
+      ..addAll(['get_vod_streams', 'get_series']);
+    final r = await importXtream(path, id, null);
+    expect(r.live, 300);
+    expect(repo.movies(id), hasLength(2));
+    expect(repo.series(id).single.name, 'Dark');
+    expect(repo.source(id)!.lastError, allOf(contains('Films'), contains('Séries')));
+  });
+
+  test('an empty or unreadable guide keeps the one the source has', () async {
+    final path = '${tmp.path}/emptyguide.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(
+      name: 'XT',
+      type: SourceType.xtream,
+      url: '$base/',
+      username: 'u',
+      password: 'p',
+      epgUrl: '$base/xmltv.php',
+    );
+    final kept = await importEpg(path, id, 3, null);
+    expect(kept, greaterThan(0));
+    final at = repo.source(id)!.epgUpdatedAt;
+    emptyGuide = true;
+    addTearDown(() => emptyGuide = false);
+    await expectLater(importEpg(path, id, 3, null), throwsA(predicate((e) => '$e'.contains('guide reçu est vide'))));
+    expect(repo.db.select('SELECT count(*) AS n FROM epg_programs WHERE source_id = ?', [id]).first['n'], kept);
+    expect(repo.source(id)!.epgUpdatedAt, at, reason: 'not marked up to date: asked again next time');
   });
 
   test('a list that fails to download keeps what the source had, and says so', () async {
@@ -385,17 +471,23 @@ void main() {
     raw.execute(
       "INSERT INTO sources (id, name, type, url, created_at) VALUES (1, 'old', 'm3u', 'http://x/list.m3u', 0)",
     );
+    raw.execute(
+      "INSERT INTO sources (id, name, type, url, created_at) VALUES (2, 'tls', 'm3u', 'https://y/list.m3u', 1)",
+    );
     raw.execute("INSERT INTO favorites VALUES (1, 'movie', 'm42', 5)");
     raw.execute("INSERT INTO progress VALUES (1, 'movie', 'm42', 60000, 600000, 0, 7, 'Film', NULL, NULL, NULL)");
     raw.close();
     final repo = track(Repository(openAppDatabase(path)));
     expect(repo.db.select('PRAGMA user_version').first.columnAt(0), kSchemaVersion);
-    final src = repo.sources().single;
+    final src = repo.sources().firstWhere((s) => s.id == 1);
     expect(src.epgOffsetMinutes, 0);
     expect(src.url, 'http://x/list.m3u');
+    // v10: an https source made before keeps accepting its certificate.
+    expect(src.acceptInvalidCertificate, isFalse);
+    expect(repo.source(2)!.acceptInvalidCertificate, isTrue);
     expect(repo.profiles().single.id, 1);
     // v5: ids shared by all devices, the first profile is the same everywhere.
-    expect(repo.db.select('SELECT uid FROM sources').single['uid'], matches(RegExp(r'^[0-9a-f]{32}$')));
+    expect(repo.db.select('SELECT uid FROM sources WHERE id = 1').single['uid'], matches(RegExp(r'^[0-9a-f]{32}$')));
     expect(repo.db.select('SELECT uid FROM profiles').single['uid'], kDefaultProfileUid);
     expect(repo.profiles().single.avatar, isNull); // v6: the initial, as before
     expect(repo.favoriteKeys(1, ContentKind.movie), {'m42'});
@@ -422,5 +514,13 @@ void main() {
   test('schema opens in memory', () {
     final db = openMemoryDatabase();
     expect(Repository(db).sources(), isEmpty);
+  });
+
+  test('data made by a newer Bobine is not opened by this one', () {
+    final path = '${tmp.path}/newer.db';
+    openAppDatabase(path)
+      ..execute('PRAGMA user_version = ${kSchemaVersion + 1}')
+      ..close();
+    expect(() => openAppDatabase(path), throwsA(isA<NewerDatabaseException>()));
   });
 }

@@ -55,7 +55,10 @@ class CastVariantResult {
 }
 
 /// The variants worth trying for [target] on a TV accepting [sink].
-List<CastVariant> castVariants(String target, List<String> sink, {required bool live}) {
+///
+/// The provider's address itself (with the account's identifiers in it,
+/// sent in clear on the network) is tried only with [direct].
+List<CastVariant> castVariants(String target, List<String> sink, {required bool live, bool direct = false}) {
   final base = castContentType(target, live: live, protocol: CastProtocol.dlna);
   final out = <CastVariant>[
     CastVariant('$base, description de Bobine', mime: base),
@@ -75,7 +78,7 @@ List<CastVariant> castVariants(String target, List<String> sink, {required bool 
   }
   if (base != 'video/mp4') out.add(const CastVariant('video/mp4 (type forcé)', mime: 'video/mp4'));
   if (base != 'video/mpeg' && !live) out.add(const CastVariant('video/mpeg (type forcé)', mime: 'video/mpeg'));
-  if (target.startsWith('http://') || target.startsWith('https://')) {
+  if (direct && (target.startsWith('http://') || target.startsWith('https://'))) {
     out.add(CastVariant('adresse du fournisseur en direct, $base', mime: base, direct: true));
   }
   // Same variant twice (e.g. no spelling of its own): once is enough.
@@ -124,8 +127,14 @@ class CastTester {
   }
 
   /// Runs every variant; stops at the first one the TV plays unless [all].
-  Future<List<CastVariantResult>> run(String target, {required bool live, String? userAgent, bool all = false}) async {
-    final variants = castVariants(target, session.sink, live: live);
+  Future<List<CastVariantResult>> run(
+    String target, {
+    required bool live,
+    String? userAgent,
+    bool all = false,
+    bool direct = false,
+  }) async {
+    final variants = castVariants(target, session.sink, live: live, direct: direct);
     final results = [for (final v in variants) CastVariantResult(v)];
     say('Étape 1 : ce que la télé accepte (${variants.length} façons de présenter la vidéo)');
     for (final (i, r) in results.indexed) {

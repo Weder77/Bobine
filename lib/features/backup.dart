@@ -22,6 +22,9 @@ class RestoreReport {
   /// here. Their favourites and progress were skipped.
   final List<String> skippedProfiles = [];
 
+  /// Rows of the file left out: their values were not of the right kind.
+  int damaged = 0;
+
   @override
   String toString() => [
     if (sourcesCreated > 0) '$sourcesCreated source(s) ajoutée(s)',
@@ -38,6 +41,7 @@ class RestoreReport {
       'rien de nouveau, tout était déjà là',
     if (skippedSources.isNotEmpty) 'ignoré : ${skippedSources.join(', ')} (source absente)',
     if (skippedProfiles.isNotEmpty) 'ignoré : ${skippedProfiles.join(', ')} (${Profile.max} profils au maximum)',
+    if (damaged > 0) '$damaged ligne(s) illisible(s) ignorée(s)',
   ].join(' · ');
 }
 
@@ -91,6 +95,7 @@ class BackupService {
             'fingerprint': sourceFingerprint(s),
             'liveFormat': s.liveFormat,
             'epgOffset': s.epgOffsetMinutes,
+            if (s.acceptInvalidCertificate) 'acceptInvalidCertificate': true,
             'userAgent': s.userAgent,
             if (credentials) ...{'url': s.url, 'username': s.username, 'password': s.password, 'epgUrl': s.epgUrl},
           },
@@ -131,13 +136,75 @@ class BackupService {
     if (j['format'] != format && !_legacyFormats.contains(j['format'])) {
       throw BackupException("Ce fichier n'est pas une sauvegarde Bobine.");
     }
-    if ((j['version'] as int? ?? 0) > version) {
+    final v = j['version'];
+    if (v != null && v is! int) throw BackupException("Ce fichier n'est pas une sauvegarde Bobine lisible.");
+    if (((v as int?) ?? 0) > version) {
       throw BackupException('Sauvegarde faite par une version plus récente de Bobine : mets l’app à jour.');
     }
     final report = RestoreReport();
-    List<Map<String, Object?>> list(String key) => [
-      for (final r in (j[key] as List? ?? const [])) (r as Map).cast<String, Object?>(),
-    ];
+    List<Map<String, Object?>> list(String key) {
+      final raw = j[key];
+      return [
+        if (raw is List)
+          for (final r in raw)
+            if (r is Map) r.cast<String, Object?>(),
+      ];
+    }
+
+    // A row is written only when its values have the types the tables
+    // expect: one that does not (a damaged or hand-edited file) used to
+    // break "Reprendre" here and, through the account, on the other devices.
+    bool id(Object? v) => v is int && v >= 0 && v < 1 << 53;
+    bool text(Object? v) => v is String && v.isNotEmpty;
+    bool textOrNull(Object? v) => v == null || v is String;
+    bool flag(Object? v) => v == 0 || v == 1;
+    bool kind(Object? v) => v is String && ContentKind.values.any((k) => k.db == v);
+    bool intOrNull(Object? v) => v == null || v is int;
+    final rowOk = <String, bool Function(Map<String, Object?>)>{
+      'sources': (r) =>
+          id(r['id']) &&
+          r['name'] != null &&
+          textOrNull(r['url']) &&
+          textOrNull(r['username']) &&
+          textOrNull(r['password']) &&
+          textOrNull(r['epgUrl']) &&
+          textOrNull(r['userAgent']) &&
+          textOrNull(r['liveFormat']) &&
+          intOrNull(r['epgOffset']),
+      'profiles': (r) => id(r['id']) && r['name'] != null && intOrNull(r['color']) && intOrNull(r['kids']),
+      'favorites': (r) => kind(r['kind']) && text(r['ext_id']) && id(r['added_at']),
+      'progress': (r) =>
+          kind(r['kind']) &&
+          text(r['ext_id']) &&
+          id(r['position_ms']) &&
+          id(r['duration_ms']) &&
+          flag(r['finished']) &&
+          id(r['updated_at']) &&
+          r['title'] is String &&
+          textOrNull(r['subtitle']) &&
+          textOrNull(r['image']) &&
+          textOrNull(r['series_ext']),
+      'recent_channels': (r) => text(r['ext_id']) && id(r['watched_at']),
+      'category_prefs': (r) =>
+          kind(r['kind']) &&
+          text(r['ext_id']) &&
+          flag(r['hidden']) &&
+          flag(r['locked']) &&
+          (r['position'] == null || id(r['position'])),
+      'channel_prefs': (r) => text(r['ext_id']) && flag(r['hidden']),
+      'reminders': (r) =>
+          text(r['channel_ext']) &&
+          r['channel_name'] is String &&
+          r['title'] is String &&
+          id(r['start']) &&
+          id(r['stop']),
+    };
+    List<Map<String, Object?>> rows(String key) {
+      final all = list(key);
+      final ok = all.where(rowOk[key]!).toList();
+      report.damaged += all.length - ok.length;
+      return ok;
+    }
 
     // Everything in one transaction: a busy database (an import running) is
     // said so before anything is written, and a restore that fails halfway
@@ -153,7 +220,7 @@ class BackupService {
       // else created from the file when it carries the credentials.
       final sources = <int, int>{};
       final local = _repo.sources();
-      for (final b in list('sources')) {
+      for (final b in rows('sources')) {
         final type = b['type'] == 'xtream' ? SourceType.xtream : SourceType.m3u;
         final match =
             local.where((s) => sourceFingerprint(s) == b['fingerprint']).firstOrNull ??
@@ -172,6 +239,7 @@ class BackupService {
             userAgent: b['userAgent'] as String?,
             liveFormat: (b['liveFormat'] as String?) ?? 'ts',
             epgOffset: (b['epgOffset'] as int?) ?? 0,
+            acceptInvalidCertificate: b['acceptInvalidCertificate'] == true,
           );
           report.sourcesCreated++;
         } else {
@@ -183,7 +251,7 @@ class BackupService {
       final profiles = <int, int>{};
       final skippedProfiles = <Object?>{};
       final localProfiles = _repo.profiles();
-      for (final b in list('profiles')) {
+      for (final b in rows('profiles')) {
         final name = '${b['name']}';
         final avatar = b['avatar'] is String ? b['avatar'] as String : null;
         final match = localProfiles.where((p) => p.name.toLowerCase() == name.toLowerCase()).firstOrNull;
@@ -212,7 +280,7 @@ class BackupService {
       // Null for the rows of a profile left out.
       int? prof(Map<String, Object?> r) =>
           skippedProfiles.contains(r['profile_id']) ? null : profiles[r['profile_id']] ?? 1;
-      for (final r in list('favorites')) {
+      for (final r in rows('favorites')) {
         final s = src(r), p = prof(r);
         if (s == null || p == null) continue;
         db.execute(
@@ -221,7 +289,7 @@ class BackupService {
         );
         report.favorites += db.updatedRows;
       }
-      for (final r in list('progress')) {
+      for (final r in rows('progress')) {
         final s = src(r), p = prof(r);
         if (s == null || p == null) continue;
         db.execute(
@@ -247,7 +315,7 @@ class BackupService {
         );
         report.progress += db.updatedRows;
       }
-      for (final r in list('recent_channels')) {
+      for (final r in rows('recent_channels')) {
         final s = src(r), p = prof(r);
         if (s == null || p == null) continue;
         db.execute(
@@ -257,7 +325,7 @@ class BackupService {
         );
         report.other++;
       }
-      for (final r in list('category_prefs')) {
+      for (final r in rows('category_prefs')) {
         final s = src(r);
         if (s == null) continue;
         db.execute(
@@ -266,7 +334,7 @@ class BackupService {
         );
         report.other++;
       }
-      for (final r in list('channel_prefs')) {
+      for (final r in rows('channel_prefs')) {
         final s = src(r);
         if (s == null) continue;
         db.execute('INSERT OR REPLACE INTO channel_prefs (source_id, ext_id, hidden) VALUES (?, ?, ?)', [
@@ -276,7 +344,7 @@ class BackupService {
         ]);
         report.other++;
       }
-      for (final r in list('reminders')) {
+      for (final r in rows('reminders')) {
         final s = src(r), p = prof(r);
         if (s == null || p == null) continue;
         db.execute(

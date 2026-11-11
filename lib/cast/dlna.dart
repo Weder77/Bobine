@@ -9,6 +9,7 @@ import 'cast_device.dart';
 import 'cast_log.dart';
 import 'cast_media.dart';
 import 'cast_session.dart';
+import 'cast_xml.dart';
 
 /// Drives a DLNA / UPnP media renderer (SOAP on its AVTransport and
 /// RenderingControl services). Polled: renderers rarely send events reliably.
@@ -114,8 +115,12 @@ class DlnaSession implements CastSession {
     } on CastException {
       // Some start by themselves and answer an error to Play: check below.
     }
-    if (start != null && start.inSeconds > 5 && !media.live) unawaited(_seekWhenPlaying(start));
+    if (start != null && start.inSeconds > 5 && !media.live) unawaited(_seekWhenPlaying(start, ++_loads));
   }
+
+  /// Media loaded so far: a resume waiting for the stream to start belongs
+  /// to one of them, and is dropped once another is loaded (or stopped).
+  int _loads = 0;
 
   /// " (listé par la télé)" or the formats of the same family it lists, for the log.
   String _listed(String mime) {
@@ -128,11 +133,15 @@ class DlnaSession implements CastSession {
   }
 
   /// Renderers only accept a seek once the stream has started.
-  Future<void> _seekWhenPlaying(Duration to) async {
+  Future<void> _seekWhenPlaying(Duration to, int load) async {
     for (var i = 0; i < 20; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 700));
+      // Applied to the next media, it jumped into it at the first one's place.
+      if (load != _loads) return;
       try {
         final state = await _transportState();
+        // Another media may have been loaded while the TV answered.
+        if (load != _loads) return;
         if (state == 'PLAYING' || state == 'PAUSED_PLAYBACK') {
           await seek(to);
           return;
@@ -167,6 +176,7 @@ class DlnaSession implements CastSession {
   @override
   Future<void> stop() async {
     _stopping = true;
+    _loads++; // a resume still waiting is dropped
     await _av('Stop', const [('InstanceID', '0')]);
   }
 
@@ -271,7 +281,7 @@ class DlnaSession implements CastSession {
       req.contentLength = body.length;
       req.add(body);
       final res = await req.close().timeout(timeout);
-      final text = await res.transform(const Utf8Decoder(allowMalformed: true)).join().timeout(timeout);
+      final text = await readDeviceAnswer(res, timeout: timeout);
       if (res.statusCode >= 300) {
         final code = soapValue(text, 'errorCode');
         final description = soapValue(text, 'errorDescription');
@@ -319,9 +329,8 @@ String soapEnvelope(String type, String action, List<(String, String)> args) {
 
 /// Text of the element [name] in a SOAP answer (namespace prefix ignored).
 String? soapValue(String xml, String name) {
-  final m = RegExp('<(?:[\\w-]+:)?$name(?:\\s[^>]*)?>(.*?)</(?:[\\w-]+:)?$name\\s*>', dotAll: true).firstMatch(xml);
-  if (m == null) return null;
-  return decodeEntities(m.group(1)!.trim());
+  final v = xmlElements(xml, name, caseSensitive: true).firstOrNull;
+  return v == null ? null : decodeEntities(v.trim());
 }
 
 String xmlEscape(String s) => s

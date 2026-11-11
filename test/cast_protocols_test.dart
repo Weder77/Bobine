@@ -121,6 +121,27 @@ void main() {
       expect(tv.add(dnsRecords(_chromecastAnswer(fn: 'Chambre')), from).single.name, 'Chambre');
     });
 
+    test('a full table still follows the devices it knows', () {
+      final answers = ChromecastAnswers();
+      final from = InternetAddress('192.168.1.42');
+      expect(answers.add(dnsRecords(_chromecastAnswer(fn: 'Salon')), from), hasLength(1));
+      // Forged answers fill the table…
+      for (var i = 0; i < ChromecastAnswers.maxEntries + 5; i++) {
+        final instance = 'Faux-$i._googlecast._tcp.local';
+        answers.add(
+          dnsRecords(
+            _DnsWriter.answer(
+              count: 1,
+              (w) => w.record(ChromecastBrowser.service, DnsType.ptr, () => w.name(instance)),
+            ),
+          ),
+          InternetAddress('192.168.1.${100 + i % 100}'),
+        );
+      }
+      // …and the known device's new name still comes through.
+      expect(answers.add(dnsRecords(_chromecastAnswer(fn: 'Chambre')), from).single.name, 'Chambre');
+    });
+
     test('a bare PTR asks for details; the responder address is used without A record', () {
       const instance = 'Google-TV-ffffffffffffffffffffffffffffffff._googlecast._tcp.local';
       final answers = ChromecastAnswers();
@@ -225,6 +246,95 @@ void main() {
 <serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType><controlURL>/cd</controlURL>
 </service></serviceList></device></root>''';
       expect(parseUpnpDescription(server, Uri.parse('http://10.0.0.6/')), isNull);
+    });
+
+    test('the volume and format addresses of a description stay on its network too', () {
+      const xml = '''<root><device><friendlyName>TV</friendlyName><serviceList>
+<service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType><controlURL>/av</controlURL></service>
+<service><serviceType>urn:schemas-upnp-org:service:RenderingControl:1</serviceType>
+<controlURL>http://203.0.113.9/rc</controlURL></service>
+<service><serviceType>urn:schemas-upnp-org:service:ConnectionManager:1</serviceType>
+<controlURL>http://127.0.0.1:8080/cm</controlURL></service>
+</serviceList></device></root>''';
+      final d = parseUpnpDescription(xml, Uri.parse('http://192.168.1.20:9197/desc.xml'))!;
+      expect(d.avTransport, Uri.parse('http://192.168.1.20:9197/av'));
+      expect(d.renderingControl, isNull);
+      expect(d.connectionManager, isNull);
+    });
+
+    test('a file of this computer is a path or file://, not an rtsp or udp stream', () {
+      for (final local in [r'C:\Videos\Bobine\x.ts', '/home/moi/x.ts', 'file:///home/moi/x.ts']) {
+        expect(isLocalMedia(local), isTrue, reason: local);
+      }
+      for (final stream in ['rtsp://cam/x', 'udp://@239.0.0.1:1234', 'http://h/x.ts', 'RTMP://h/app']) {
+        expect(isLocalMedia(stream), isFalse, reason: stream);
+      }
+    });
+
+    test('an answer is followed only to the device that sent it, or its own network', () {
+      final tv = InternetAddress('192.168.1.20');
+      expect(answerMayPointTo('192.168.1.20', tv), isTrue);
+      expect(answerMayPointTo('192.168.1.21', tv), isTrue, reason: 'same /24');
+      for (final elsewhere in ['127.0.0.1', '192.168.2.1', '10.0.0.1', '8.8.8.8', 'tv.example', '']) {
+        expect(answerMayPointTo(elsewhere, tv), isFalse, reason: elsewhere);
+      }
+      // A description that sends the controls to this computer or the Internet.
+      const xml = '''<root><URLBase>http://127.0.0.1:8080/</URLBase><device><friendlyName>Piège</friendlyName>
+<serviceList><service><serviceType>urn:schemas-upnp-org:service:AVTransport:1</serviceType>
+<controlURL>/ctl</controlURL></service></serviceList></device></root>''';
+      expect(parseUpnpDescription(xml, Uri.parse('http://192.168.1.20:9197/d.xml')), isNull);
+      expect(
+        parseUpnpDescription(xml.replaceFirst('127.0.0.1', '192.168.1.20'), Uri.parse('http://192.168.1.20/')),
+        isNotNull,
+      );
+    });
+
+    test('hostile descriptions: tags read in linear time, answers read up to a limit', () async {
+      // Thousands of opening tags never closed used to cost quadratic time.
+      final hostile = '<root>${'<service>' * 20000}${'<friendlyName>' * 20000}</root>';
+      final sw = Stopwatch()..start();
+      expect(parseUpnpDescription(hostile, Uri.parse('http://192.168.1.20/')), isNull);
+      expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(soapValue('<a>${'<Sink>' * 20000}', 'Sink'), isNull);
+
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      server.listen((req) async {
+        // An endless description.
+        for (var i = 0; i < 2000; i++) {
+          req.response.add(List.filled(1024, 0x41));
+          await req.response.flush();
+        }
+        await req.response.close();
+      });
+      final client = HttpClient();
+      addTearDown(client.close);
+      await expectLater(
+        DlnaBrowser.fetchDescription(client, Uri.parse('http://127.0.0.1:${server.port}/desc.xml')),
+        throwsA(isA<HttpException>()),
+      );
+    });
+  });
+
+  group('mDNS answers that cannot be trusted', () {
+    test('a name built from compression pointers is cut at 255 bytes, records are bounded', () {
+      // A label of 60 bytes pointing back to itself through 5 pointers.
+      final p = BytesBuilder()
+        ..add([0, 0, 0x84, 0, 0, 0, 0xFF, 0xFF, 0, 0, 0, 0]) // 65535 answers claimed
+        ..add([60, ...List.filled(60, 0x61), 0xC0, 12]);
+      expect(dnsRecords(p.toBytes()), isEmpty);
+    });
+
+    test('an answer cannot send the device to an address outside the responder network', () {
+      final answers = ChromecastAnswers();
+      const instance = 'Salon-1234._googlecast._tcp.local';
+      final devices = answers.add([
+        DnsRecord(ChromecastBrowser.service, DnsType.ptr, ptr: instance),
+        DnsRecord(instance, DnsType.txt, txt: const {'id': 'abc', 'fn': 'Salon', 'ca': '5'}),
+        DnsRecord(instance, DnsType.srv, port: 8009, target: 'salon.local'),
+        DnsRecord('salon.local', DnsType.a, address: InternetAddress('127.0.0.1')),
+      ], InternetAddress('192.168.1.30'));
+      expect(devices.single.host, '192.168.1.30');
     });
   });
 
@@ -462,6 +572,39 @@ void main() {
       expect(out.first.destination, 'receiver-0');
       expect(out.first.namespace, CastNs.receiver);
       expect(out.last.json['t'], 'é');
+    });
+
+    test('a malformed message is refused, never a loop or another error', () {
+      // A 10-byte length with its sign bit set (-11): it sent the reader
+      // back to the start of the message, for ever.
+      for (final bad in [
+        [0x0A, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01],
+        [0x12, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01],
+        [0x0A, 0x80], // truncated number
+        [0x12, 0x05, 0x61], // length past the end
+        [0x09, 0x01, 0x02], // 8-byte field cut short
+        [0x0D, 0x01], // 4-byte field cut short
+        [0x08], // number missing
+      ]) {
+        expect(() => decodeCastMessage(Uint8List.fromList(bad)), throwsFormatException, reason: '$bad');
+      }
+    });
+
+    test('a device that sends garbage loses the connection', () async {
+      final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(server.close);
+      server.listen((c) {
+        // Framed as one message of 11 bytes, its content the looping one.
+        c.add([0, 0, 0, 11, 0x0A, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01]);
+      });
+      final s = ChromecastSession(
+        const CastDevice(id: 'cc', name: 'Faux', protocol: CastProtocol.chromecast, host: '127.0.0.1', port: 0),
+        connector: (host, port, timeout) => Socket.connect(host, server.port, timeout: timeout),
+      );
+      final lost = s.updates.firstWhere((u) => u.state == RemoteState.error).timeout(const Duration(seconds: 3));
+      await s.connect();
+      expect((await lost).error, 'Connexion perdue avec la télé.');
+      await s.close();
     });
 
     test('launches the media receiver, loads, controls and quits', () async {

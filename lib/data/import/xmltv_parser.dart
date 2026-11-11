@@ -146,7 +146,8 @@ class XmltvParser {
     return all.first.text;
   }
 
-  static final _attrRe = RegExp(r'''([\w\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)')''');
+  // Look-behind: see the M3U parser, a long tag without "=" was slow.
+  static final _attrRe = RegExp(r'''(?<![\w\-:])([\w\-:]+)\s*=\s*(?:"([^"]*)"|'([^']*)')''');
 
   static Map<String, String> _attributes(String tag) {
     final out = <String, String>{};
@@ -254,7 +255,9 @@ int? parseXmltvTime(String? v) {
   int? n(int a, int b) => b <= s.length ? int.tryParse(s.substring(a, b)) : null;
   final year = n(0, 4), month = n(4, 6), day = n(6, 8), hour = n(8, 10), minute = n(10, 12);
   if (year == null || month == null || day == null || hour == null || minute == null) return null;
-  final hasSeconds = s.length >= 14 && int.tryParse(s.substring(12, 14)) != null;
+  // Two digits: "202401312030+0100" read "+0" as seconds, and its zone was
+  // lost (the programme shown at UTC time).
+  final hasSeconds = s.length >= 14 && RegExp(r'^\d\d$').hasMatch(s.substring(12, 14));
   final second = hasSeconds ? n(12, 14)! : 0;
   var offsetSec = 0;
   final rest = s.substring(hasSeconds ? 14 : 12).trim();

@@ -279,6 +279,37 @@ http://srv/plain/stream4.ts
       expect(channelMatchKey('|FR| France 2 FHD'), 'france2');
       expect(channelMatchKey('France 2'), 'france2');
       expect(channelMatchKey('Canal+ Sport (Backup)'), 'canalsport');
+      expect(channelMatchKey('FR | TF1'), 'tf1');
+      expect(channelMatchKey('[UK] BBC One'), 'bbcone');
+      // Other alphabets are kept, and two channels do not get the key "1".
+      expect(channelMatchKey('Россия 1 HD'), 'россия1');
+      expect(channelMatchKey('БНТ 1'), 'бнт1');
+      expect(channelMatchKey('الجزيرة'), isNotEmpty);
+      expect(channelMatchKey('Первый канал'), 'первыйканал');
+      // A dash is part of a name, not a country.
+      expect(channelMatchKey('BBC-One'), 'bbcone');
+      expect(channelMatchKey('RMC-Sport 1'), isNot(channelMatchKey('Sky-Sport 1')));
+      // Nothing to tell the channel by.
+      expect(channelMatchKey('13'), '');
+      expect(channelMatchKey('FR: 1 HD'), '');
+    });
+
+    test('a very long line is read at once', () {
+      final sw = Stopwatch()..start();
+      final n = 200000;
+      M3uParser.parseAttributes('a' * n);
+      parseEpisode('a ${'- ' * n}');
+      parseEpisode('${'- ' * n}S01E02');
+      channelMatchKey('(' * n);
+      channelMatchKey('[a' * n);
+      final entries = <M3uEntry>[];
+      M3uParser(entries.add)
+        ..addLine('#EXTM3U')
+        ..addLine('#EXTINF:-1 ${'a' * n},${'(' * n}')
+        ..addLine('http://h/1.ts');
+      expect(entries.single.name.length, kMaxEntryName);
+      expect(sw.elapsed, lessThan(const Duration(seconds: 2)));
+      expect(parseEpisode('Lupin - - S01E03')!.seriesName, 'Lupin');
     });
 
     test('filter words match in any order', () {
@@ -326,6 +357,29 @@ http://srv/plain/stream4.ts
         'DB write failed: SqliteException(5): database is locked\n'
         '  Causing statement: UPDATE sources SET password = ? WHERE id = ?, parameters: ***',
       );
+      // The shapes that used to come out whole.
+      for (final (raw, masked) in [
+        ('http://h.tv/playlist/bob/s3cret/m3u_plus', 'http://h.tv/playlist/bob/***/m3u_plus'),
+        ('http://h.tv/timeshifts/bob/s3cret/60/5.ts', 'http://h.tv/timeshifts/bob/***/60/5.ts'),
+        ('http://h.tv/hlsr/t0k3nAbc/bob/s3cret/5.m3u8', 'http://h.tv/hlsr/***/5.m3u8'),
+        ('http://h.tv/hls/TOKENSECRET/123_45.ts', 'http://h.tv/hls/***/123_45.ts'),
+        ('http://h.tv/play/AbC123xYz789/ts', 'http://h.tv/play/***/ts'),
+        ('http://h.tv/x?play_token=AAAA1111&refresh_token=BBBB2222', 'http://h.tv/x?play_token=***&refresh_token=***'),
+        ('http://h.tv/x?sign=CCCC3333&hash=DDDD4444&n=1', 'http://h.tv/x?sign=***&hash=***&n=1'),
+        ('http://h.tv/x?wmsAuthSign=EEEE&auth_key=FFFF', 'http://h.tv/x?wmsAuthSign=***&auth_key=***'),
+        ('http://h.tv/x?client_secret=GGGG', 'http://h.tv/x?client_secret=***'),
+        (
+          'http://r/?u=http%3A%2F%2Fh%2Fa%3Fpassword%3Ds3cret%26x%3D1',
+          'http://r/?u=http%3A%2F%2Fh%2Fa%3Fpassword%3D***%26x%3D1',
+        ),
+        ('Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.SECRET', 'Authorization: Bearer ***'),
+        ('{"username":"bob","password":"s3cret"}', '{"username":"bob","password":"***"}'),
+        ('{"refresh_token": "abc\\"def"}', '{"refresh_token": "***"}'),
+        ('Failed to open http://h/bob/s3cret/123:', 'Failed to open http://h/bob/***/123:'),
+        ('x, parameters: s3cret,\nsuite s3cret', 'x, parameters: ***'),
+      ]) {
+        expect(redactCredentials(raw), masked, reason: raw);
+      }
       // Ordinary addresses and the relay's own are left readable.
       for (final plain in [
         'https://github.com/Weder77/Bobine/releases/tag/v1.6.5',

@@ -41,15 +41,32 @@ class _SearchScreenState extends State<SearchScreen> {
   /// "Tendances" of the empty page, worked out once (it reads the catalogue).
   List<Object>? _trends;
 
+  /// What the results were made for: when it changes (an import, another
+  /// source, categories locked again, another profile), they are made
+  /// again. Results locked since, or of another source, stayed on screen.
+  (int, int?, bool, int)? _madeFor;
+  (int, int?, bool, int) get _context =>
+      (_s.library.content, _s.activeSource?.id, _s.repo.hideLocked, _s.repo.profileId);
+
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onChanged);
+    _s.library.addListener(_onLibrary);
+    _madeFor = _context;
+    _run(widget.controller.text);
+  }
+
+  void _onLibrary() {
+    if (!mounted || _context == _madeFor) return;
+    _madeFor = _context;
+    _trends = null;
     _run(widget.controller.text);
   }
 
   @override
   void dispose() {
+    _s.library.removeListener(_onLibrary);
     widget.controller.removeListener(_onChanged);
     _debounce?.cancel();
     super.dispose();
@@ -239,9 +256,11 @@ class _SearchScreenState extends State<SearchScreen> {
                 image: m.poster,
                 year: m.year,
                 rating: m.rating,
+                // The detail first (as everywhere else): the film did not
+                // start at once from a search result.
                 onTap: () {
                   _remember();
-                  Launch.movie(context, m);
+                  Launch.openMovie(context, m);
                 },
                 onContextMenu: (at) => showMovieActions(context, m, at),
               ),
@@ -263,7 +282,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 rating: sr.rating,
                 onTap: () {
                   _remember();
-                  playSeries(context, sr);
+                  Launch.openSeries(context, sr);
                 },
                 onContextMenu: (at) => showSeriesActions(context, sr, at),
               ),
@@ -335,7 +354,7 @@ class _TrendRow extends StatelessWidget {
     final sr = item is Series ? item as Series : null;
     final title = m?.name ?? sr!.name;
     final year = m?.year ?? sr?.year;
-    void open() => m != null ? Launch.movie(context, m) : playSeries(context, sr!);
+    void open() => m != null ? Launch.openMovie(context, m) : Launch.openSeries(context, sr!);
     return HoverBuilder(
       onActivate: open,
       onContextMenu: (at) => m != null ? showMovieActions(context, m, at) : showSeriesActions(context, sr!, at),

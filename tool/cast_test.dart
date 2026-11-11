@@ -7,7 +7,9 @@
 //
 // Compilé par la CI (artefact « Bobine-test-cast ») :
 //   dart compile exe tool/cast_test.dart -o bobine-test-cast.exe
-// Utilisation : bobine-test-cast.exe [adresse ou fichier vidéo] [--tv nom] [--ua User-Agent] [--tout]
+// Utilisation : bobine-test-cast.exe [adresse ou fichier vidéo] [--tv nom] [--ua User-Agent] [--tout] [--direct]
+// --direct essaie aussi l'adresse du fournisseur telle quelle : la télé la
+// reçoit alors en clair, identifiant et mot de passe compris.
 
 import 'dart:convert';
 import 'dart:io';
@@ -108,11 +110,15 @@ Future<int> _run(List<String> args, List<String> log) async {
   // 4. The variants.
   final requests = <RelayRequest>[];
   final relay = CastRelay(onRequest: requests.add);
+  final direct = args.contains('--direct');
+  if (direct) {
+    stdout.writeln('--direct : la télé recevra aussi l’adresse du fournisseur, identifiants compris, en clair.\n');
+  }
   final results = await CastTester(
     session,
     relay,
     say: stdout.writeln,
-  ).run(target, live: live, userAgent: _option(args, '--ua'), all: args.contains('--tout'));
+  ).run(target, live: live, userAgent: _option(args, '--ua'), all: args.contains('--tout'), direct: direct);
 
   // 5. Summary and report.
   final played = results.where((r) => r.played).toList();

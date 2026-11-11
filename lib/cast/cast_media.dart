@@ -6,11 +6,10 @@ bool isHlsUrl(String url) {
   return path.endsWith('.m3u8') || path.endsWith('.m3u');
 }
 
-/// Whether [url] is a file of this computer (recordings).
-bool isLocalMedia(String url) {
-  final u = url.toLowerCase();
-  return !(u.startsWith('http://') || u.startsWith('https://'));
-}
+/// Whether [url] is a file of this computer (recordings): a path, or a
+/// `file://` address. An `rtsp://` or `udp://` stream is not one.
+bool isLocalMedia(String url) =>
+    url.toLowerCase().startsWith('file://') || !RegExp(r'^[a-z][a-z0-9+.-]*://', caseSensitive: false).hasMatch(url);
 
 /// Address the device should open for [url].
 ///

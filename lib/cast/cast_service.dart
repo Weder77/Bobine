@@ -56,6 +56,11 @@ class CastService extends ChangeNotifier {
     if (current != null) found[current.key] = current;
     final shown = <String, CastDevice>{for (final d in devices.value) d.key: d, ...found};
     void add(CastDevice d) {
+      // Another answer under the same name, from another host, does not
+      // take the place of the device found first (a device of the network
+      // could pass itself off as the TV, and inherit its choices).
+      final known = found[d.key];
+      if (known != null && (known.host != d.host || known.port != d.port)) return;
       found[d.key] = d;
       shown[d.key] = d;
       devices.value = _sorted(shown.values);
@@ -132,10 +137,14 @@ class CastService extends ChangeNotifier {
   bool _viaRelay = false;
 
   /// Whether streams reach [d] through this computer.
-  bool relayFor(CastDevice d) => !_direct.contains(d.key);
+  bool relayFor(CastDevice d) => !_direct.contains(_directKey(d));
+
+  /// Direct mode is chosen for this TV at this address: another device
+  /// announcing the same name elsewhere does not get the identifiers.
+  static String _directKey(CastDevice d) => '${d.key}@${d.host}:${d.port}';
 
   /// Sends streams to [d] directly ([direct]) or through this computer.
-  void setDirect(CastDevice d, bool direct) => direct ? _direct.add(d.key) : _direct.remove(d.key);
+  void setDirect(CastDevice d, bool direct) => direct ? _direct.add(_directKey(d)) : _direct.remove(_directKey(d));
 
   /// Whether direct mode hands the TV the account's identifiers for [it]
   /// (they are part of the provider's address).
@@ -200,17 +209,36 @@ class CastService extends ChangeNotifier {
       });
       _connecting = false;
       _startPolling(gen);
-      await _load(it, start, gen, ++_loadSeq);
+      // Zapped while connecting: the last channel asked is the one to play.
+      final (what, from) = _pending ?? (it, start);
+      _pending = null;
+      final seq = ++_loadSeq;
+      try {
+        await _load(what, from, gen, seq);
+      } catch (e) {
+        if (gen == _generation && seq == _loadSeq) _fail(e);
+      }
     } catch (e) {
       if (gen != _generation) return;
       _connecting = false;
+      _pending = null;
       _fail(e);
     }
   }
 
+  /// Asked with [load] while the connection was being made.
+  (PlayItem, Duration?)? _pending;
+
   /// Plays [it] on the connected TV (zapping, next episode).
   Future<void> load(PlayItem it, {Duration? start}) async {
     if (_session == null) return;
+    if (_connecting) {
+      // Played as soon as the TV is connected (see [start]).
+      _pending = (it, start);
+      item.value = it;
+      notifyListeners();
+      return;
+    }
     final gen = _generation;
     final seq = ++_loadSeq;
     try {
@@ -223,6 +251,7 @@ class CastService extends ChangeNotifier {
   Future<void> _load(PlayItem it, Duration? start, int gen, int seq) async {
     final session = _session!;
     final d = _device!;
+    if (!it.canOpen) throw CastException(PlayerService.refusedMessage);
     item.value = it;
     _lastStart = start;
     _started = false;
@@ -242,6 +271,8 @@ class CastService extends ChangeNotifier {
     // of the same format it may know.
     final types = session.contentTypesFor(address, live: it.isLive);
     for (final (i, contentType) in types.indexed) {
+      // A newer load took over: its relay address must not be cleared.
+      if (gen != _generation || seq != _loadSeq) return;
       var url = address;
       if (_viaRelay) {
         _relay.clear();
@@ -312,7 +343,7 @@ class CastService extends ChangeNotifier {
     _error = null;
     _status = RemoteStatus();
     item.value = null;
-    _relay.clear();
+    unawaited(_relay.stopServing());
     notifyListeners();
     if (s == null) return;
     final closing = () async {

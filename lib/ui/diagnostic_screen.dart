@@ -12,6 +12,7 @@ import '../core/net.dart';
 import '../core/text.dart';
 import '../core/theme.dart';
 import '../core/version.dart';
+import '../data/import/xtream_api.dart';
 import '../data/models.dart';
 import '../services.dart';
 import 'settings_screen.dart';
@@ -78,28 +79,35 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
   Future<void> _test(Source src) async {
     setState(() => _testing.add(src.id));
     final sw = Stopwatch()..start();
-    final client = createHttpClient();
+    final client = createHttpClient(acceptInvalidCertificate: src.acceptInvalidCertificate);
     _SourceTest result;
     try {
-      final Uri uri;
       if (src.isXtream) {
-        uri = Uri.parse('${src.baseUrl}/player_api.php')
-            .replace(queryParameters: {'username': src.username ?? '', 'password': src.password ?? ''});
+        // The account is checked, not only the answer: an expired one
+        // still answers 200.
+        final info = await XtreamApi.forSource(src, client: client).authenticate().timeout(const Duration(seconds: 30));
+        final exp = accountExpiry(info['exp_date']);
+        final until = exp == null ? '' : ' · expire le ${formatDay(exp)}';
+        result = _SourceTest(true, 'Compte actif · réponse en ${sw.elapsedMilliseconds} ms$until');
       } else if (src.url.startsWith('http')) {
-        uri = Uri.parse(src.url);
+        final res = await openGet(
+          client,
+          Uri.parse(src.url),
+          userAgent: src.userAgent,
+          timeout: const Duration(seconds: 15),
+        );
+        final firstByte = sw.elapsedMilliseconds;
+        var bytes = 0;
+        await for (final chunk in guardBody(res, stall: const Duration(seconds: 15))) {
+          bytes += chunk.length;
+          if (bytes > 256 * 1024) break; // enough to measure
+        }
+        result = _SourceTest(true, 'HTTP ${res.statusCode} · réponse en $firstByte ms · ${formatBytes(bytes)} reçus');
       } else {
+        // No return here: the spinner stayed on for ever.
         final exists = File(src.url).existsSync();
         result = _SourceTest(exists, exists ? 'Fichier local trouvé' : 'Fichier introuvable : ${src.url}');
-        return;
       }
-      final res = await openGet(client, uri, userAgent: src.userAgent, timeout: const Duration(seconds: 15));
-      final firstByte = sw.elapsedMilliseconds;
-      var bytes = 0;
-      await for (final chunk in guardBody(res, stall: const Duration(seconds: 15))) {
-        bytes += chunk.length;
-        if (bytes > 256 * 1024) break; // enough to measure
-      }
-      result = _SourceTest(true, 'HTTP ${res.statusCode} · réponse en $firstByte ms · ${formatBytes(bytes)} reçus');
     } on NetException catch (e) {
       result = _SourceTest(false, redactCredentials(e.message));
     } catch (e) {
@@ -145,7 +153,11 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
     for (final l in AppLog.lines.reversed.take(150).toList().reversed) {
       b.writeln(l);
     }
-    return b.toString();
+    return anonymizeReport(
+      b.toString(),
+      sources: _s.repo.sources(),
+      home: Platform.environment['USERPROFILE'] ?? Platform.environment['HOME'],
+    );
   }
 
   Future<void> _copy() async {
@@ -317,4 +329,31 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
       ),
     );
   }
+}
+
+/// A report meant to be shared: the provider's server, the account name
+/// and the source names become "serveur-1", "compte-1", "source-1", the
+/// same each time in the report, and the user's folder becomes "~"
+/// (a path under C:\Users\Prénom Nom names the person).
+@visibleForTesting
+String anonymizeReport(String text, {required List<Source> sources, String? home}) {
+  final swaps = <String, String>{};
+  for (final (i, src) in sources.indexed) {
+    final n = i + 1;
+    final host = Uri.tryParse(src.isXtream ? src.baseUrl : src.url)?.host;
+    if (host != null && host.isNotEmpty) swaps[host] = 'serveur-$n';
+    final user = src.username?.trim();
+    if (user != null && user.length >= 3) swaps[user] = 'compte-$n';
+    if (src.name.trim().length >= 3) swaps.putIfAbsent(src.name.trim(), () => 'source-$n');
+  }
+  var out = text;
+  if (home != null && home.length > 3) out = out.replaceAll(home, '~');
+  // Longest first: a host inside a name, a name inside another.
+  for (final e in swaps.entries.toList()..sort((a, b) => b.key.length.compareTo(a.key.length))) {
+    out = out.replaceAll(
+      RegExp('(?<![A-Za-z0-9])${RegExp.escape(e.key)}(?![A-Za-z0-9])', caseSensitive: false),
+      e.value,
+    );
+  }
+  return out;
 }

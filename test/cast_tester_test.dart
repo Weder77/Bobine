@@ -108,11 +108,14 @@ class FakePhilips {
 
 void main() {
   test('variants: Bobine first, then the TV spellings, forced types, direct', () {
-    final v = castVariants('https://h/series/u/p/1.mkv', const [
-      'http-get:*:video/x-mkv:*',
-      'http-get:*:video/x-matroska:DLNA.ORG_PN=MKV',
-      'http-get:*:video/mp4:*',
-    ], live: false);
+    final v = castVariants(
+      'https://h/series/u/p/1.mkv',
+      const ['http-get:*:video/x-mkv:*', 'http-get:*:video/x-matroska:DLNA.ORG_PN=MKV', 'http-get:*:video/mp4:*'],
+      live: false,
+      direct: true,
+    );
+    // Without --direct, the provider's address is never handed to the TV.
+    expect(castVariants('https://h/series/u/p/1.mkv', const [], live: false).where((x) => x.direct), isEmpty);
     expect(v.map((x) => x.label).toList(), [
       'video/x-matroska, description de Bobine',
       'video/x-matroska, sans description',

@@ -4,12 +4,15 @@ import 'dart:io';
 
 import 'package:ffi/ffi.dart';
 
+import 'app_log.dart';
+
 /// Encrypts small secrets (passwords, URLs containing credentials) before
 /// they are written to the local database.
 ///
 /// Windows: DPAPI (`CryptProtectData`), bound to the current Windows user
 /// account, so a copied `bobine.db` cannot be read on another account or PC.
-/// Other platforms: values are stored as-is for now.
+/// Other platforms: values are stored as-is for now; the database file is
+/// then readable by this user account only (see `openAppDatabase`).
 ///
 /// Values are tagged with a prefix so plain (legacy) values keep working and
 /// can be migrated transparently.
@@ -24,8 +27,10 @@ class Secrets {
     if (value == null || value.isEmpty || !supported || value.startsWith(prefix)) return value;
     try {
       return prefix + base64.encode(_Dpapi.protect(utf8.encode(value)));
-    } catch (_) {
-      return value; // never lose the value: fall back to plain storage
+    } catch (e) {
+      // Never lose the value: it is kept as it is, and said.
+      AppLog.add('Chiffrement Windows (DPAPI) indisponible, valeur gardée en clair : $e');
+      return value;
     }
   }
 

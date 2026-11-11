@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:collection';
 import 'dart:io';
 
@@ -12,6 +13,12 @@ class AppLog {
   static const _max = 400;
   static final _lines = ListQueue<String>();
   static IOSink? _file;
+  static String? _path;
+  static int _written = 0;
+
+  /// The log file is started again past this size (the previous one kept as
+  /// `bobine.log.1`), during the session too: it grew without bound.
+  static const maxFileBytes = 1 << 20;
 
   static List<String> get lines => List.unmodifiable(_lines);
 
@@ -24,7 +31,34 @@ class AppLog {
       _lines.removeFirst();
     }
     try {
-      _file?.writeln('${t.toIso8601String().substring(0, 10)} $line');
+      final out = '${t.toIso8601String().substring(0, 10)} $line';
+      _file?.writeln(out);
+      _written += out.length + 1;
+      if (_written > maxFileBytes) _rotate();
+    } catch (_) {}
+  }
+
+  static void _rotate() {
+    final path = _path, old = _file;
+    if (path == null || old == null) return;
+    _file = null;
+    _written = 0;
+    unawaited(() async {
+      try {
+        await old.flush();
+        await old.close();
+        File(path).renameSync('$path.1');
+      } catch (_) {}
+      try {
+        _file = File(path).openWrite(mode: FileMode.append);
+      } catch (_) {}
+    }());
+  }
+
+  /// Writes what is waiting to `bobine.log` (the app is closing).
+  static Future<void> flush() async {
+    try {
+      await _file?.flush();
     } catch (_) {}
   }
 
@@ -33,7 +67,9 @@ class AppLog {
     if (logPath != null) {
       try {
         final f = File(logPath);
-        if (f.existsSync() && f.lengthSync() > 1 << 20) f.renameSync('$logPath.1');
+        if (f.existsSync() && f.lengthSync() > maxFileBytes) f.renameSync('$logPath.1');
+        _path = logPath;
+        _written = f.existsSync() ? f.lengthSync() : 0;
         _file = f.openWrite(mode: FileMode.append);
       } catch (_) {}
     }

@@ -20,7 +20,7 @@ class RecordingsSection extends StatelessWidget {
     // Recordings of a locked channel stay out while the code is required.
     final list = [
       for (final r in s.repo.recordings())
-        if (!s.repo.isLocked(r.sourceId, ContentKind.live, r.channelExt)) r,
+        if (!s.repo.isRecordingLocked(r.sourceId, r.channelExt)) r,
     ];
     return SettingsSection(
       title: 'Enregistrements',

@@ -158,13 +158,13 @@ class AvatarView extends StatelessWidget {
 /// Switches to [p], asking for the parental code when leaving a kids profile.
 Future<bool> switchToProfile(BuildContext context, Profile p) async {
   final s = AppScope.of(context);
-  if (p.id == s.profile.id) return true;
-  if (s.profile.kids && s.settings.parentalEnabled) {
+  if (p.id == s.profile.id && !s.kidsProfileLost) return true;
+  if ((s.profile.kids || s.kidsProfileLost) && s.settings.parentalEnabled) {
     final pin = await askPin(context, title: 'Quitter le profil enfant', message: 'Tape le code parental.');
     if (pin == null) return false;
-    if (pin != s.settings.parentalPin) {
+    if (!s.checkParentalPin(pin)) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.parentalRefusal)));
       }
       return false;
     }
@@ -289,8 +289,8 @@ Future<void> showProfileEditor(BuildContext context, {Profile? profile}) async {
   if (s.profile.kids && s.settings.parentalEnabled) {
     final pin = await askPin(context, title: 'Modifier les profils', message: 'Tape le code parental.');
     if (pin == null || !context.mounted) return;
-    if (pin != s.settings.parentalPin) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+    if (!s.checkParentalPin(pin)) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.parentalRefusal)));
       return;
     }
   }
@@ -518,7 +518,21 @@ class _ProfileEditorState extends State<_ProfileEditor> {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               value: _kids,
-              onChanged: (v) => setState(() => _kids = v),
+              onChanged: (v) async {
+                final s = AppScope.of(context);
+                // Without a code, a kids profile would protect nothing.
+                if (v && !s.settings.parentalEnabled) {
+                  final pin = await askPin(
+                    context,
+                    title: 'Code parental',
+                    message: 'Un profil enfant a besoin du code parental. Choisis 4 chiffres.',
+                    confirm: true,
+                  );
+                  if (pin == null || !mounted) return;
+                  s.setParentalPin(pin);
+                }
+                setState(() => _kids = v);
+              },
               title: const Text('Profil enfant'),
               subtitle: Text(
                 'Les catégories protégées ne sont jamais affichées, et il faut le code parental pour quitter ce profil.',
@@ -690,7 +704,7 @@ class ProfileMenuButton extends StatelessWidget {
       } else if (v == 'unlock') {
         final pin = await askPin(context, title: 'Catégories protégées', message: 'Tape le code parental.');
         if (pin != null && !s.unlockParental(pin) && context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.parentalRefusal)));
         }
       } else if (v == 'lock') {
         s.lockParental();

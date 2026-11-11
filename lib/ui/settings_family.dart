@@ -138,9 +138,9 @@ class ParentalSection extends StatelessWidget {
     Future<bool> check() async {
       final pin = await askPin(context, title: 'Code parental', message: 'Tape le code actuel.');
       if (pin == null) return false;
-      if (pin != s.settings.parentalPin) {
+      if (!s.checkParentalPin(pin)) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Code incorrect.')));
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(s.parentalRefusal)));
         }
         return false;
       }
@@ -150,48 +150,68 @@ class ParentalSection extends StatelessWidget {
     return SettingsSection(
       title: 'Contrôle parental',
       children: [
-        SettingsOption(
-          title: on ? 'Activé' : 'Désactivé',
-          subtitle: on
-              ? 'Les catégories verrouillées sont cachées partout (accueil, recherche, guide) tant que le code '
-                    "n'est pas tapé (menu du profil → « Afficher les catégories protégées »)."
-              : 'Choisis un code à 4 chiffres pour cacher les catégories adultes (repérées automatiquement) '
-                    'et celles que tu verrouilles.',
-          child: Wrap(
-            spacing: 8,
-            children: [
-              if (!on)
-                FilledButton(
-                  onPressed: () async {
-                    final pin = await askPin(
-                      context,
-                      title: 'Nouveau code parental',
-                      message: 'Choisis 4 chiffres.',
-                      confirm: true,
-                    );
-                    if (pin != null) s.setParentalPin(pin);
-                  },
-                  child: const Text('Activer'),
-                )
-              else ...[
-                OutlinedButton(
-                  onPressed: () async {
-                    if (!await check() || !context.mounted) return;
-                    final pin = await askPin(context, title: 'Nouveau code parental', confirm: true);
-                    if (pin != null) s.setParentalPin(pin);
-                  },
-                  child: const Text('Changer le code'),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    if (await check()) s.setParentalPin(null);
-                  },
-                  child: const Text('Désactiver'),
-                ),
+        if (s.settings.parentalPinUnreadable)
+          SettingsOption(
+            title: 'Code illisible sur cet ordinateur',
+            subtitle:
+                'Le code a été enregistré sur un autre ordinateur ou une autre session Windows et ne peut pas être '
+                'lu ici. Les catégories verrouillées restent cachées : choisis un nouveau code.',
+            child: FilledButton(
+              onPressed: () async {
+                final pin = await askPin(
+                  context,
+                  title: 'Nouveau code parental',
+                  message: 'Choisis 4 chiffres.',
+                  confirm: true,
+                );
+                if (pin != null) s.setParentalPin(pin);
+              },
+              child: const Text('Choisir un nouveau code'),
+            ),
+          )
+        else
+          SettingsOption(
+            title: on ? 'Activé' : 'Désactivé',
+            subtitle: on
+                ? 'Les catégories verrouillées sont cachées partout (accueil, recherche, guide) tant que le code '
+                      "n'est pas tapé (menu du profil → « Afficher les catégories protégées »)."
+                : 'Choisis un code à 4 chiffres pour cacher les catégories adultes (repérées automatiquement) '
+                      'et celles que tu verrouilles.',
+            child: Wrap(
+              spacing: 8,
+              children: [
+                if (!on)
+                  FilledButton(
+                    onPressed: () async {
+                      final pin = await askPin(
+                        context,
+                        title: 'Nouveau code parental',
+                        message: 'Choisis 4 chiffres.',
+                        confirm: true,
+                      );
+                      if (pin != null) s.setParentalPin(pin);
+                    },
+                    child: const Text('Activer'),
+                  )
+                else ...[
+                  OutlinedButton(
+                    onPressed: () async {
+                      if (!await check() || !context.mounted) return;
+                      final pin = await askPin(context, title: 'Nouveau code parental', confirm: true);
+                      if (pin != null) s.setParentalPin(pin);
+                    },
+                    child: const Text('Changer le code'),
+                  ),
+                  TextButton(
+                    onPressed: () async {
+                      if (await check()) s.setParentalPin(null);
+                    },
+                    child: const Text('Désactiver'),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -294,7 +314,12 @@ class _CategoryManagerState extends State<_CategoryManager> {
     // Unlocking needs the code when parental control is on.
     if (c.locked && _s.settings.parentalEnabled) {
       final pin = await askPin(context, title: 'Code parental', message: 'Tape le code pour déverrouiller.');
-      if (pin != _s.settings.parentalPin) return;
+      if (pin == null || !_s.checkParentalPin(pin)) {
+        if (pin != null && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(_s.parentalRefusal)));
+        }
+        return;
+      }
     }
     _s.repo.setCategoryLocked(_sourceId, widget.kind, c.extId, !c.locked);
     _reload();

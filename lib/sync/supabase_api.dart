@@ -168,6 +168,14 @@ class SupabaseApi {
     if (code == 'sync quota exceeded' || (detail ?? '').contains('sync quota exceeded')) {
       return SyncApiException('Limite de données du compte atteinte.', code: 'quota', status: status);
     }
+    if (code == 'sync rate exceeded' || (detail ?? '').contains('sync rate exceeded')) {
+      // Tried again later by the back-off of the service, keys kept.
+      return SyncApiException(
+        'Trop de synchros en peu de temps : nouvel essai plus tard.',
+        code: 'rate',
+        network: true,
+      );
+    }
     // The account was deleted from another device (its rows can no longer
     // reference it).
     if (code == '23503') {
@@ -223,6 +231,16 @@ class SupabaseApi {
     ),
   );
 
+  /// What the service answers for a refresh token that will never work.
+  static const deadRefreshCodes = {
+    'refresh_token_not_found',
+    'refresh_token_already_used',
+    'session_not_found',
+    'session_expired',
+    'user_not_found',
+    'user_banned',
+  };
+
   Future<SupabaseSession> refresh(SupabaseSession s) async {
     try {
       return SupabaseSession.fromAuth(
@@ -237,8 +255,13 @@ class SupabaseApi {
       );
     } on SyncApiException catch (e) {
       if (e.network) rethrow;
-      // A refresh token refused for any other reason will never work again.
-      throw SyncApiException('Session expirée : reconnecte-toi.', code: 'session_not_found', status: 401);
+      // Only a token the service says it no longer knows ends the session.
+      // A 429 behind a shared address, a proxy's 403, an unexpected answer:
+      // tried again later, the keys kept.
+      if (deadRefreshCodes.contains(e.code)) {
+        throw SyncApiException('Session expirée : reconnecte-toi.', code: 'session_not_found', status: 401);
+      }
+      throw SyncApiException(e.message, code: e.code, status: e.status == 401 ? null : e.status, network: true);
     }
   }
 
