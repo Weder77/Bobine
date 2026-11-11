@@ -326,6 +326,29 @@ http://srv/plain/stream4.ts
         'DB write failed: SqliteException(5): database is locked\n'
         '  Causing statement: UPDATE sources SET password = ? WHERE id = ?, parameters: ***',
       );
+      // The shapes that used to come out whole.
+      for (final (raw, masked) in [
+        ('http://h.tv/playlist/bob/s3cret/m3u_plus', 'http://h.tv/playlist/bob/***/m3u_plus'),
+        ('http://h.tv/timeshifts/bob/s3cret/60/5.ts', 'http://h.tv/timeshifts/bob/***/60/5.ts'),
+        ('http://h.tv/hlsr/t0k3nAbc/bob/s3cret/5.m3u8', 'http://h.tv/hlsr/***/5.m3u8'),
+        ('http://h.tv/hls/TOKENSECRET/123_45.ts', 'http://h.tv/hls/***/123_45.ts'),
+        ('http://h.tv/play/AbC123xYz789/ts', 'http://h.tv/play/***/ts'),
+        ('http://h.tv/x?play_token=AAAA1111&refresh_token=BBBB2222', 'http://h.tv/x?play_token=***&refresh_token=***'),
+        ('http://h.tv/x?sign=CCCC3333&hash=DDDD4444&n=1', 'http://h.tv/x?sign=***&hash=***&n=1'),
+        ('http://h.tv/x?wmsAuthSign=EEEE&auth_key=FFFF', 'http://h.tv/x?wmsAuthSign=***&auth_key=***'),
+        ('http://h.tv/x?client_secret=GGGG', 'http://h.tv/x?client_secret=***'),
+        (
+          'http://r/?u=http%3A%2F%2Fh%2Fa%3Fpassword%3Ds3cret%26x%3D1',
+          'http://r/?u=http%3A%2F%2Fh%2Fa%3Fpassword%3D***%26x%3D1',
+        ),
+        ('Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.SECRET', 'Authorization: Bearer ***'),
+        ('{"username":"bob","password":"s3cret"}', '{"username":"bob","password":"***"}'),
+        ('{"refresh_token": "abc\\"def"}', '{"refresh_token": "***"}'),
+        ('Failed to open http://h/bob/s3cret/123:', 'Failed to open http://h/bob/***/123:'),
+        ('x, parameters: s3cret,\nsuite s3cret', 'x, parameters: ***'),
+      ]) {
+        expect(redactCredentials(raw), masked, reason: raw);
+      }
       // Ordinary addresses and the relay's own are left readable.
       for (final plain in [
         'https://github.com/Weder77/Bobine/releases/tag/v1.6.5',

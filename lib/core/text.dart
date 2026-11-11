@@ -87,14 +87,34 @@ bool matchesWords(String key, List<String> words) {
   return true;
 }
 
+/// "password=…", "play_token=…", "auth_key=…", "wmsAuthSign=…", also
+/// percent-encoded ("password%3D…") in an address nested in another one.
+/// A word is a whole name or a part of it between "_" / "-": "monkey" is
+/// not a key.
 final RegExp _secretQuery = RegExp(
-  r'(\b(?:password|pass|pwd|token|access_token|api_key|apikey|key|auth|secret|signature|sig)=)[^&\s"]+',
+  r'((?:^|(?<=[?&;\s"'
+  "'"
+  r'{,/]|%3F|%26))(?:[A-Za-z0-9]+[_\-])*'
+  r'(?:password|passwd|pass|pwd|token|key|apikey|auth|authsign|wmsauthsign|secret|signature|sig|sign|hash|mac|hdnea|hdnts)'
+  r'(?:[_\-][A-Za-z0-9]+)*(?:=|%3D))[^&\s"'
+  "'"
+  r']+?(?=&|%26|\s|"|'
+  "'"
+  r'|$)',
   caseSensitive: false,
 );
+
+/// "/live/user/password/…", and the other places panels put them.
 final RegExp _secretPath = RegExp(
-  r'(/(?:live|movie|series|timeshift|hls|vod|play|streaming)/[^/\s]+/)[^/\s]+/',
+  r'(/(?:live|movie|series|timeshift|timeshifts|hls|vod|play|streaming|playlist|xmltv)/[^/\s]+/)[^/\s]+/',
   caseSensitive: false,
 );
+
+/// "/hlsr/<token>/<user>/<password>/…".
+final RegExp _secretHlsr = RegExp(r'(/hlsr/)[^/\s]+/[^/\s]+/[^/\s]+/', caseSensitive: false);
+
+/// A token alone in the path: "/play/<token>/ts", "/hls/<token>/123_45.ts".
+final RegExp _secretToken = RegExp(r'(/(?:play|hls|token|auth)/)[A-Za-z0-9_\-.~%]{8,}(?=/)', caseSensitive: false);
 
 /// "http://user:password@host".
 final RegExp _secretUserInfo = RegExp(r'(://[^/\s:@]*:)[^/\s@]+@');
@@ -102,23 +122,36 @@ final RegExp _secretUserInfo = RegExp(r'(://[^/\s:@]*:)[^/\s@]+@');
 /// "http://host:8080/user/password/1234.ts": the addresses of an M3U
 /// playlist exported by an Xtream panel, without "/live/".
 final RegExp _secretShortPath = RegExp(
-  r'''(https?://[^/\s]+/[^/\s?#]+/)[^/\s?#]+(/\d+(?:\.[A-Za-z0-9]{1,5})?)(?=$|[\s?#"'),;.\]])''',
+  r'''(https?://[^/\s]+/[^/\s?#]+/)[^/\s?#]+(/\d+(?:\.[A-Za-z0-9]{1,5})?)(?=$|[\s?#"'),;.:|\]])''',
+  caseSensitive: false,
+);
+
+/// "Authorization: Bearer …" / "Basic …".
+final RegExp _secretBearer = RegExp(r'\b((?:Bearer|Basic)\s+)[A-Za-z0-9._~+/=\-]{6,}', caseSensitive: false);
+
+/// A secret in JSON: "password":"…".
+final RegExp _secretJson = RegExp(
+  r'("(?:[A-Za-z0-9]+_)*(?:password|passwd|pass|pwd|token|key|apikey|secret|auth)"\s*:\s*")(?:[^"\\]|\\.)*"',
   caseSensitive: false,
 );
 
 /// Values bound to a failed SQL statement (sqlite3 prints them: a source's
-/// address and password, the parental code…).
-final RegExp _sqlParameters = RegExp(r', parameters: .*');
+/// address and password, the parental code…), to the end of the message.
+final RegExp _sqlParameters = RegExp(r', parameters: .*', dotAll: true);
 
 /// Masks credentials in URLs / messages before they are shown or stored
 /// ("…?username=bob&password=***", "/live/bob/***/123.ts",
 /// "http://bob:***@host", "http://host/bob/***/123.ts").
 String redactCredentials(String text) => text
+    .replaceAll(_sqlParameters, ', parameters: ***')
     .replaceAllMapped(_secretQuery, (m) => '${m.group(1)}***')
+    .replaceAllMapped(_secretHlsr, (m) => '${m.group(1)}***/')
     .replaceAllMapped(_secretPath, (m) => '${m.group(1)}***/')
+    .replaceAllMapped(_secretToken, (m) => '${m.group(1)}***')
     .replaceAllMapped(_secretUserInfo, (m) => '${m.group(1)}***@')
     .replaceAllMapped(_secretShortPath, (m) => '${m.group(1)}***${m.group(2)}')
-    .replaceAll(_sqlParameters, ', parameters: ***');
+    .replaceAllMapped(_secretBearer, (m) => '${m.group(1)}***')
+    .replaceAllMapped(_secretJson, (m) => '${m.group(1)}***"');
 
 final RegExp _countryPrefix = RegExp(
   r'^\s*(\|?[a-z]{2,3}\|?\s*[:|\-]\s*|\[[a-z]{2,3}\]\s*|\([a-z]{2,3}\)\s*)',
