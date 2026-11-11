@@ -81,7 +81,7 @@ class FakeSession implements CastSession {
 const _tv = CastDevice(id: 'tv', name: 'Salon', protocol: CastProtocol.chromecast, host: '127.0.0.1', port: 8009);
 const _dlna = CastDevice(id: 'lg', name: 'Chambre', protocol: CastProtocol.dlna, host: '127.0.0.1', port: 1400);
 
-PlayItem _movie({String url = 'http://host:8080/movie/u/p/9.mkv'}) => PlayItem(
+PlayItem _movie({String url = 'http://host:8080/movie/u/p/9.mkv', bool localFile = false}) => PlayItem(
   kind: ContentKind.movie,
   sourceId: 1,
   extId: '9',
@@ -90,6 +90,7 @@ PlayItem _movie({String url = 'http://host:8080/movie/u/p/9.mkv'}) => PlayItem(
   subtitle: '2024',
   image: 'http://img/p.jpg',
   userAgent: 'VLC/3.0',
+  localFile: localFile,
 );
 
 PlayItem _channel() => const PlayItem(
@@ -484,9 +485,15 @@ void main() {
 
     test('recordings always go through the relay', () async {
       cast.setDirect(_dlna, true);
-      await cast.start(_dlna, _movie(url: r'C:\Videos\Bobine\film.ts'));
+      await cast.start(_dlna, _movie(url: r'C:\Videos\Bobine\film.ts', localFile: true));
       expect(session.loaded.single.$1.url, contains('/c/'));
       expect(cast.viaRelay, isTrue);
+    });
+
+    test('a file named by a playlist is not sent to the TV', () async {
+      await cast.start(_dlna, _movie(url: r'C:\Users\moi\bobine.db'));
+      expect(session.loaded, isEmpty);
+      expect(cast.error, PlayerService.refusedMessage);
     });
 
     test('controls, position between updates, and stop', () async {

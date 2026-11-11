@@ -176,10 +176,12 @@ class RecordingService {
       }.entries) {
         await native.setProperty(e.key, e.value);
       }
+      final url = StreamUrls.live(source, channel);
+      if (!isStreamUrl(url)) throw StateError("Cette chaîne n'a pas d'adresse de flux réseau.");
       _active[r.id] = player;
       activeCount.value = _active.length;
       _repo.updateRecording(r.id, status: RecordingStatus.recording, path: path);
-      await player.open(Media(StreamUrls.live(source, channel)), play: true);
+      await player.open(Media(url), play: true);
     } catch (e) {
       debugPrint('Recording failed: ${redactCredentials('$e')}');
       _active.remove(r.id)?.dispose();

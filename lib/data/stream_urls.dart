@@ -1,5 +1,37 @@
 import 'models.dart';
 
+/// Protocols a provider's stream may use. Anything else (a file of this
+/// computer, a `\\server\share` path, mpv's own `edl://`, `av://`,
+/// `concat:`…) is refused: a playlist comes from the provider, and the
+/// player would open whatever it names. A network path even makes Windows
+/// log in to that server.
+const Set<String> kStreamSchemes = {
+  'http',
+  'https',
+  'rtmp',
+  'rtmps',
+  'rtmpe',
+  'rtmpt',
+  'rtsp',
+  'rtsps',
+  'rtp',
+  'udp',
+  'mms',
+  'mmsh',
+  'mmst',
+  'srt',
+};
+
+final RegExp _streamAddress = RegExp(r'^([A-Za-z][A-Za-z0-9+.\-]*)://[^/\\\s?#]');
+
+/// Whether [url] is a network stream address: one of [kStreamSchemes]
+/// followed by a host. Placeholders (`{utc}`) are fine: a catch-up
+/// template is checked before it is filled.
+bool isStreamUrl(String url) {
+  final m = _streamAddress.firstMatch(url.trim());
+  return m != null && kStreamSchemes.contains(m[1]!.toLowerCase());
+}
+
 /// Builds playable URLs. Xtream URLs are computed at play time from the
 /// source credentials so a password change does not require a full refresh.
 class StreamUrls {

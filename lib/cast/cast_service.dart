@@ -223,6 +223,7 @@ class CastService extends ChangeNotifier {
   Future<void> _load(PlayItem it, Duration? start, int gen, int seq) async {
     final session = _session!;
     final d = _device!;
+    if (!it.canOpen) throw CastException(PlayerService.refusedMessage);
     item.value = it;
     _lastStart = start;
     _started = false;

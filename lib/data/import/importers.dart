@@ -15,6 +15,7 @@ import '../../core/secrets.dart';
 import '../../core/text.dart';
 import '../db.dart';
 import '../models.dart';
+import '../stream_urls.dart';
 import 'm3u_parser.dart';
 import 'xmltv_parser.dart';
 import 'xtream_api.dart';
@@ -42,6 +43,12 @@ class ContentImportResult {
 }
 
 int _now() => DateTime.now().millisecondsSinceEpoch ~/ 1000;
+
+/// A `catchup-source` template, unless it names an address that is not a
+/// network stream. A relative one (no "://") is appended to the channel's
+/// own address, already checked.
+String? _catchupSource(String? template) =>
+    template == null || !template.contains('://') || isStreamUrl(template) ? template : null;
 
 Source _loadSource(Database db, int sourceId) {
   final rows = db.select('SELECT * FROM sources WHERE id = ?', [sourceId]);
@@ -183,7 +190,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
     final batch = _Batch();
     final seenIds = <String>{};
     final seriesByKey = <String, ({String extId, int position})>{};
-    var count = 0;
+    var count = 0, refused = 0;
 
     String uniqueId(String base) {
       var id = stableHash(base);
@@ -195,6 +202,11 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
     }
 
     final parser = M3uParser((e) {
+      // Only network streams: see [kStreamSchemes].
+      if (!isStreamUrl(e.url)) {
+        refused++;
+        return;
+      }
       count++;
       if (count % 1000 == 0) progress('Analyse', count);
       final kind = classifyEntry(e);
@@ -213,7 +225,7 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
             asInt(e.attr('tvg-chno') ?? e.attr('channel-number')),
             asInt(e.attr('catchup-days') ?? e.attr('tvg-rec') ?? e.attr('timeshift')) ?? 0,
             e.attr('catchup') ?? e.attr('catchup-type'),
-            e.attr('catchup-source'),
+            _catchupSource(e.attr('catchup-source')),
             channelMatchKey(e.name),
             batch.channels.length,
           ]);
@@ -299,10 +311,24 @@ Future<ContentImportResult> importM3u(String dbPath, int sourceId, SendPort? por
       }
     }
     if (count == 0) {
-      throw NetException("La playlist est vide ou n'est pas au format M3U.");
+      throw NetException(
+        refused > 0
+            ? "Aucune adresse de flux réseau dans la playlist : $refused entrée(s) désignent un fichier ou un "
+                  'protocole non pris en charge.'
+            : "La playlist est vide ou n'est pas au format M3U.",
+      );
     }
     progress('Analyse', count);
-    _commit(db, sourceId, batch, progress, discoveredEpg: parser.epgUrl);
+    _commit(
+      db,
+      sourceId,
+      batch,
+      progress,
+      discoveredEpg: parser.epgUrl,
+      warning: refused == 0
+          ? null
+          : '$refused entrée(s) ignorée(s) : elles désignent un fichier ou un protocole non pris en charge.',
+    );
     return ContentImportResult(live: batch.channels.length, movies: batch.movies.length, series: batch.series.length);
   } finally {
     client.close(force: true);

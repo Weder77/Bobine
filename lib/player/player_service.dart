@@ -9,6 +9,7 @@ import '../core/format.dart';
 import '../core/text.dart';
 import '../data/models.dart';
 import '../data/settings.dart';
+import '../data/stream_urls.dart';
 import 'reconnect.dart';
 
 /// Something the player can open.
@@ -25,6 +26,7 @@ class PlayItem {
     this.seriesExt,
     this.isReplay = false,
     this.saveProgress = true,
+    this.localFile = false,
   });
 
   final ContentKind kind;
@@ -42,6 +44,12 @@ class PlayItem {
 
   /// Whether the position is remembered ("Reprendre"): films and episodes.
   final bool saveProgress;
+
+  /// A file this app wrote (a recording), the only thing played from disk.
+  final bool localFile;
+
+  /// Whether the player may open [url]: a network stream, or a recording.
+  bool get canOpen => localFile || isStreamUrl(url);
 
   bool get isLive => kind == ContentKind.live && !isReplay;
 
@@ -119,7 +127,15 @@ class PlayerService {
   final List<StreamSubscription> _subs = [];
   Timer? _volumeSave;
 
-  /// Protocols libmpv may open (IPTV streams use most of them).
+  /// Shown instead of opening an address [PlayItem.canOpen] refuses.
+  static const refusedMessage =
+      "Cette adresse n'est pas celle d'un flux réseau (http, rtsp…) : elle n'est pas ouverte. "
+      'La liste du fournisseur désigne un fichier ou un protocole non pris en charge.';
+
+  /// Protocols FFmpeg may open for the segments, keys and sub-streams of a
+  /// stream (IPTV streams use most of them). No `file`: a playlist served
+  /// by the provider could otherwise name files of this computer. The
+  /// recordings are read by mpv itself, not through this list.
   static const protocols = [
     'udp',
     'rtp',
@@ -129,7 +145,6 @@ class PlayerService {
     'tcp',
     'tls',
     'data',
-    'file',
     'http',
     'https',
     'httpproxy',
@@ -226,7 +241,10 @@ class PlayerService {
         'protocol_whitelist=[${protocols.join(',')}]',
     'hls-bitrate': 'max',
     'tls-verify': 'no',
-    'load-unsafe-playlists': 'yes',
+    // A playlist the provider serves may only lead to other network
+    // streams (mpv's default), and no youtube-dl.
+    'load-unsafe-playlists': 'no',
+    'ytdl': 'no',
   };
 
   static final RegExp _fatal = RegExp(
@@ -368,6 +386,11 @@ class PlayerService {
     }
     current.value = item;
     status.value = null;
+    if (!item.canOpen) {
+      await player.stop();
+      status.value = refusedMessage;
+      return;
+    }
     final ua = item.userAgent;
     await setProp('user-agent', (ua == null || ua.isEmpty) ? 'libmpv' : ua);
     if (item.isLive) {

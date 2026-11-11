@@ -137,7 +137,7 @@ class SeekPreview extends ChangeNotifier {
 
   /// The pointer is at [at] on the bar of [item], which lasts [length].
   void hover(PlayItem item, Duration at, Duration length) {
-    if (_disposed || _refused == item.url) return;
+    if (_disposed || _refused == item.url || !item.canOpen) return;
     _idleTimer?.cancel();
     if (_item?.url != item.url) {
       _queue.reset();

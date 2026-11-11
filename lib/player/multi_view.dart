@@ -195,6 +195,10 @@ class MpvTile implements TileEngine {
     _retryTimer?.cancel();
     _reconnect.reset();
     _state.value = const TileState();
+    if (!item.canOpen) {
+      _state.value = const TileState(loading: false, message: 'Adresse refusée');
+      return;
+    }
     final ua = item.userAgent;
     await _set('user-agent', (ua == null || ua.isEmpty) ? 'libmpv' : ua);
     await _player.open(Media(item.url), play: true);
