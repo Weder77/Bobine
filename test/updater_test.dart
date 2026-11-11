@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bobine/core/version.dart';
 import 'package:bobine/data/db.dart';
 import 'package:bobine/data/repository.dart';
 import 'package:bobine/data/settings.dart';
@@ -8,6 +9,16 @@ import 'package:bobine/features/updater.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  // These tests are about the release itself: no signature asked, except
+  // in the one that sets its own key.
+  final shippedKey = UpdateService.publicKey;
+  setUp(() => UpdateService.publicKey = '');
+  tearDown(() => UpdateService.publicKey = shippedKey);
+
+  test('the app ships with a valid update key', () {
+    expect(base64.decode(kUpdatePublicKey), hasLength(32));
+  });
+
   Map<String, Object?> release(String tag, {bool pre = false}) => {
     'tag_name': tag,
     'prerelease': pre,

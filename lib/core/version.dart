@@ -12,7 +12,7 @@ const String kReleaseRepo = 'Weder77/Bobine';
 /// refused. Signed by the build, it does not protect from the build itself
 /// (a workflow changed, a step compromised): only signing outside GitHub
 /// would. Empty: the fingerprint given by GitHub alone is checked.
-const String kUpdatePublicKey = '';
+const String kUpdatePublicKey = 'H4VPuAMEMnAk3VHNGFoiQFlq7EDBUzmy7VEXmztCaRQ=';
 
 /// Compares two "1.2.3" versions (a leading "v" and a "+build" are ignored).
 int compareVersions(String a, String b) {
