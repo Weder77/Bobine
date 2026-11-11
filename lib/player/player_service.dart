@@ -382,16 +382,28 @@ class PlayerService {
 
   /// Opens [item]. If it is already playing, nothing is reloaded.
   /// [reconnecting]: the automatic reopening of a live stream that stopped.
+  /// Bumped by every [play]: a screen that closes stops the engine only if
+  /// nothing was opened since (by the screen taking its place).
+  int get generation => _generation;
+  int _generation = 0;
+
   Future<void> play(PlayItem item, {Duration? start, bool force = false, bool reconnecting = false}) async {
+    _generation++;
     await ready;
+    // A stream being reconnected (or that failed) is opened again, not
+    // reused: its reconnection is cancelled just below.
+    final broken = (_reconnectTimer?.isActive ?? false) || status.value != null;
     if (!reconnecting) {
       // Something the user opened (another channel, "Réessayer"): the
       // attempts of the previous stream do not count against this one.
       _reconnectTimer?.cancel();
       _reconnect.reset();
     }
-    if (!force && current.value?.url == item.url && player.state.playlist.medias.isNotEmpty) {
+    if (!force && !broken && current.value?.url == item.url && player.state.playlist.medias.isNotEmpty) {
       current.value = item;
+      // "Depuis le début" (or a position) on what already plays here, as
+      // in the mini-player: it goes there.
+      if (start != null && !item.isLive) await player.seek(start);
       if (resumesOnReopen(playing: player.state.playing, completed: player.state.completed)) await player.play();
       return;
     }

@@ -82,15 +82,26 @@ class RecordingService {
 
   bool isActive(int id) => _active.containsKey(id);
 
+  /// Longest recording: a guide entry of several days (a "programme" that
+  /// is the whole night, a broken guide) filled the disk.
+  static const maxLength = Duration(hours: 6);
+
+  /// Largest file: the recording stops there (about 6 h of 4K).
+  static const maxBytes = 40 << 30;
+
+  static DateTime _capped(DateTime start, DateTime stop) =>
+      stop.difference(start) > maxLength ? start.add(maxLength) : stop;
+
   /// Records [p] on [c] (starts right away if it already began).
   int schedule(Channel c, Program prog) {
+    final start = prog.start.subtract(_before);
     final id = _repo.addRecording(
       sourceId: c.sourceId,
       channelExt: c.extId,
       channelName: c.name,
       title: prog.title,
-      start: prog.start.subtract(_before),
-      stop: prog.stop.add(_after),
+      start: start,
+      stop: _capped(start, prog.stop.add(_after)),
     );
     onChanged();
     _tick();
@@ -106,7 +117,10 @@ class RecordingService {
       channelName: c.name,
       title: current?.title ?? c.name,
       start: now,
-      stop: current != null && current.stop.isAfter(now) ? current.stop.add(_after) : now.add(const Duration(hours: 2)),
+      stop: _capped(
+        now,
+        current != null && current.stop.isAfter(now) ? current.stop.add(_after) : now.add(const Duration(hours: 2)),
+      ),
     );
     onChanged();
     _tick();
@@ -162,6 +176,9 @@ class RecordingService {
         } else if (_repo.source(r.sourceId) == null) {
           // Source deleted (here or on another device): stopped, kept.
           await _finish(r.id, note: 'Partiel : source supprimée');
+          changed = true;
+        } else if ((_sizeOf(r.path) ?? 0) > maxBytes) {
+          await _finish(r.id, note: 'Partiel : taille maximale atteinte');
           changed = true;
         } else if (_stalled(r, now)) {
           await _cut(r.id);

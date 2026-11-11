@@ -41,15 +41,32 @@ class _SearchScreenState extends State<SearchScreen> {
   /// "Tendances" of the empty page, worked out once (it reads the catalogue).
   List<Object>? _trends;
 
+  /// What the results were made for: when it changes (an import, another
+  /// source, categories locked again, another profile), they are made
+  /// again. Results locked since, or of another source, stayed on screen.
+  (int, int?, bool, int)? _madeFor;
+  (int, int?, bool, int) get _context =>
+      (_s.library.content, _s.activeSource?.id, _s.repo.hideLocked, _s.repo.profileId);
+
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_onChanged);
+    _s.library.addListener(_onLibrary);
+    _madeFor = _context;
+    _run(widget.controller.text);
+  }
+
+  void _onLibrary() {
+    if (!mounted || _context == _madeFor) return;
+    _madeFor = _context;
+    _trends = null;
     _run(widget.controller.text);
   }
 
   @override
   void dispose() {
+    _s.library.removeListener(_onLibrary);
     widget.controller.removeListener(_onChanged);
     _debounce?.cancel();
     super.dispose();

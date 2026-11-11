@@ -243,9 +243,12 @@ class _PlayerScreenState extends State<PlayerScreen> {
     // its own now, whatever it plays (the same channel, for a reminder
     // about the channel being watched).
     final replaced = ps.takeovers != _takeovers;
+    final generation = ps.generation;
     scheduleMicrotask(() {
       if (wasFullscreen && !replaced) AppWindow.setFullscreen(false);
-      if (!keepAlive && !replaced) ps.stop();
+      // Something opened meanwhile (the screen that follows): its stream is
+      // not cut by this one's late stop.
+      if (!keepAlive && !replaced && ps.generation == generation) ps.stop();
     });
     _preview.dispose();
     _focus.dispose();

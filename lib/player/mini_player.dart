@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -70,7 +71,6 @@ class MiniPlayer extends StatefulWidget {
 
 class _MiniPlayerState extends State<MiniPlayer> {
   static const _width = 448.0;
-  static const _height = _width * 9 / 16;
   Offset _offset = Offset.zero; // from the bottom-right corner
   bool _hover = false;
 
@@ -80,13 +80,17 @@ class _MiniPlayerState extends State<MiniPlayer> {
     final size = MediaQuery.sizeOf(context);
     final casting = s.cast.active;
     final item = casting ? s.cast.item.value : s.player.current.value;
-    final right = (24 - _offset.dx).clamp(8.0, size.width - _width - 8);
-    final bottom = (24 - _offset.dy).clamp(8.0, size.height - _height - 8);
+    // A window smaller than the mini-player (possible on Linux): it shrinks
+    // to fit, where the bounds below crossed and it became an error block.
+    final double width = math.max(120.0, math.min(_width, math.min(size.width - 16, (size.height - 16) * 16 / 9)));
+    final height = width * 9 / 16;
+    final right = (24 - _offset.dx).clamp(8.0, math.max(8.0, size.width - width - 8)).toDouble();
+    final bottom = (24 - _offset.dy).clamp(8.0, math.max(8.0, size.height - height - 8)).toDouble();
     return Positioned(
       right: right,
       bottom: bottom,
-      width: _width,
-      height: _height,
+      width: width,
+      height: height,
       child: Theme(
         data: darkTheme,
         child: MouseRegion(

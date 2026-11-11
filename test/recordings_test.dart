@@ -79,4 +79,18 @@ void main() {
     expect(repo.db.select('SELECT profile_id FROM favorites').map((r) => r['profile_id']), [lea]);
     expect(repo.profileId, 1);
   });
+
+  test('a recording lasts six hours at most, whatever the guide says', () async {
+    final (repo, src) = fixture();
+    final rec = RecordingService(repo, AppSettings(repo), onChanged: () {});
+    addTearDown(rec.dispose);
+    final start = DateTime.now().add(const Duration(days: 1));
+    final channel = Channel(id: 1, sourceId: src, extId: 'c', name: 'Chaîne', url: 'http://s/1.ts');
+    final id = rec.schedule(
+      channel,
+      Program(title: 'Toute la nuit', start: start, stop: start.add(const Duration(days: 3))),
+    );
+    final r = repo.recording(id)!;
+    expect(r.stop.difference(r.start), RecordingService.maxLength);
+  });
 }
