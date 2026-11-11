@@ -19,6 +19,10 @@ import 'cast_media.dart';
 /// the relay as well.
 ///
 /// Only addresses published with [publish] are served, under a random token.
+/// The addresses of a rewritten playlist are served under short ids the
+/// relay hands out itself: the TV never sees them (they hold the account's
+/// identifiers), and the token, which the TV tells to any device that asks
+/// what it plays, cannot be used to fetch any other address.
 class CastRelay {
   CastRelay({HttpClient? client, this.onRequest})
     : _client =
@@ -106,11 +110,7 @@ class CastRelay {
     if (route != null && seg[2] == 'm') {
       target = route.target;
     } else if (route != null && seg[2] == 'u' && seg.length >= 4 && !route.file) {
-      try {
-        target = utf8.decode(base64Url.decode(base64Url.normalize(seg[3])));
-      } on FormatException {
-        target = null;
-      }
+      target = route.links[seg[3]];
     }
     if (route != null) hits++;
     if (route == null || target == null || (req.method != 'GET' && req.method != 'HEAD')) {
@@ -171,7 +171,7 @@ class CastRelay {
           rewritePlaylist(
             text,
             finalUri,
-            (abs) => '${route.origin}/c/$token/u/${encodeLink(abs)}/${linkName(abs.toString())}',
+            (abs) => '${route.origin}/c/$token/u/${route.link(abs)}/${linkName(abs.toString())}',
           ),
         );
         res.statusCode = HttpStatus.ok;
@@ -379,6 +379,29 @@ class _Route {
   final String origin;
   final String userAgent;
   final String? contentType;
+
+  /// Addresses of the playlists rewritten for this route, by id.
+  final links = <String, String>{};
+  final _ids = <String, String>{};
+  var _next = 0;
+
+  /// Most addresses kept: a live playlist names new segments every few
+  /// seconds, the oldest ones are long played.
+  static const maxLinks = 4096;
+
+  /// The id [address] is served under.
+  String link(Uri address) {
+    final key = address.toString();
+    final known = _ids[key];
+    if (known != null) return known;
+    final id = (_next++).toRadixString(36);
+    _ids[key] = id;
+    links[id] = key;
+    while (links.length > maxLinks) {
+      _ids.remove(links.remove(links.keys.first));
+    }
+    return id;
+  }
 }
 
 /// Rewrites the addresses of an HLS playlist with [link] (absolute address
@@ -409,9 +432,6 @@ String rewritePlaylist(String text, Uri base, String Function(Uri absolute) link
   }
   return out.toString();
 }
-
-/// URL-safe form of an address, for the relay path.
-String encodeLink(Uri u) => base64Url.encode(utf8.encode(u.toString())).replaceAll('=', '');
 
 /// Last part of the address ("1234.ts"), kept so devices see the extension.
 String linkName(String target) {

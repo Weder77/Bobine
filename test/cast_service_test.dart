@@ -228,6 +228,30 @@ void main() {
       expect(seenAgents.where((a) => a == 'VLC/3.0').length, greaterThanOrEqualTo(2));
     });
 
+    test('HLS: the TV never sees the provider addresses, and the token fetches nothing else', () async {
+      final link = await relay.publish(up('/hls/index.m3u8'), host: InternetAddress.loopbackIPv4, userAgent: 'VLC/3.0');
+      final body = utf8.decode((await _get(link)).$3);
+      // Neither the provider's host and port nor any of its paths (where an
+      // Xtream panel puts the login and password), in clear or encoded.
+      expect(body, isNot(contains('${upstream.port}')));
+      expect(body, isNot(contains('other')));
+      final links = body.split('\n').where((l) => l.isNotEmpty && !l.startsWith('#')).toList();
+      for (final l in links) {
+        expect(Uri.parse(l).pathSegments[3], matches(RegExp(r'^[0-9a-z]{1,4}$')));
+      }
+      // The same address keeps its id when the playlist is read again.
+      expect(utf8.decode((await _get(link)).$3), body);
+
+      // Whoever knows the token (the TV tells it) asks for another address:
+      // this computer, the router, a host only the VPN reaches.
+      final token = Uri.parse(link).pathSegments[1];
+      final origin = link.substring(0, link.indexOf('/c/'));
+      final other = base64Url.encode(utf8.encode(up('/movie.mp4'))).replaceAll('=', '');
+      for (final path in ['/c/$token/u/$other/x.mp4', '/c/$token/u/zz/x.ts', '/c/$token/u/-1/x.ts']) {
+        expect((await _get('$origin$path')).$1, 404, reason: path);
+      }
+    });
+
     test('HEAD refused by the provider; the TV gets the type it was told', () async {
       final link = await relay.publish(
         up('/nohead.mkv'),
@@ -276,7 +300,7 @@ void main() {
       expect((await _get('$origin/c/0000/m/x.ts')).$1, 404);
       // A file route cannot be used to fetch other addresses.
       final token = Uri.parse(link).pathSegments[1];
-      expect((await _get('$origin/c/$token/u/${encodeLink(Uri.parse(up('/live.ts')))}/x')).$1, 404);
+      expect((await _get('$origin/c/$token/u/0/x')).$1, 404);
       relay.clear();
       expect((await _get(link)).$1, 404);
       await dir.delete(recursive: true);
