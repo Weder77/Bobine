@@ -2,7 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../data/import/xtream_api.dart';
 import '../data/models.dart';
+import '../data/repository.dart';
 import '../player/play_items.dart';
 import '../player/player_screen.dart';
 import '../player/player_session.dart';
@@ -115,7 +117,10 @@ class Launch {
       if (m != null) return movie(context, m, image: p.image);
     } else if (p.kind == ContentKind.episode && p.seriesExt != null) {
       final series = s.repo.seriesByExt(p.sourceId, p.seriesExt!);
-      final all = s.repo.episodes(p.sourceId, p.seriesExt!);
+      // An Xtream refresh empties the episodes until the series is opened
+      // again: they are asked to the server here.
+      final all = series == null ? s.repo.episodes(p.sourceId, p.seriesExt!) : await loadEpisodes(s.repo, series);
+      if (!context.mounted) return;
       final e = all.where((x) => x.extId == p.extId).firstOrNull;
       if (e != null) return episode(context, series, e, all);
       if (series != null && context.mounted) return openSeries(context, series);
@@ -134,5 +139,24 @@ class Launch {
   static Future<void> openSeries(BuildContext context, Series sr) async {
     if (_locked(context, sr.sourceId, ContentKind.series, sr.extId)) return;
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: sr)));
+  }
+}
+
+/// The episodes of [sr]: those kept here, else (Xtream, whose refresh
+/// empties them) asked to the server and kept. Empty when they cannot be had.
+Future<List<Episode>> loadEpisodes(Repository repo, Series sr) async {
+  final cached = repo.episodes(sr.sourceId, sr.extId);
+  if (cached.isNotEmpty) return cached;
+  final src = repo.source(sr.sourceId);
+  if (src == null || !src.isXtream) return const [];
+  final api = XtreamApi.forSource(src);
+  try {
+    final d = await api.seriesInfo(sr.sourceId, sr.extId);
+    repo.replaceEpisodes(sr.sourceId, sr.extId, d.episodes);
+    return d.episodes;
+  } catch (_) {
+    return const [];
+  } finally {
+    api.close();
   }
 }

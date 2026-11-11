@@ -11,6 +11,7 @@ import 'package:bobine/data/import/xtream_api.dart';
 import 'package:bobine/data/models.dart';
 import 'package:bobine/data/repository.dart';
 import 'package:bobine/data/stream_urls.dart';
+import 'package:bobine/ui/launch.dart';
 
 String _xmltvTime(DateTime t) {
   final u = t.toUtc();
@@ -124,6 +125,15 @@ void main() {
                 'backdrop_path': ['http://img/dark_b.jpg'],
               },
             ],
+            'get_series_info' => {
+              'info': {'name': 'Dark'},
+              'episodes': {
+                '1': [
+                  {'id': '7701', 'episode_num': 1, 'title': 'Secrets', 'container_extension': 'mkv'},
+                  {'id': '7702', 'episode_num': 2, 'title': 'Mensonges', 'container_extension': 'mkv'},
+                ],
+              },
+            },
             _ => <Object>[],
           };
           res.write(jsonEncode(data));
@@ -246,6 +256,21 @@ void main() {
     final list = repo.channels(id);
     expect(epg.now(list[0]), isNotNull);
     expect(epg.now(list[1]), isNotNull);
+  });
+
+  test('after an Xtream refresh, the episodes of a series are asked again to resume', () async {
+    final path = '${tmp.path}/episodes.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'X', type: SourceType.xtream, url: base, username: 'u', password: 'p');
+    await importXtream(path, id, null);
+    final dark = repo.seriesByExt(id, '77')!;
+    // Opened once: the episodes are kept. A refresh empties them again.
+    expect((await loadEpisodes(repo, dark)).map((e) => e.extId), ['7701', '7702']);
+    await importXtream(path, id, null);
+    expect(repo.episodes(id, '77'), isEmpty);
+    final again = await loadEpisodes(repo, dark);
+    expect(again.map((e) => e.extId), ['7701', '7702']);
+    expect(repo.episodes(id, '77'), hasLength(2));
   });
 
   test('a list that fails to download keeps what the source had, and says so', () async {

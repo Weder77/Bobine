@@ -545,26 +545,26 @@ class Repository {
   /// series the most recent episode. Films and series of a locked category
   /// stay out while the parental code is required.
   List<ProgressEntry> continueWatching(int sourceId, {int limit = 20}) {
+    // A series is where its last episode watched is: an episode left at
+    // the credits and followed by others seen to the end is not offered
+    // again. Its newest progress decides, finished or not.
     final rows = db.select(
-      'SELECT * FROM progress pr WHERE pr.profile_id = $profileId AND pr.source_id = ? AND pr.finished = 0 '
-      'AND pr.position_ms > 30000 '
+      'SELECT * FROM ('
+      'SELECT pr.*, ROW_NUMBER() OVER (PARTITION BY '
+      "CASE WHEN pr.kind = '${ContentKind.episode.db}' AND pr.series_ext IS NOT NULL "
+      "THEN 's:' || pr.series_ext ELSE pr.kind || ':' || pr.ext_id END "
+      'ORDER BY pr.updated_at DESC) AS newest '
+      'FROM progress pr WHERE pr.profile_id = $profileId AND pr.source_id = ? '
       "AND NOT EXISTS (SELECT 1 FROM movies m WHERE pr.kind = '${ContentKind.movie.db}' "
       'AND m.source_id = pr.source_id AND m.ext_id = pr.ext_id AND ${_lockedOut('m', ContentKind.movie, sourceId)}) '
       "AND NOT EXISTS (SELECT 1 FROM series sr WHERE pr.kind = '${ContentKind.episode.db}' "
       'AND sr.source_id = pr.source_id AND sr.ext_id = pr.series_ext '
-      'AND ${_lockedOut('sr', ContentKind.series, sourceId)}) '
-      'ORDER BY pr.updated_at DESC LIMIT 200',
-      [sourceId],
+      'AND ${_lockedOut('sr', ContentKind.series, sourceId)})'
+      ') WHERE newest = 1 AND finished = 0 AND position_ms > 30000 '
+      'ORDER BY updated_at DESC LIMIT ?',
+      [sourceId, limit],
     );
-    final seenSeries = <String>{};
-    final out = <ProgressEntry>[];
-    for (final r in rows) {
-      final p = ProgressEntry.fromRow(r);
-      if (p.seriesExt != null && !seenSeries.add(p.seriesExt!)) continue;
-      out.add(p);
-      if (out.length >= limit) break;
-    }
-    return out;
+    return rows.map(ProgressEntry.fromRow).toList();
   }
 
   /// Marks a film or an episode as seen (it leaves "Reprendre"), or with
