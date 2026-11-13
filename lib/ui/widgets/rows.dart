@@ -657,7 +657,7 @@ class _ResumeCard extends StatelessWidget {
                           icon: Icons.play_arrow_rounded,
                           filled: true,
                           onTap: onTap,
-                          tooltip: 'Reprendre',
+                          tooltip: p.upNext ? 'Lecture' : 'Reprendre',
                           size: 48,
                         ),
                       ),
@@ -678,25 +678,27 @@ class _ResumeCard extends StatelessWidget {
                           ),
                         ),
                       ),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: SizedBox(
-                        height: 4,
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ColoredBox(color: AppColors.ink.withAlpha(0x2E)),
-                            FractionallySizedBox(
-                              alignment: Alignment.centerLeft,
-                              widthFactor: p.fraction,
-                              child: ColoredBox(color: AppColors.accent),
-                            ),
-                          ],
+                    // The next episode has not been started: no bar.
+                    if (!p.upNext)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: SizedBox(
+                          height: 4,
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              ColoredBox(color: AppColors.ink.withAlpha(0x2E)),
+                              FractionallySizedBox(
+                                alignment: Alignment.centerLeft,
+                                widthFactor: p.fraction,
+                                child: ColoredBox(color: AppColors.accent),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -714,7 +716,7 @@ class _ResumeCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Text(
-                  'reste $left',
+                  p.upNext ? 'Épisode suivant' : 'reste $left',
                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, height: 1.3, color: AppColors.faint),
                 ),
               ],

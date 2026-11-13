@@ -135,10 +135,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final r = _s.repo;
     final series = _c.series;
     final kind = _c.kind;
+    final resume = r.continueWatchingWithPending(src.id);
     _resume = [
-      for (final p in r.continueWatching(src.id))
+      for (final p in resume.entries)
         if (series ? p.kind == ContentKind.episode : p.kind == ContentKind.movie) p,
     ];
+    if (series) {
+      loadPendingSeries(_s, src.id, resume.pendingSeries, () {
+        if (!mounted) return;
+        setState(() {
+          _rowsStale = true;
+          _load();
+        });
+      });
+    }
     List<Object> list({int? categoryId, CatalogSort sort = CatalogSort.added}) => series
         ? r.series(src.id, categoryId: categoryId, sort: sort, limit: 30)
         : r.movies(src.id, categoryId: categoryId, sort: sort, limit: 30);
@@ -221,7 +231,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 entries: r.resume!,
                 onPlay: (p) => Launch.resume(context, p),
                 onRemove: (p) {
-                  _s.repo.removeProgress(p.sourceId, p.kind, p.extId);
+                  _s.repo.removeFromResume(p);
                   _s.library.userChanged();
                 },
               )

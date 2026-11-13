@@ -119,7 +119,9 @@ Future<void> showMovieActions(BuildContext context, Movie m, Offset at) {
   if (last != null) {
     final i = episodes.indexWhere((e) => e.extId == last.extId);
     if (i >= 0) {
-      if (!last.finished) return (episodes[i], true);
+      // Started for a few seconds only (or taken out of "Reprendre"): it
+      // starts again, it is not resumed.
+      if (!last.finished) return (episodes[i], last.resumable);
       if (i + 1 < episodes.length) return (episodes[i + 1], false);
     }
   }
@@ -242,7 +244,7 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
   }
 
   void remove() {
-    s.repo.removeProgress(p.sourceId, p.kind, p.extId);
+    s.repo.removeFromResume(p);
     s.library.userChanged();
     _toast(
       context,
@@ -250,17 +252,22 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
       action: SnackBarAction(
         label: 'Annuler',
         onPressed: () {
-          s.repo.saveProgress(
-            sourceId: p.sourceId,
-            kind: p.kind,
-            extId: p.extId,
-            position: p.position,
-            duration: p.duration,
-            title: p.title,
-            subtitle: p.subtitle,
-            image: p.image,
-            seriesExt: p.seriesExt,
-          );
+          // The next episode had no position: the series is back where it was.
+          if (p.upNext) {
+            s.repo.removeProgress(p.sourceId, p.kind, p.extId);
+          } else {
+            s.repo.saveProgress(
+              sourceId: p.sourceId,
+              kind: p.kind,
+              extId: p.extId,
+              position: p.position,
+              duration: p.duration,
+              title: p.title,
+              subtitle: p.subtitle,
+              image: p.image,
+              seriesExt: p.seriesExt,
+            );
+          }
           s.library.userChanged();
         },
       ),
@@ -269,15 +276,37 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
 
   return showQuickActions(context, at, [
     QuickAction.header(p.title.toUpperCase()),
-    QuickAction('Reprendre à ${formatDuration(p.position)}', Icons.play_arrow_rounded, () => Launch.resume(context, p)),
-    QuickAction('Depuis le début', Icons.replay_rounded, restart),
+    if (p.upNext)
+      QuickAction(
+        'Lecture ${p.subtitle?.split(' · ').first ?? ''}'.trim(),
+        Icons.play_arrow_rounded,
+        () => Launch.resume(context, p),
+      )
+    else ...[
+      QuickAction(
+        'Reprendre à ${formatDuration(p.position)}',
+        Icons.play_arrow_rounded,
+        () => Launch.resume(context, p),
+      ),
+      QuickAction('Depuis le début', Icons.replay_rounded, restart),
+    ],
     if (movie != null)
       QuickAction("Plus d'infos", Icons.info_outline_rounded, () => Launch.openMovie(context, movie))
     else if (series != null)
       QuickAction('Voir la série', Icons.info_outline_rounded, () => Launch.openSeries(context, series)),
     null,
     QuickAction(episode ? "Marquer l'épisode comme vu" : 'Marquer comme vu', Icons.check_rounded, () {
-      s.repo.setWatched(p.sourceId, p.kind, p.extId, seen: true, title: p.title);
+      // The next episode may have no row yet: it must join its series.
+      s.repo.setWatched(
+        p.sourceId,
+        p.kind,
+        p.extId,
+        seen: true,
+        title: p.title,
+        subtitle: p.subtitle,
+        image: p.image,
+        seriesExt: p.seriesExt,
+      );
       s.library.userChanged();
     }),
     QuickAction('Retirer de Reprendre', Icons.close_rounded, remove, danger: true),

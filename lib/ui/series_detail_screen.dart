@@ -115,7 +115,9 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     if (last != null) {
       final i = _episodes.indexWhere((e) => e.extId == last.extId);
       if (i >= 0) {
-        if (!last.finished) return (_episodes[i], true);
+        // Started for a few seconds only (or taken out of "Reprendre"): it
+        // starts again, it is not resumed.
+        if (!last.finished) return (_episodes[i], last.resumable);
         if (i + 1 < _episodes.length) return (_episodes[i + 1], false);
       }
     }
@@ -360,7 +362,7 @@ class _EpisodeTile extends StatelessWidget {
                                 child: const Icon(Icons.play_arrow_rounded, size: 26),
                               ),
                             ),
-                          if (p != null)
+                          if (p != null && (p.finished || p.fraction > 0))
                             Positioned(
                               left: 0,
                               right: 0,

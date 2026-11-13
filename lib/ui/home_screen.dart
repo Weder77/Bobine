@@ -71,7 +71,13 @@ class _HomeScreenState extends State<HomeScreen> {
       d.liveCount = r.count(id, ContentKind.live);
       d.movieCount = r.count(id, ContentKind.movie);
       d.seriesCount = r.count(id, ContentKind.series);
-      d.continueWatching = r.continueWatching(id);
+      final resume = r.continueWatchingWithPending(id);
+      d.continueWatching = resume.entries;
+      // After an Xtream refresh, the next episode of a series is known once
+      // its episodes are asked again.
+      loadPendingSeries(_s, id, resume.pendingSeries, () {
+        if (mounted) _load();
+      });
       final favs = r.favoriteChannels(id);
       d.liveAreFavorites = favs.isNotEmpty;
       final seen = <String>{};
@@ -168,7 +174,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPlay: (p) => Launch.resume(context, p),
             onContextMenu: (p, at) => showProgressActions(context, p, at),
             onRemove: (p) {
-              _s.repo.removeProgress(p.sourceId, p.kind, p.extId);
+              _s.repo.removeFromResume(p);
               _s.library.userChanged();
             },
           ),

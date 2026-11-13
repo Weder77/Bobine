@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -144,6 +145,35 @@ class Launch {
     if (_locked(context, sr.sourceId, ContentKind.series, sr.extId)) return;
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: sr)));
   }
+}
+
+/// Loads of [loadPendingSeries], one at a time, each series once per
+/// content version (a refresh empties the episodes again).
+final _pendingLoads = <String, Future<bool>>{};
+Future<void> _pendingQueue = Future.value();
+
+/// Asks the server for the episodes of the series whose next episode
+/// "Reprendre" cannot name yet
+/// ([Repository.continueWatchingWithPending]); [then] runs when some came,
+/// to show it.
+void loadPendingSeries(AppServices s, int sourceId, List<String> series, VoidCallback then) {
+  if (series.isEmpty) return;
+  final loads = [
+    for (final ext in series)
+      _pendingLoads.putIfAbsent('$sourceId:$ext:${s.library.content}', () {
+        final f = _pendingQueue.then((_) async {
+          final sr = s.repo.seriesByExt(sourceId, ext);
+          return sr != null && (await loadEpisodes(s.repo, sr)).isNotEmpty;
+        });
+        _pendingQueue = f.then((_) {}, onError: (_) {});
+        return f;
+      }),
+  ];
+  unawaited(
+    Future.wait(loads).then((got) {
+      if (got.contains(true)) then();
+    }, onError: (_) {}),
+  );
 }
 
 /// The episodes of [sr]: those kept here, else (Xtream, whose refresh

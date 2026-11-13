@@ -383,6 +383,7 @@ class ProgressEntry {
     this.subtitle,
     this.image,
     this.seriesExt,
+    this.upNext = false,
   });
   final int sourceId;
   final ContentKind kind;
@@ -395,6 +396,10 @@ class ProgressEntry {
   final String? subtitle;
   final String? image;
   final String? seriesExt;
+
+  /// In "Reprendre": the episode after one watched to the end, offered from
+  /// its start (it has no position of its own).
+  final bool upNext;
 
   double get fraction =>
       duration.inMilliseconds <= 0 ? 0 : (position.inMilliseconds / duration.inMilliseconds).clamp(0.0, 1.0);

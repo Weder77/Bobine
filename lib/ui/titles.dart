@@ -72,7 +72,8 @@ class TitleCards {
     );
   }
 
-  /// A title in progress, with its progress bar and "Reprendre".
+  /// A title in progress, with its progress bar and "Reprendre" (or the
+  /// next episode of a series, from its start).
   HeroEntry resumeHero(ProgressEntry p) {
     final episode = p.kind == ContentKind.episode;
     final movie = episode ? null : s.repo.movieByExt(p.sourceId, p.extId);
@@ -81,7 +82,7 @@ class TitleCards {
     final base = movie != null
         ? movieHero(movie, 'Film · Reprendre')
         : series != null
-        ? seriesHero(series, 'Série · Tu en es à ${code ?? "l'épisode"}')
+        ? seriesHero(series, p.upNext ? 'Série · Épisode suivant' : 'Série · Tu en es à ${code ?? "l'épisode"}')
         : null;
     final left = 'reste ${formatSpan(p.duration - p.position)}';
     return HeroEntry(
@@ -96,9 +97,9 @@ class TitleCards {
       synopsis: base?.synopsis,
       backdrop: base?.backdrop,
       poster: base?.poster ?? p.image,
-      progress: p.fraction,
-      progressLabel: episode && code != null ? '$code · $left' : left,
-      primaryLabel: episode && code != null ? 'Reprendre $code' : 'Reprendre',
+      progress: p.upNext ? null : p.fraction,
+      progressLabel: p.upNext ? null : (episode && code != null ? '$code · $left' : left),
+      primaryLabel: '${p.upNext ? 'Lecture' : 'Reprendre'}${episode && code != null ? ' $code' : ''}',
       onPrimary: () => Launch.resume(context, p),
       onInfo: base?.onInfo,
       favorite: base?.favorite ?? false,
