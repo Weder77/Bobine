@@ -46,4 +46,32 @@ void main() {
     await t.pump();
     expect(played, ['373225']);
   });
+
+  testWidgets('the next episode of a series is offered from its start', (t) async {
+    t.view.physicalSize = const Size(1600, 900);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final entry = ProgressEntry(
+      sourceId: 1,
+      kind: ContentKind.episode,
+      extId: 'g4',
+      position: Duration.zero,
+      duration: const Duration(minutes: 55),
+      finished: false,
+      updatedAt: DateTime(2026, 11, 13),
+      title: 'Les Gentlemen (2024)',
+      subtitle: "S02E04 · La vue d'ensemble",
+      seriesExt: 'gent',
+      upNext: true,
+    );
+    await t.pumpWidget(
+      MaterialApp(
+        theme: darkTheme,
+        home: Scaffold(body: ResumeRail(entries: [entry], onPlay: (_) {})),
+      ),
+    );
+    expect(find.text('Épisode suivant'), findsOneWidget);
+    expect(find.textContaining('reste'), findsNothing);
+    expect(find.text("S02E04 · La vue d'ensemble"), findsOneWidget);
+  });
 }

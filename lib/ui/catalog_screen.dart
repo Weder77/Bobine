@@ -12,6 +12,7 @@ import '../data/repository.dart';
 import '../services.dart';
 import 'catalog_controller.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'shell.dart';
 import 'titles.dart';
 import 'widgets/billboard.dart';
@@ -135,10 +136,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final r = _s.repo;
     final series = _c.series;
     final kind = _c.kind;
-    _resume = [
-      for (final p in r.continueWatching(src.id))
-        if (series ? p.kind == ContentKind.episode : p.kind == ContentKind.movie) p,
-    ];
+    // Its own kind only: films seen since do not push the series out.
+    final resume = r.continueWatchingWithPending(src.id, kind: series ? ContentKind.episode : ContentKind.movie);
+    _resume = resume.entries;
+    if (series) {
+      loadPendingSeries(_s, src.id, resume.pendingSeries, () {
+        if (!mounted) return;
+        setState(() {
+          _rowsStale = true;
+          _load();
+        });
+      });
+    }
     List<Object> list({int? categoryId, CatalogSort sort = CatalogSort.added}) => series
         ? r.series(src.id, categoryId: categoryId, sort: sort, limit: 30)
         : r.movies(src.id, categoryId: categoryId, sort: sort, limit: 30);
@@ -220,10 +229,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ResumeRail(
                 entries: r.resume!,
                 onPlay: (p) => Launch.resume(context, p),
-                onRemove: (p) {
-                  _s.repo.removeProgress(p.sourceId, p.kind, p.extId);
-                  _s.library.userChanged();
-                },
+                onContextMenu: (p, at) => showProgressActions(context, p, at),
+                onRemove: (p) => takeOutOfResume(context, p),
               )
             else if (r.top)
               TopTenRail(items: [for (final t in r.items) cards.top(t)])
@@ -306,10 +313,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   Map<String, double> _movieProgress(Source src) => _c.series
       ? const {}
-      : {
-          for (final p in _s.repo.continueWatching(src.id, limit: 500))
-            if (p.kind == ContentKind.movie) p.extId: p.fraction,
-        };
+      : {for (final p in _s.repo.continueWatching(src.id, limit: 500, kind: ContentKind.movie)) p.extId: p.fraction};
 
   Widget _buildGrid() {
     final cards = TitleCards(context, _s, _favorites);

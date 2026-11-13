@@ -119,7 +119,8 @@ Future<void> showMovieActions(BuildContext context, Movie m, Offset at) {
   if (last != null) {
     final i = episodes.indexWhere((e) => e.extId == last.extId);
     if (i >= 0) {
-      if (!last.finished) return (episodes[i], true);
+      // Taken out of "Reprendre" (no position kept): it starts again.
+      if (!last.finished) return (episodes[i], last.resumable);
       if (i + 1 < episodes.length) return (episodes[i + 1], false);
     }
   }
@@ -241,15 +242,61 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
     _toast(context, 'Cet épisode n’est plus proposé par la source.');
   }
 
-  void remove() {
-    s.repo.removeProgress(p.sourceId, p.kind, p.extId);
-    s.library.userChanged();
-    _toast(
-      context,
-      '« ${p.title} » retiré de Reprendre',
-      action: SnackBarAction(
-        label: 'Annuler',
-        onPressed: () {
+  return showQuickActions(context, at, [
+    QuickAction.header(p.title.toUpperCase()),
+    if (p.upNext)
+      QuickAction(
+        'Lecture ${p.subtitle?.split(' · ').first ?? ''}'.trim(),
+        Icons.play_arrow_rounded,
+        () => Launch.resume(context, p),
+      )
+    else ...[
+      QuickAction(
+        'Reprendre à ${formatDuration(p.position)}',
+        Icons.play_arrow_rounded,
+        () => Launch.resume(context, p),
+      ),
+      QuickAction('Depuis le début', Icons.replay_rounded, restart),
+    ],
+    if (movie != null)
+      QuickAction("Plus d'infos", Icons.info_outline_rounded, () => Launch.openMovie(context, movie))
+    else if (series != null)
+      QuickAction('Voir la série', Icons.info_outline_rounded, () => Launch.openSeries(context, series)),
+    null,
+    QuickAction(episode ? "Marquer l'épisode comme vu" : 'Marquer comme vu', Icons.check_rounded, () {
+      // The next episode may have no row yet: it must join its series.
+      s.repo.setWatched(
+        p.sourceId,
+        p.kind,
+        p.extId,
+        seen: true,
+        title: p.title,
+        subtitle: p.subtitle,
+        image: p.image,
+        seriesExt: p.seriesExt,
+      );
+      s.library.userChanged();
+    }),
+    QuickAction('Retirer de Reprendre', Icons.close_rounded, () => takeOutOfResume(context, p), danger: true),
+  ]);
+}
+
+/// Takes [p] out of "Reprendre" (right click or the cross of its card), with
+/// "Annuler" for a click made too fast.
+void takeOutOfResume(BuildContext context, ProgressEntry p) {
+  final s = AppScope.of(context);
+  s.repo.removeFromResume(p);
+  s.library.userChanged();
+  _toast(
+    context,
+    '« ${p.title} » retiré de Reprendre',
+    action: SnackBarAction(
+      label: 'Annuler',
+      onPressed: () {
+        // The next episode had no position: the series is back where it was.
+        if (p.upNext) {
+          s.repo.removeProgress(p.sourceId, p.kind, p.extId);
+        } else {
           s.repo.saveProgress(
             sourceId: p.sourceId,
             kind: p.kind,
@@ -261,27 +308,11 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
             image: p.image,
             seriesExt: p.seriesExt,
           );
-          s.library.userChanged();
-        },
-      ),
-    );
-  }
-
-  return showQuickActions(context, at, [
-    QuickAction.header(p.title.toUpperCase()),
-    QuickAction('Reprendre à ${formatDuration(p.position)}', Icons.play_arrow_rounded, () => Launch.resume(context, p)),
-    QuickAction('Depuis le début', Icons.replay_rounded, restart),
-    if (movie != null)
-      QuickAction("Plus d'infos", Icons.info_outline_rounded, () => Launch.openMovie(context, movie))
-    else if (series != null)
-      QuickAction('Voir la série', Icons.info_outline_rounded, () => Launch.openSeries(context, series)),
-    null,
-    QuickAction(episode ? "Marquer l'épisode comme vu" : 'Marquer comme vu', Icons.check_rounded, () {
-      s.repo.setWatched(p.sourceId, p.kind, p.extId, seen: true, title: p.title);
-      s.library.userChanged();
-    }),
-    QuickAction('Retirer de Reprendre', Icons.close_rounded, remove, danger: true),
-  ]);
+        }
+        s.library.userChanged();
+      },
+    ),
+  );
 }
 
 // ----------------------------------------------------------------- chaînes

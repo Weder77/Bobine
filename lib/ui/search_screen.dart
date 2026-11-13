@@ -14,10 +14,11 @@ import 'quick_actions.dart';
 import 'shell.dart';
 import 'widgets/cards.dart';
 import 'widgets/common.dart';
+import 'widgets/rows.dart';
 
 /// Search layer under the header (its field is the header's): recent
-/// searches and trends while empty, then channels, TV programmes, films
-/// and series.
+/// searches and trends while empty, then films and series first, channels,
+/// and the first TV programmes (the others on demand).
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key, required this.controller, required this.onClose});
   final TextEditingController controller;
@@ -217,32 +218,6 @@ class _SearchScreenState extends State<SearchScreen> {
           ),
         ],
       ),
-      if (r.channels.isNotEmpty) ...[
-        const SizedBox(height: 44),
-        _title('Chaînes'),
-        const SizedBox(height: 14),
-        AutoGrid(
-          minWidth: 280,
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final c in r.channels.take(24))
-              _ChannelResult(
-                channel: c,
-                onTap: () {
-                  _remember();
-                  Launch.channel(context, c, r.channels);
-                },
-              ),
-          ],
-        ),
-      ],
-      if (_programs.isNotEmpty) ...[
-        const SizedBox(height: 44),
-        _title('Programmes TV'),
-        const SizedBox(height: 14),
-        for (final h in _programs.take(30)) _ProgramRow(hit: h, now: now, onOpen: () => _openProgram(h, now)),
-      ],
       if (r.movies.isNotEmpty) ...[
         const SizedBox(height: 44),
         _title('Films'),
@@ -287,6 +262,38 @@ class _SearchScreenState extends State<SearchScreen> {
                 onContextMenu: (at) => showSeriesActions(context, sr, at),
               ),
           ],
+        ),
+      ],
+      if (r.channels.isNotEmpty) ...[
+        const SizedBox(height: 44),
+        _title('Chaînes'),
+        const SizedBox(height: 14),
+        AutoGrid(
+          minWidth: 280,
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final c in r.channels.take(24))
+              _ChannelResult(
+                channel: c,
+                onTap: () {
+                  _remember();
+                  Launch.channel(context, c, r.channels);
+                },
+              ),
+          ],
+        ),
+      ],
+      if (_programs.isNotEmpty) ...[
+        const SizedBox(height: 44),
+        _title('Programmes TV'),
+        const SizedBox(height: 14),
+        // Five first: films and series matter more, and the guide can hold
+        // dozens of airings of a title.
+        FoldedList(
+          key: ValueKey(_query),
+          moreLabel: 'Tout voir · ${_programs.length} programmes',
+          children: [for (final h in _programs) _ProgramRow(hit: h, now: now, onOpen: () => _openProgram(h, now))],
         ),
       ],
     ];

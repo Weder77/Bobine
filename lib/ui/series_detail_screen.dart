@@ -11,6 +11,7 @@ import '../data/models.dart';
 import '../features/tmdb.dart';
 import '../services.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'widgets/common.dart';
 import 'widgets/detail_layout.dart';
 import 'widgets/net_image.dart';
@@ -108,19 +109,8 @@ class _SeriesDetailScreenState extends State<SeriesDetailScreen> {
     }
   }
 
-  /// Episode to start with: the one in progress, the next unwatched, or the first.
-  (Episode, bool)? _target() {
-    if (_episodes.isEmpty) return null;
-    final last = _last;
-    if (last != null) {
-      final i = _episodes.indexWhere((e) => e.extId == last.extId);
-      if (i >= 0) {
-        if (!last.finished) return (_episodes[i], true);
-        if (i + 1 < _episodes.length) return (_episodes[i + 1], false);
-      }
-    }
-    return (_episodes.first, false);
-  }
+  /// Episode to start with, and whether it resumes ([seriesTarget]).
+  (Episode, bool)? _target() => seriesTarget(_episodes, _last);
 
   @override
   Widget build(BuildContext context) {
@@ -360,7 +350,7 @@ class _EpisodeTile extends StatelessWidget {
                                 child: const Icon(Icons.play_arrow_rounded, size: 26),
                               ),
                             ),
-                          if (p != null)
+                          if (p != null && (p.finished || p.fraction > 0))
                             Positioned(
                               left: 0,
                               right: 0,

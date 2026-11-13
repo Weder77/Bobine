@@ -52,7 +52,9 @@ class TitleCards {
 
   HeroEntry seriesHero(Series sr, String kicker) {
     final t = s.tmdb.cachedSeries(sr);
-    final started = s.repo.lastEpisodeProgress(sr.sourceId, sr.extId) != null;
+    final last = s.repo.lastEpisodeProgress(sr.sourceId, sr.extId);
+    // The episode it starts with, when its episodes are known here.
+    final target = seriesTarget(s.repo.episodes(sr.sourceId, sr.extId), last);
     return HeroEntry(
       key: 's${sr.extId}',
       kicker: kicker,
@@ -64,7 +66,9 @@ class TitleCards {
       synopsis: (sr.plot != null && sr.plot!.isNotEmpty) ? sr.plot : t?.overview,
       backdrop: t?.backdrop ?? sr.backdrop,
       poster: sr.poster ?? t?.poster,
-      primaryLabel: started ? 'Reprendre' : 'Lecture S01E01',
+      primaryLabel: target != null
+          ? '${target.$2 ? 'Reprendre' : 'Lecture'} ${target.$1.code}'
+          : (last != null ? 'Reprendre' : 'Lecture S01E01'),
       onPrimary: () => playSeries(context, sr),
       onInfo: () => Launch.openSeries(context, sr),
       favorite: favorites.contains(favKey(ContentKind.series, sr.extId)),
@@ -72,7 +76,8 @@ class TitleCards {
     );
   }
 
-  /// A title in progress, with its progress bar and "Reprendre".
+  /// A title in progress, with its progress bar and "Reprendre" (or the
+  /// next episode of a series, from its start).
   HeroEntry resumeHero(ProgressEntry p) {
     final episode = p.kind == ContentKind.episode;
     final movie = episode ? null : s.repo.movieByExt(p.sourceId, p.extId);
@@ -81,7 +86,7 @@ class TitleCards {
     final base = movie != null
         ? movieHero(movie, 'Film · Reprendre')
         : series != null
-        ? seriesHero(series, 'Série · Tu en es à ${code ?? "l'épisode"}')
+        ? seriesHero(series, p.upNext ? 'Série · Épisode suivant' : 'Série · Tu en es à ${code ?? "l'épisode"}')
         : null;
     final left = 'reste ${formatSpan(p.duration - p.position)}';
     return HeroEntry(
@@ -96,9 +101,9 @@ class TitleCards {
       synopsis: base?.synopsis,
       backdrop: base?.backdrop,
       poster: base?.poster ?? p.image,
-      progress: p.fraction,
-      progressLabel: episode && code != null ? '$code · $left' : left,
-      primaryLabel: episode && code != null ? 'Reprendre $code' : 'Reprendre',
+      progress: p.upNext ? null : p.fraction,
+      progressLabel: p.upNext ? null : (episode && code != null ? '$code · $left' : left),
+      primaryLabel: '${p.upNext ? 'Lecture' : 'Reprendre'}${episode && code != null ? ' $code' : ''}',
       onPrimary: () => Launch.resume(context, p),
       onInfo: base?.onInfo,
       favorite: base?.favorite ?? false,

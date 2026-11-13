@@ -552,11 +552,17 @@ class Repository {
       r['ext_id'] as String: ProgressEntry.fromRow(r),
   };
 
-  /// Most recently watched episode of a series (to offer "Reprendre").
+  /// Progress rows that tell where a series is (see [continueWatching]):
+  /// seen to the end, under way, or taken out of "Reprendre". A few seconds
+  /// of an episode (the next one started by itself, a look) do not count.
+  static String _meaningful(String t) => '($t.finished = 1 OR $t.position_ms > 30000 OR $t.duration_ms = 0)';
+
+  /// Most recently watched episode of a series (to offer "Reprendre"), as
+  /// "Reprendre" sees it ([_meaningful]).
   ProgressEntry? lastEpisodeProgress(int sourceId, String seriesExt) {
     final rows = db.select(
       'SELECT * FROM progress WHERE profile_id = $profileId AND source_id = ? AND kind = ? AND series_ext = ? '
-      'ORDER BY updated_at DESC LIMIT 1',
+      'AND ${_meaningful('progress')} ORDER BY updated_at DESC LIMIT 1',
       [sourceId, ContentKind.episode.db, seriesExt],
     );
     return rows.isEmpty ? null : ProgressEntry.fromRow(rows.first);
@@ -601,33 +607,133 @@ class Repository {
   }
 
   /// Items to show in "Continuer à regarder": unfinished movies, plus for each
-  /// series the most recent episode. Films and series of a locked category
-  /// stay out while the parental code is required.
-  List<ProgressEntry> continueWatching(int sourceId, {int limit = 20}) {
-    // A series is where its last episode watched is: an episode left at
-    // the credits and followed by others seen to the end is not offered
-    // again. Its newest progress decides, finished or not.
+  /// series the episode in progress or the one after the last seen to the
+  /// end ([ProgressEntry.upNext]). Films and series of a locked category
+  /// stay out while the parental code is required. [kind] keeps films
+  /// ([ContentKind.movie]) or series ([ContentKind.episode]) only.
+  List<ProgressEntry> continueWatching(int sourceId, {int limit = 20, ContentKind? kind}) =>
+      continueWatchingWithPending(sourceId, limit: limit, kind: kind).entries;
+
+  /// [continueWatching], with the series whose next episode cannot be named
+  /// yet: an Xtream refresh empties the episodes until they are asked to the
+  /// server again ([pendingSeries], to load; they count in [limit]).
+  ({List<ProgressEntry> entries, List<String> pendingSeries}) continueWatchingWithPending(
+    int sourceId, {
+    int limit = 20,
+    ContentKind? kind,
+  }) {
+    final ep = ContentKind.episode.db;
+    // A series is where its last episode watched is: an episode left at the
+    // credits and followed by others seen to the end is not offered again.
+    // Its newest progress decides: under way, it is resumed; seen to the
+    // end, the next episode is offered. A few seconds of an episode (the
+    // next one started by itself, a look) change nothing, and a row without
+    // length is a series taken out of "Reprendre" ([removeFromResume]).
     final rows = db.select(
       'SELECT * FROM ('
       'SELECT pr.*, ROW_NUMBER() OVER (PARTITION BY '
-      "CASE WHEN pr.kind = '${ContentKind.episode.db}' AND pr.series_ext IS NOT NULL "
+      "CASE WHEN pr.kind = '$ep' AND pr.series_ext IS NOT NULL "
       "THEN 's:' || pr.series_ext ELSE pr.kind || ':' || pr.ext_id END "
       'ORDER BY pr.updated_at DESC) AS newest '
       'FROM progress pr WHERE pr.profile_id = $profileId AND pr.source_id = ? '
+      'AND ${_meaningful('pr')} '
+      '${kind == null ? '' : "AND pr.kind = '${kind.db}' "}'
       "AND NOT EXISTS (SELECT 1 FROM movies m WHERE pr.kind = '${ContentKind.movie.db}' "
       'AND m.source_id = pr.source_id AND m.ext_id = pr.ext_id AND ${_lockedOut('m', ContentKind.movie, sourceId)}) '
-      "AND NOT EXISTS (SELECT 1 FROM series sr WHERE pr.kind = '${ContentKind.episode.db}' "
+      "AND NOT EXISTS (SELECT 1 FROM series sr WHERE pr.kind = '$ep' "
       'AND sr.source_id = pr.source_id AND sr.ext_id = pr.series_ext '
       'AND ${_lockedOut('sr', ContentKind.series, sourceId)})'
-      ') WHERE newest = 1 AND finished = 0 AND position_ms > 30000 '
-      'ORDER BY updated_at DESC LIMIT ?',
-      [sourceId, limit],
+      ') WHERE newest = 1 AND duration_ms > 0 '
+      "AND (finished = 0 OR (kind = '$ep' AND series_ext IS NOT NULL)) "
+      'ORDER BY updated_at DESC',
+      [sourceId],
     );
-    return rows.map(ProgressEntry.fromRow).toList();
+    final xtream = source(sourceId)?.isXtream ?? false;
+    final entries = <ProgressEntry>[];
+    final pending = <String>[];
+    for (final r in rows) {
+      if (entries.length + pending.length >= limit) break;
+      final p = ProgressEntry.fromRow(r);
+      if (!p.finished) {
+        entries.add(p);
+        continue;
+      }
+      final next = nextEpisode(sourceId, p.seriesExt!, p.extId);
+      if (next != null) {
+        entries.add(
+          ProgressEntry(
+            sourceId: sourceId,
+            kind: ContentKind.episode,
+            extId: next.extId,
+            position: Duration.zero,
+            duration: Duration(seconds: next.durationSec ?? 0),
+            finished: false,
+            updatedAt: p.updatedAt,
+            title: p.title,
+            subtitle: '${next.code} · ${next.displayTitle}',
+            image: next.image ?? p.image,
+            seriesExt: p.seriesExt,
+            upNext: true,
+          ),
+        );
+      } else if (xtream && _awaitsEpisodes(sourceId, p.seriesExt!)) {
+        pending.add(p.seriesExt!);
+      }
+      // Otherwise the series was seen to its last episode (or is gone).
+    }
+    return (entries: entries, pendingSeries: pending);
   }
 
-  /// Marks a film or an episode as seen (it leaves "Reprendre"), or with
-  /// [seen] false forgets that it was watched.
+  /// Whether [seriesExt] is still listed, without its episodes here.
+  bool _awaitsEpisodes(int sourceId, String seriesExt) => db.select(
+    'SELECT 1 FROM series WHERE source_id = ? AND ext_id = ? '
+    'AND NOT EXISTS (SELECT 1 FROM episodes WHERE source_id = ? AND series_ext = ?) LIMIT 1',
+    [sourceId, seriesExt, sourceId, seriesExt],
+  ).isNotEmpty;
+
+  /// The episode after [extId] in its series, by season then number: null
+  /// after the last one, or when the episodes are not known here.
+  Episode? nextEpisode(int sourceId, String seriesExt, String extId) {
+    final rows = db.select(
+      'SELECT n.* FROM episodes c JOIN episodes n ON n.source_id = c.source_id AND n.series_ext = c.series_ext '
+      'AND (n.season > c.season OR (n.season = c.season AND n.episode > c.episode)) '
+      'WHERE c.source_id = ? AND c.series_ext = ? AND c.ext_id = ? '
+      'ORDER BY n.season, n.episode LIMIT 1',
+      [sourceId, seriesExt, extId],
+    );
+    return rows.isEmpty ? null : Episode.fromRow(rows.first);
+  }
+
+  /// Takes [p] out of "Reprendre". A film forgets its position. A series
+  /// would otherwise come back with the episode after the one seen before:
+  /// its episode is kept as just started, without length, which keeps the
+  /// series out until something of it is watched again.
+  void removeFromResume(ProgressEntry p) {
+    if (p.kind != ContentKind.episode || p.seriesExt == null) {
+      return removeProgress(p.sourceId, p.kind, p.extId);
+    }
+    write(
+      () => db.execute(
+        'INSERT OR REPLACE INTO progress (profile_id, source_id, kind, ext_id, position_ms, duration_ms, finished, '
+        'updated_at, title, subtitle, image, series_ext) VALUES (?, ?, ?, ?, 0, 0, 0, ?, ?, ?, ?, ?)',
+        [
+          profileId,
+          p.sourceId,
+          p.kind.db,
+          p.extId,
+          DateTime.now().millisecondsSinceEpoch,
+          p.title,
+          p.subtitle,
+          p.image,
+          p.seriesExt,
+        ],
+      ),
+    );
+  }
+
+  /// Marks a film or an episode as seen (a film leaves "Reprendre", a
+  /// series goes on to its next episode), or with [seen] false forgets that
+  /// it was watched.
   void setWatched(
     int sourceId,
     ContentKind kind,
