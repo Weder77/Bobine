@@ -2,8 +2,14 @@
 
 Bobine installe ses mises à jour en silence. Pour qu'un installateur déposé
 sur une release sans la clé (fichier remplacé, release faite à la main) ne
-puisse pas être installé, l'installateur peut être signé avec une clé Ed25519
+puisse pas être installé, l'installateur est signé avec une clé Ed25519
 dont la moitié publique est intégrée à l'application.
+
+**État : en place depuis la 1.7.0.** La clé publique est dans
+`kUpdatePublicKey` (`lib/core/version.dart`), le secret
+`BOBINE_UPDATE_SIGNING_KEY` est dans l'environnement `PRD`, et chaque release
+publie `Bobine-Setup-x.y.z.exe.sig` à côté de l'installateur (1.7.0, 1.7.1).
+Une version 1.7 ou plus récente refuse un installateur sans signature valide.
 
 Limite : la signature est faite par le build GitHub. Elle ne protège pas d'un
 build lui-même compromis (workflow modifié par un accès volé, étape tierce
@@ -12,11 +18,11 @@ faut signer hors de GitHub, sur ton ordinateur, l'installateur téléchargé
 depuis l'artefact du build (mêmes commandes que dans le workflow), puis
 déposer le `.sig` sur la release.
 
-Tant que la clé n'est pas configurée, l'application vérifie seulement que
-l'installateur vient des releases du dépôt sur github.com, en https, avec
+Une version sans clé publique (`kUpdatePublicKey` vide) vérifie seulement
+que l'installateur vient des releases du dépôt sur github.com, en https, avec
 l'empreinte SHA-256 donnée par GitHub.
 
-## Mise en place (une seule fois)
+## Mise en place (déjà faite, gardée pour référence)
 
 1. Créer la paire de clés, sur ton ordinateur, hors du dépôt :
 

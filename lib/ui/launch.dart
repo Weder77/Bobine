@@ -114,7 +114,7 @@ class Launch {
     await PlayerScreen.open(context, PlayerSession(item: recordingItem(r)));
   }
 
-  /// Resumes an entry of "Continuer à regarder".
+  /// Resumes an entry of "Reprendre" (an episode up next starts from its beginning).
   static Future<void> resume(BuildContext context, ProgressEntry p) async {
     final s = AppScope.of(context);
     if (p.kind == ContentKind.movie) {
