@@ -197,6 +197,67 @@ void main() {
     });
   });
 
+  test('"Reprendre" of one kind is not crowded out by the other', () async {
+    final repo = Repository(openMemoryDatabase());
+    final src = repo.insertSource(name: 'S', type: SourceType.m3u, url: 'http://x');
+    repo.saveProgress(
+      sourceId: src,
+      kind: ContentKind.episode,
+      extId: 'e1',
+      position: const Duration(minutes: 10),
+      duration: const Duration(minutes: 45),
+      title: 'Série',
+      seriesExt: 'show',
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 3));
+    // Twenty films watched since: they fill the shared row.
+    for (var i = 0; i < 20; i++) {
+      repo.saveProgress(
+        sourceId: src,
+        kind: ContentKind.movie,
+        extId: 'm$i',
+        position: const Duration(minutes: 10),
+        duration: const Duration(minutes: 100),
+        title: 'Film $i',
+      );
+    }
+    expect(repo.continueWatching(src).map((p) => p.kind).toSet(), {ContentKind.movie});
+    expect(repo.continueWatching(src, kind: ContentKind.episode).single.extId, 'e1');
+    expect(repo.continueWatching(src, kind: ContentKind.movie), hasLength(20));
+  });
+
+  test('the series page starts where "Reprendre" does: a few seconds change nothing', () async {
+    final repo = Repository(openMemoryDatabase());
+    final src = repo.insertSource(name: 'S', type: SourceType.m3u, url: 'http://x');
+    Future<void> watch(String ext, Duration at) async {
+      repo.saveProgress(
+        sourceId: src,
+        kind: ContentKind.episode,
+        extId: ext,
+        position: at,
+        duration: const Duration(minutes: 55),
+        title: 'Série',
+        seriesExt: 'show',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 3));
+    }
+
+    // Only a look: not started.
+    await watch('e1', const Duration(seconds: 10));
+    expect(repo.lastEpisodeProgress(src, 'show'), isNull);
+
+    await watch('e4', const Duration(minutes: 20));
+    await watch('e5', const Duration(seconds: 10));
+    expect(repo.lastEpisodeProgress(src, 'show')!.extId, 'e4');
+    expect(repo.continueWatching(src).single.extId, 'e4');
+
+    // Taken out of "Reprendre": that is where the series is.
+    repo.removeFromResume(repo.continueWatching(src).single);
+    final last = repo.lastEpisodeProgress(src, 'show')!;
+    expect(last.extId, 'e4');
+    expect(last.resumable, isFalse);
+  });
+
   test('the next episode follows the season order', () {
     final repo = Repository(openMemoryDatabase());
     final src = repo.insertSource(name: 'S', type: SourceType.m3u, url: 'http://x');

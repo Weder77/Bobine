@@ -173,10 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
             entries: _d.continueWatching,
             onPlay: (p) => Launch.resume(context, p),
             onContextMenu: (p, at) => showProgressActions(context, p, at),
-            onRemove: (p) {
-              _s.repo.removeFromResume(p);
-              _s.library.userChanged();
-            },
+            onRemove: (p) => takeOutOfResume(context, p),
           ),
         ),
       if (_d.top.isNotEmpty)

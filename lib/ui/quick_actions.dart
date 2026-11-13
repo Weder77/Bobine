@@ -119,8 +119,7 @@ Future<void> showMovieActions(BuildContext context, Movie m, Offset at) {
   if (last != null) {
     final i = episodes.indexWhere((e) => e.extId == last.extId);
     if (i >= 0) {
-      // Started for a few seconds only (or taken out of "Reprendre"): it
-      // starts again, it is not resumed.
+      // Taken out of "Reprendre" (no position kept): it starts again.
       if (!last.finished) return (episodes[i], last.resumable);
       if (i + 1 < episodes.length) return (episodes[i + 1], false);
     }
@@ -243,37 +242,6 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
     _toast(context, 'Cet épisode n’est plus proposé par la source.');
   }
 
-  void remove() {
-    s.repo.removeFromResume(p);
-    s.library.userChanged();
-    _toast(
-      context,
-      '« ${p.title} » retiré de Reprendre',
-      action: SnackBarAction(
-        label: 'Annuler',
-        onPressed: () {
-          // The next episode had no position: the series is back where it was.
-          if (p.upNext) {
-            s.repo.removeProgress(p.sourceId, p.kind, p.extId);
-          } else {
-            s.repo.saveProgress(
-              sourceId: p.sourceId,
-              kind: p.kind,
-              extId: p.extId,
-              position: p.position,
-              duration: p.duration,
-              title: p.title,
-              subtitle: p.subtitle,
-              image: p.image,
-              seriesExt: p.seriesExt,
-            );
-          }
-          s.library.userChanged();
-        },
-      ),
-    );
-  }
-
   return showQuickActions(context, at, [
     QuickAction.header(p.title.toUpperCase()),
     if (p.upNext)
@@ -309,8 +277,42 @@ Future<void> showProgressActions(BuildContext context, ProgressEntry p, Offset a
       );
       s.library.userChanged();
     }),
-    QuickAction('Retirer de Reprendre', Icons.close_rounded, remove, danger: true),
+    QuickAction('Retirer de Reprendre', Icons.close_rounded, () => takeOutOfResume(context, p), danger: true),
   ]);
+}
+
+/// Takes [p] out of "Reprendre" (right click or the cross of its card), with
+/// "Annuler" for a click made too fast.
+void takeOutOfResume(BuildContext context, ProgressEntry p) {
+  final s = AppScope.of(context);
+  s.repo.removeFromResume(p);
+  s.library.userChanged();
+  _toast(
+    context,
+    '« ${p.title} » retiré de Reprendre',
+    action: SnackBarAction(
+      label: 'Annuler',
+      onPressed: () {
+        // The next episode had no position: the series is back where it was.
+        if (p.upNext) {
+          s.repo.removeProgress(p.sourceId, p.kind, p.extId);
+        } else {
+          s.repo.saveProgress(
+            sourceId: p.sourceId,
+            kind: p.kind,
+            extId: p.extId,
+            position: p.position,
+            duration: p.duration,
+            title: p.title,
+            subtitle: p.subtitle,
+            image: p.image,
+            seriesExt: p.seriesExt,
+          );
+        }
+        s.library.userChanged();
+      },
+    ),
+  );
 }
 
 // ----------------------------------------------------------------- chaînes

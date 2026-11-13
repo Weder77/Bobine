@@ -552,11 +552,17 @@ class Repository {
       r['ext_id'] as String: ProgressEntry.fromRow(r),
   };
 
-  /// Most recently watched episode of a series (to offer "Reprendre").
+  /// Progress rows that tell where a series is (see [continueWatching]):
+  /// seen to the end, under way, or taken out of "Reprendre". A few seconds
+  /// of an episode (the next one started by itself, a look) do not count.
+  static String _meaningful(String t) => '($t.finished = 1 OR $t.position_ms > 30000 OR $t.duration_ms = 0)';
+
+  /// Most recently watched episode of a series (to offer "Reprendre"), as
+  /// "Reprendre" sees it ([_meaningful]).
   ProgressEntry? lastEpisodeProgress(int sourceId, String seriesExt) {
     final rows = db.select(
       'SELECT * FROM progress WHERE profile_id = $profileId AND source_id = ? AND kind = ? AND series_ext = ? '
-      'ORDER BY updated_at DESC LIMIT 1',
+      'AND ${_meaningful('progress')} ORDER BY updated_at DESC LIMIT 1',
       [sourceId, ContentKind.episode.db, seriesExt],
     );
     return rows.isEmpty ? null : ProgressEntry.fromRow(rows.first);
@@ -603,9 +609,10 @@ class Repository {
   /// Items to show in "Continuer à regarder": unfinished movies, plus for each
   /// series the episode in progress or the one after the last seen to the
   /// end ([ProgressEntry.upNext]). Films and series of a locked category
-  /// stay out while the parental code is required.
-  List<ProgressEntry> continueWatching(int sourceId, {int limit = 20}) =>
-      continueWatchingWithPending(sourceId, limit: limit).entries;
+  /// stay out while the parental code is required. [kind] keeps films
+  /// ([ContentKind.movie]) or series ([ContentKind.episode]) only.
+  List<ProgressEntry> continueWatching(int sourceId, {int limit = 20, ContentKind? kind}) =>
+      continueWatchingWithPending(sourceId, limit: limit, kind: kind).entries;
 
   /// [continueWatching], with the series whose next episode cannot be named
   /// yet: an Xtream refresh empties the episodes until they are asked to the
@@ -613,6 +620,7 @@ class Repository {
   ({List<ProgressEntry> entries, List<String> pendingSeries}) continueWatchingWithPending(
     int sourceId, {
     int limit = 20,
+    ContentKind? kind,
   }) {
     final ep = ContentKind.episode.db;
     // A series is where its last episode watched is: an episode left at the
@@ -628,7 +636,8 @@ class Repository {
       "THEN 's:' || pr.series_ext ELSE pr.kind || ':' || pr.ext_id END "
       'ORDER BY pr.updated_at DESC) AS newest '
       'FROM progress pr WHERE pr.profile_id = $profileId AND pr.source_id = ? '
-      'AND (pr.finished = 1 OR pr.position_ms > 30000 OR pr.duration_ms = 0) '
+      'AND ${_meaningful('pr')} '
+      '${kind == null ? '' : "AND pr.kind = '${kind.db}' "}'
       "AND NOT EXISTS (SELECT 1 FROM movies m WHERE pr.kind = '${ContentKind.movie.db}' "
       'AND m.source_id = pr.source_id AND m.ext_id = pr.ext_id AND ${_lockedOut('m', ContentKind.movie, sourceId)}) '
       "AND NOT EXISTS (SELECT 1 FROM series sr WHERE pr.kind = '$ep' "

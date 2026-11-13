@@ -52,7 +52,9 @@ class TitleCards {
 
   HeroEntry seriesHero(Series sr, String kicker) {
     final t = s.tmdb.cachedSeries(sr);
-    final started = s.repo.lastEpisodeProgress(sr.sourceId, sr.extId) != null;
+    final last = s.repo.lastEpisodeProgress(sr.sourceId, sr.extId);
+    // The episode it starts with, when its episodes are known here.
+    final target = seriesTarget(s.repo.episodes(sr.sourceId, sr.extId), last);
     return HeroEntry(
       key: 's${sr.extId}',
       kicker: kicker,
@@ -64,7 +66,9 @@ class TitleCards {
       synopsis: (sr.plot != null && sr.plot!.isNotEmpty) ? sr.plot : t?.overview,
       backdrop: t?.backdrop ?? sr.backdrop,
       poster: sr.poster ?? t?.poster,
-      primaryLabel: started ? 'Reprendre' : 'Lecture S01E01',
+      primaryLabel: target != null
+          ? '${target.$2 ? 'Reprendre' : 'Lecture'} ${target.$1.code}'
+          : (last != null ? 'Reprendre' : 'Lecture S01E01'),
       onPrimary: () => playSeries(context, sr),
       onInfo: () => Launch.openSeries(context, sr),
       favorite: favorites.contains(favKey(ContentKind.series, sr.extId)),

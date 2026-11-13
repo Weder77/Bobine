@@ -12,6 +12,7 @@ import '../data/repository.dart';
 import '../services.dart';
 import 'catalog_controller.dart';
 import 'launch.dart';
+import 'quick_actions.dart';
 import 'shell.dart';
 import 'titles.dart';
 import 'widgets/billboard.dart';
@@ -135,11 +136,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
     final r = _s.repo;
     final series = _c.series;
     final kind = _c.kind;
-    final resume = r.continueWatchingWithPending(src.id);
-    _resume = [
-      for (final p in resume.entries)
-        if (series ? p.kind == ContentKind.episode : p.kind == ContentKind.movie) p,
-    ];
+    // Its own kind only: films seen since do not push the series out.
+    final resume = r.continueWatchingWithPending(src.id, kind: series ? ContentKind.episode : ContentKind.movie);
+    _resume = resume.entries;
     if (series) {
       loadPendingSeries(_s, src.id, resume.pendingSeries, () {
         if (!mounted) return;
@@ -230,10 +229,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
               ResumeRail(
                 entries: r.resume!,
                 onPlay: (p) => Launch.resume(context, p),
-                onRemove: (p) {
-                  _s.repo.removeFromResume(p);
-                  _s.library.userChanged();
-                },
+                onContextMenu: (p, at) => showProgressActions(context, p, at),
+                onRemove: (p) => takeOutOfResume(context, p),
               )
             else if (r.top)
               TopTenRail(items: [for (final t in r.items) cards.top(t)])
@@ -316,10 +313,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
   Map<String, double> _movieProgress(Source src) => _c.series
       ? const {}
-      : {
-          for (final p in _s.repo.continueWatching(src.id, limit: 500))
-            if (p.kind == ContentKind.movie) p.extId: p.fraction,
-        };
+      : {for (final p in _s.repo.continueWatching(src.id, limit: 500, kind: ContentKind.movie)) p.extId: p.fraction};
 
   Widget _buildGrid() {
     final cards = TitleCards(context, _s, _favorites);
