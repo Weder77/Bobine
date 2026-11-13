@@ -77,6 +77,45 @@ class MoreLink extends StatelessWidget {
   );
 }
 
+/// The first [initial] of [children], then a [MoreLink] that shows the
+/// others ([moreLabel]) and folds them again. A new key starts it folded.
+class FoldedList extends StatefulWidget {
+  const FoldedList({super.key, required this.children, required this.moreLabel, this.initial = 5});
+  final List<Widget> children;
+  final String moreLabel;
+  final int initial;
+
+  @override
+  State<FoldedList> createState() => _FoldedListState();
+}
+
+class _FoldedListState extends State<FoldedList> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final all = widget.children;
+    final folds = all.length > widget.initial;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ...(folds && !_open ? all.take(widget.initial) : all),
+        if (folds)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 14, 12, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: MoreLink(
+                label: _open ? 'Voir moins' : widget.moreLabel,
+                onTap: () => setState(() => _open = !_open),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 /// Horizontal rail of same-width items without scrollbar; arrows appear on
 /// hover. The [raised] item is painted above its neighbours, so a card
 /// growing on hover is never covered by the next one.
