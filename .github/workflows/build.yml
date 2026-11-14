@@ -114,6 +114,83 @@ jobs:
           path: bobine-test-cast.exe
           retention-days: 30
 
+  # Android TV: App Bundle for the Play Store. Built without any secret
+  # (debug key); the upload key only signs it in the job below.
+  android:
+    name: Android TV (App Bundle)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.6.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: '3.47.9'
+          cache: true
+
+      - name: Dépendances
+        run: flutter pub get
+
+      - name: Compilation Android (App Bundle)
+        run: flutter build appbundle --release
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: Bobine-android-unsigned
+          path: build/app/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+  # Signs the App Bundle with the Play Store upload key (secrets of the PRD
+  # environment), for a release only. No third-party build step runs here:
+  # jarsigner comes with the JDK of the runner.
+  android-sign:
+    name: Android TV (signature d'envoi)
+    needs: [windows, android]
+    if: needs.windows.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: PRD
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          name: Bobine-android-unsigned
+
+      - name: Signature avec la clé d'envoi
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ]; then
+            echo "Pas de clé d'envoi Android : App Bundle non signé pour le Play Store."
+            exit 0
+          fi
+          umask 077
+          printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          out="Bobine-${{ needs.windows.outputs.version }}.aab"
+          cp app-release.aab "$out"
+          # The debug signature of the build is replaced by the upload key's.
+          zip -q -d "$out" 'META-INF/*' || true
+          jarsigner -sigalg SHA256withRSA -digestalg SHA-256 -keystore "$RUNNER_TEMP/upload.jks" \
+            -storepass:env STORE_PASSWORD -keypass:env KEY_PASSWORD "$out" "$KEY_ALIAS"
+          jarsigner -verify "$out" > /dev/null
+          rm -f "$RUNNER_TEMP/upload.jks"
+          ls -l "$out"
+
+      - uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v5.0.0
+        with:
+          name: Bobine-android-playstore
+          path: Bobine-*.aab
+          if-no-files-found: ignore
+          retention-days: 90
+
   # Tag v* pushed, or new version merged into main (the tag is then created here).
   release:
     name: Publication de la Release
