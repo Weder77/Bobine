@@ -9,7 +9,7 @@ enum PlayerKeyRoute {
   /// presses the button (Flutter's own focus navigation).
   toFocusedButton,
 
-  /// OK with the controls hidden: show them, focus on play / pause.
+  /// OK while no button is selected: show the controls, focus on play / pause.
   revealControls,
 }
 
@@ -32,6 +32,8 @@ final _ok = {
 PlayerKeyRoute playerKeyRoute(LogicalKeyboardKey key, {required bool controlsVisible, required bool buttonFocused}) {
   final arrowOrOk = _arrows.contains(key) || _ok.contains(key);
   if (controlsVisible && buttonFocused && arrowOrOk) return PlayerKeyRoute.toFocusedButton;
-  if (!controlsVisible && _ok.contains(key)) return PlayerKeyRoute.revealControls;
+  // Also with the controls already there (in pause they stay): OK selects
+  // play / pause, from where the arrows reach every button.
+  if (!buttonFocused && _ok.contains(key)) return PlayerKeyRoute.revealControls;
   return PlayerKeyRoute.handle;
 }

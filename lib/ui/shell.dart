@@ -20,6 +20,7 @@ import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
+import 'widgets/focus_reveal.dart';
 import 'widgets/tv_canvas.dart';
 
 /// Pages of the main shell.
@@ -270,7 +271,11 @@ class _AppShellState extends State<AppShell> {
                                   // Hero pages run under the header, the others start below it.
                                   child: Padding(
                                     padding: EdgeInsets.only(top: _heroPage(i) ? 0 : kTopBarHeight),
-                                    child: _page(i),
+                                    // Hero pages run under the top bar: what the remote selects
+                                    // is kept out from under it.
+                                    child: _heroPage(i)
+                                        ? RevealUnderHeader(header: kTopBarHeight, child: _page(i))
+                                        : _page(i),
                                   ),
                                 ),
                               ),
@@ -513,7 +518,7 @@ class _SearchField extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: AppColors.borderInput, borderRadius: BorderRadius.circular(4)),
-                child: Text('Échap', style: monoStyle(12, color: AppColors.textSoft)),
+                child: Text(Device.backKey, style: monoStyle(12, color: AppColors.textSoft)),
               ),
             ),
           ),

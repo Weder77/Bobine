@@ -18,17 +18,28 @@ class TvCanvas extends StatelessWidget {
   /// Margin kept clear of the TV's edges (Android TV guidelines: 5 %).
   static const EdgeInsets safe = EdgeInsets.symmetric(horizontal: 64, vertical: 36);
 
-  /// Up / Down in a one-line text field move to the next field: the text
-  /// field keeps them otherwise (start / end of the text), and a remote has
-  /// no Tab key to get out.
+  /// The remote has no Tab key: in a one-line text field, Up / Down move
+  /// to the field above / below (the field keeps them otherwise: start / end
+  /// of the text), and Left / Right too once the caret is at the start / end.
   static KeyEventResult _leaveTextField(FocusNode node, KeyEvent e) {
     if (e is KeyUpEvent) return KeyEventResult.ignored;
-    final down = e.logicalKey == LogicalKeyboardKey.arrowDown;
-    if (!down && e.logicalKey != LogicalKeyboardKey.arrowUp) return KeyEventResult.ignored;
+    final direction = switch (e.logicalKey) {
+      LogicalKeyboardKey.arrowDown => TraversalDirection.down,
+      LogicalKeyboardKey.arrowUp => TraversalDirection.up,
+      LogicalKeyboardKey.arrowLeft => TraversalDirection.left,
+      LogicalKeyboardKey.arrowRight => TraversalDirection.right,
+      _ => null,
+    };
+    if (direction == null) return KeyEventResult.ignored;
     final focus = FocusManager.instance.primaryFocus;
     final field = focus?.context?.findAncestorWidgetOfExactType<EditableText>();
     if (focus == null || field == null || field.maxLines != 1) return KeyEventResult.ignored;
-    focus.focusInDirection(down ? TraversalDirection.down : TraversalDirection.up);
+    final sel = field.controller.selection;
+    final atStart = !sel.isValid || (sel.isCollapsed && sel.baseOffset == 0);
+    final atEnd = !sel.isValid || (sel.isCollapsed && sel.baseOffset >= field.controller.text.length);
+    if (direction == TraversalDirection.left && !atStart) return KeyEventResult.ignored;
+    if (direction == TraversalDirection.right && !atEnd) return KeyEventResult.ignored;
+    focus.focusInDirection(direction);
     return KeyEventResult.handled;
   }
 

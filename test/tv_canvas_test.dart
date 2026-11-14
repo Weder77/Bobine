@@ -96,7 +96,11 @@ void main() {
   ) async {
     await screen(t, const Size(1920, 1080));
     final a = FocusNode(), b = FocusNode(), c = FocusNode();
-    addTearDown(() => [a, b, c].forEach((n) => n.dispose()));
+    addTearDown(() {
+      for (final n in [a, b, c]) {
+        n.dispose();
+      }
+    });
     await t.pumpWidget(
       MaterialApp(
         builder: (context, child) => TvCanvas(child: child!),
@@ -125,5 +129,46 @@ void main() {
     await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await t.pump();
     expect(c.hasPrimaryFocus, isTrue);
+  });
+
+  testWidgets('Gauche au début du texte et Droite à la fin passent au champ voisin', (t) async {
+    await screen(t, const Size(1920, 1080));
+    final left = FocusNode(), right = FocusNode();
+    final text = TextEditingController(text: 'demo');
+    addTearDown(() {
+      left.dispose();
+      right.dispose();
+      text.dispose();
+    });
+    await t.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => TvCanvas(child: child!),
+        home: Scaffold(
+          body: Row(
+            children: [
+              Expanded(
+                child: TextField(focusNode: left, controller: text),
+              ),
+              Expanded(child: TextField(focusNode: right)),
+            ],
+          ),
+        ),
+      ),
+    );
+    left.requestFocus();
+    await t.pump();
+    text.selection = const TextSelection.collapsed(offset: 2);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.pump();
+    expect(left.hasPrimaryFocus, isTrue, reason: 'in the middle of the text, Right moves the caret');
+    expect(text.selection.baseOffset, 3);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.pump();
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await t.pump();
+    expect(right.hasPrimaryFocus, isTrue);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await t.pump();
+    expect(left.hasPrimaryFocus, isTrue);
   });
 }

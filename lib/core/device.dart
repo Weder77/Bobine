@@ -32,6 +32,9 @@ abstract final class Device {
   /// The picture above the seek bar needs a second, software decoder.
   static bool get seekPreview => !isTv;
 
+  /// Name of the key that goes back, in the hints on screen.
+  static String get backKey => isTv ? 'Retour' : 'Échap';
+
   /// Channels at once in the multi-view (hardware decoders of a box).
   static int get maxMultiSlots => isTv ? 2 : 4;
 }

@@ -29,8 +29,9 @@ void main() {
     }
   });
 
-  test('contrôles visibles sans bouton sélectionné : OK met en pause, les flèches restent au lecteur', () {
-    expect(route(LogicalKeyboardKey.select, visible: true), PlayerKeyRoute.handle);
+  test('contrôles visibles (en pause) sans bouton sélectionné : OK sélectionne les boutons, les flèches restent au lecteur', () {
+    // In pause the controls stay: OK must still lead to "Revenir au direct", "Chaînes"…
+    expect(route(LogicalKeyboardKey.select, visible: true), PlayerKeyRoute.revealControls);
     expect(route(LogicalKeyboardKey.arrowLeft, visible: true), PlayerKeyRoute.handle);
   });
 

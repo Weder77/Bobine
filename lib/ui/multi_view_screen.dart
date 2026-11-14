@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/text.dart';
 import '../core/theme.dart';
@@ -268,6 +269,9 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
           body: Focus(
             focusNode: _focus,
             autofocus: true,
+            // The whole screen: never a stop of the arrows between two buttons
+            // (its centre was often the nearest, so Right jumped to it).
+            skipTraversal: true,
             onKeyEvent: _onKey,
             child: Listener(
               onPointerSignal: (e) {
@@ -959,7 +963,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: Color(0x14FFFFFF))),
         ),
-        child: Text('Entrée : la première · Échap : fermer', style: darkMono(12, height: 1)),
+        child: Text('Entrée : la première · ${Device.backKey} : fermer', style: darkMono(12, height: 1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

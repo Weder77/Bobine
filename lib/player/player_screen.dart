@@ -791,13 +791,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       case PlayerKeyRoute.handle:
     }
 
-    if (k == LogicalKeyboardKey.space ||
-        k == LogicalKeyboardKey.keyK ||
-        k == LogicalKeyboardKey.mediaPlayPause ||
-        k == LogicalKeyboardKey.select ||
-        k == LogicalKeyboardKey.enter ||
-        k == LogicalKeyboardKey.numpadEnter ||
-        k == LogicalKeyboardKey.gameButtonA) {
+    if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.mediaPlayPause) {
       if (!repeat) _togglePlay();
     } else if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.keyJ) {
       _seekBy(-step);
@@ -919,6 +913,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
         body: Focus(
           focusNode: _focus,
           autofocus: true,
+          // The whole screen: never a stop of the arrows between two buttons
+          // (its centre was often the nearest, so Right jumped to it).
+          skipTraversal: true,
           onKeyEvent: _onKey,
           child: Listener(
             onPointerSignal: (e) {

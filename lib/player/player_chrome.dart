@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/epg_cache.dart';
@@ -25,10 +26,11 @@ String playerTime(Duration d) {
 // ------------------------------------------------------------------ buttons
 
 /// 44 px square button of the player bars (transparent, light on hover).
-/// White ring around a player button while it has the remote / keyboard
-/// focus (the hover tint alone is too faint on a TV across the room).
+/// Vermilion ring around a player button while it has the remote / keyboard
+/// focus (the hover tint alone is too faint on a TV across the room, and
+/// white is lost on the white play button).
 const focusRingSide = WidgetStateProperty<BorderSide?>.fromMap({
-  WidgetState.focused: BorderSide(color: DarkColors.text, width: 2),
+  WidgetState.focused: BorderSide(color: DarkColors.accent, width: 3),
   WidgetState.any: null,
 });
 
@@ -619,7 +621,7 @@ class ChannelListPanel extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0x14FFFFFF))),
       ),
-      child: Text('↑ ↓ pour zapper · Échap pour fermer', style: darkMono(12, height: 1)),
+      child: Text('↑ ↓ pour zapper · ${Device.backKey} pour fermer', style: darkMono(12, height: 1)),
     ),
     child: ListView.builder(
       controller: scroll,
@@ -1655,7 +1657,12 @@ class _VolumeControlState extends State<VolumeControl> {
                       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                       overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                     ),
-                    child: Slider(value: v.clamp(0, max), max: max, onChanged: widget.onChanged),
+                    // Hidden until hovered: out of the remote's way meanwhile
+                    // (an invisible stop between the buttons).
+                    child: ExcludeFocus(
+                      excluding: !_hover,
+                      child: Slider(value: v.clamp(0, max), max: max, onChanged: widget.onChanged),
+                    ),
                   ),
                 ),
               ),
