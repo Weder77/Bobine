@@ -166,4 +166,23 @@ void main() {
     await t.pump();
     expect(done, ['http://s/get.php?username=u&password=p']);
   });
+
+  test('une source : ce qu’elle contient', () {
+    expect(tvSourceCounts(live: 1234, movies: 1, series: 0), '1\u202f234 chaînes · 1 film');
+    expect(tvSourceCounts(live: 0, movies: 0, series: 0), 'Vide pour l’instant');
+  });
+
+  test('une source : son état', () {
+    final now = DateTime(2026, 11, 14, 21);
+    expect(tvSourceState(now: now, stage: 'Chaînes… 120'), ('Actualisation : Chaînes… 120', false));
+    expect(tvSourceState(now: now, error: 'Ressource introuvable (404).'), (
+      'Erreur : Ressource introuvable (404).',
+      true,
+    ));
+    expect(tvSourceState(now: now, updated: DateTime(2026, 11, 14, 20, 15)), (
+      'Connectée · mise à jour il y a 45 min',
+      false,
+    ));
+    expect(tvSourceState(now: now), ('Jamais mise à jour', false));
+  });
 }

@@ -2,10 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../core/format.dart';
 import '../core/text.dart';
 import '../data/import/xtream_api.dart';
 import '../data/models.dart';
 import '../services.dart';
+import '../ui/widgets/pin_dialog.dart';
 import 'tv_focus.dart';
 import 'tv_form.dart';
 import 'tv_rows.dart';
@@ -30,8 +32,29 @@ String tvSourceName({required bool xtream, required String location}) {
   return host;
 }
 
-/// Source on the TV: the sources of this TV (OK uses one) and the two ways
-/// to add one, then the few fields an IPTV provider gives.
+/// What a source holds: "1 234 chaînes · 3 210 films · 512 séries".
+String tvSourceCounts({required int live, required int movies, required int series}) {
+  String n(int count, String one, String many) => '${formatCount(count)} ${count > 1 ? many : one}';
+  final parts = [
+    if (live > 0) n(live, 'chaîne', 'chaînes'),
+    if (movies > 0) n(movies, 'film', 'films'),
+    if (series > 0) n(series, 'série', 'séries'),
+  ];
+  return parts.isEmpty ? 'Vide pour l’instant' : parts.join(' · ');
+}
+
+/// Where a source stands: being refreshed ([stage]), in error, or when it
+/// was last updated; true for an error.
+(String, bool) tvSourceState({required DateTime now, String? stage, String? error, DateTime? updated}) {
+  if (stage != null) return ('Actualisation : $stage', false);
+  if (error != null) return ('Erreur : $error', true);
+  if (updated == null) return ('Jamais mise à jour', false);
+  return ('Connectée · mise à jour il y a ${tvDuration(now.difference(updated))}', false);
+}
+
+/// Source on the TV: the sources of this TV and the two ways to add one,
+/// then the few fields an IPTV provider gives. OK on a source: use it,
+/// refresh it or delete it.
 class TvSourcesView extends StatefulWidget {
   const TvSourcesView({super.key, required this.onBack, required this.onDone, this.backLabel = 'Réglages'});
 
@@ -61,6 +84,12 @@ class _TvSourcesViewState extends State<TvSourcesView> {
 
   /// The form shown, or null for the list.
   SourceType? _form;
+
+  /// The source whose page is shown (use, refresh, delete), and whether its
+  /// deletion is being confirmed.
+  int? _detail;
+  bool _confirmDelete = false;
+  AppServices? _s;
   String? _busy;
   String? _error;
   String? _info;
@@ -73,7 +102,19 @@ class _TvSourcesViewState extends State<TvSourcesView> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final s = AppScope.of(context);
+    if (s != _s) {
+      // A refresh's progress, as it goes.
+      _s?.imports.removeListener(_changed);
+      _s = s..imports.addListener(_changed);
+    }
+  }
+
+  @override
   void dispose() {
+    _s?.imports.removeListener(_changed);
     _c.dispose();
     for (final t in [_server, _user, _pass, _m3u]) {
       t.dispose();
@@ -85,11 +126,14 @@ class _TvSourcesViewState extends State<TvSourcesView> {
     if (mounted) setState(() {});
   }
 
-  String get _first => switch (_form) {
-    null => _activeId ?? 'add-xtream',
-    SourceType.xtream => 'f-server',
-    SourceType.m3u => 'f-m3u',
-  };
+  String get _first {
+    if (_detail != null) return _confirmDelete ? 'd-delete-no' : 'd-refresh';
+    return switch (_form) {
+      null => _activeId ?? 'add-xtream',
+      SourceType.xtream => 'f-server',
+      SourceType.m3u => 'f-m3u',
+    };
+  }
 
   /// The source in use, the first stop of the list.
   String? get _activeId {
@@ -107,7 +151,42 @@ class _TvSourcesViewState extends State<TvSourcesView> {
     _c.focus(_first);
   }
 
-  void _back() => _form == null ? widget.onBack() : _open(null);
+  void _back() {
+    if (_confirmDelete) return _askDelete(false);
+    final detail = _detail;
+    if (detail != null) {
+      setState(() => _detail = null);
+      return _c.focus('src-$detail');
+    }
+    _form == null ? widget.onBack() : _open(null);
+  }
+
+  void _openDetail(int id) {
+    setState(() {
+      _detail = id;
+      _confirmDelete = false;
+    });
+    _c.focus(_first);
+  }
+
+  void _askDelete(bool ask) {
+    setState(() => _confirmDelete = ask);
+    _c.focus(ask ? 'd-delete-no' : 'd-delete');
+  }
+
+  Future<void> _delete(AppServices s, Source src) async {
+    // Its locks and hidden categories go with it: not without the code.
+    if (!await confirmParent(context, title: 'Supprimer la source') || !mounted) return;
+    await s.deleteSource(src.id);
+    if (!mounted) return;
+    setState(() {
+      _detail = null;
+      _confirmDelete = false;
+    });
+    // None left: the first launch's welcome is under this page.
+    if (s.repo.sources().isEmpty) return widget.onBack();
+    _c.focus(_first);
+  }
 
   /// Pasting a "get.php?username=…&password=…" link fills the three fields.
   void _onServer(String v) {
@@ -189,10 +268,7 @@ class _TvSourcesViewState extends State<TvSourcesView> {
                     style: tvText(24, weight: FontWeight.w600, height: 1, color: TvColors.ok),
                   )
                 : null,
-            onOk: () {
-              s.selectSource(src.id);
-              widget.onDone(src.id);
-            },
+            onOk: () => _openDetail(src.id),
           ),
         const SizedBox(height: 18),
         TvChoice(
@@ -211,6 +287,76 @@ class _TvSourcesViewState extends State<TvSourcesView> {
         ),
       ],
     );
+  }
+
+  /// A source's page: what it holds, where it stands, and what to do with it.
+  List<Widget> _detailView(AppServices s, Source src) {
+    final active = src.id == s.activeSource?.id;
+    final stage = s.imports.status(src.id)?.label;
+    final (state, error) = tvSourceState(
+      now: DateTime.now(),
+      stage: stage,
+      error: src.lastError,
+      updated: src.contentUpdatedAt,
+    );
+    return [
+      Text(
+        tvSourceCounts(
+          live: s.repo.count(src.id, ContentKind.live),
+          movies: s.repo.count(src.id, ContentKind.movie),
+          series: s.repo.count(src.id, ContentKind.series),
+        ),
+        style: tvText(28, color: TvColors.soft, height: 1.3),
+      ),
+      const SizedBox(height: 12),
+      TvFormMessage(state, error: error),
+      const SizedBox(height: 8),
+      if (_confirmDelete) ...[
+        Padding(
+          padding: const EdgeInsets.only(bottom: 22),
+          child: Text(
+            'Supprimer « ${src.name} » ? Ses chaînes, ses favoris et tes reprises disparaissent de cette télé.',
+            style: tvText(30, weight: FontWeight.w600, height: 1.35),
+          ),
+        ),
+        TvChoice(id: 'd-delete-no', icon: Icons.close_rounded, title: 'Annuler', onOk: () => _askDelete(false)),
+        TvChoice(
+          id: 'd-delete-yes',
+          icon: Icons.delete_outline_rounded,
+          title: 'Oui, supprimer la source',
+          onOk: () => _delete(s, src),
+        ),
+      ] else ...[
+        if (!active)
+          TvChoice(
+            id: 'd-use',
+            icon: Icons.check_circle_outline_rounded,
+            title: 'Utiliser cette source',
+            text: 'Ses chaînes, ses films et ses séries à la place de ceux de la source actuelle.',
+            onOk: () {
+              s.selectSource(src.id);
+              widget.onDone(src.id);
+            },
+          ),
+        TvChoice(
+          id: 'd-refresh',
+          icon: Icons.refresh_rounded,
+          title: stage == null ? 'Actualiser' : 'Actualisation en cours…',
+          text: 'Recharge les chaînes, les films, les séries et le guide TV.',
+          onOk: () {
+            if (stage != null) return;
+            unawaited(s.refresh(src).catchError((Object _) {}));
+          },
+        ),
+        TvChoice(
+          id: 'd-delete',
+          icon: Icons.delete_outline_rounded,
+          title: 'Supprimer la source',
+          text: 'Elle disparaît de cette télé, et de tes autres appareils si tu es connecté à ton compte Bobine.',
+          onOk: () => _askDelete(true),
+        ),
+      ],
+    ];
   }
 
   List<Widget> _fields() => [
@@ -271,8 +417,8 @@ class _TvSourcesViewState extends State<TvSourcesView> {
       return TvFormHelp(
         title: src.name,
         text: src.id == s.activeSource?.id
-            ? 'C’est la source utilisée. Ses chaînes, films et séries sont ceux de Bobine.'
-            : 'OK pour utiliser cette source à la place de l’autre.',
+            ? 'C’est la source utilisée. OK pour l’actualiser ou la supprimer.'
+            : 'OK pour l’utiliser à la place de l’autre, l’actualiser ou la supprimer.',
         extra: Text(
           [
             src.lastError == null ? 'Connectée' : 'Erreur : ${src.lastError}',
@@ -293,11 +439,29 @@ class _TvSourcesViewState extends State<TvSourcesView> {
   @override
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
+    final detail = _detail == null ? null : s.repo.source(_detail!);
+    if (_detail != null && detail == null) _detail = null;
     if (_c.id == null || !_c.isRegistered(_c.id!)) {
       // First frame, or the line focused went away: the first one.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && (_c.id == null || !_c.isRegistered(_c.id!))) _c.focus(_first);
       });
+    }
+    if (detail != null) {
+      return TvFormFrame(
+        controller: _c,
+        onBack: _back,
+        title: detail.name,
+        subtitle: detail.isXtream ? 'Abonnement Xtream Codes' : 'Playlist M3U',
+        backLabel: _confirmDelete ? 'Annuler' : 'Source',
+        side: TvFormHelp(
+          title: detail.id == s.activeSource?.id ? 'Source utilisée' : 'Autre source',
+          text:
+              'Actualiser recharge tout depuis ton fournisseur, comme Bobine le fait seul de temps en temps. '
+              'Supprimer enlève la source de cette télé ; tu pourras l’ajouter de nouveau.',
+        ),
+        children: _detailView(s, detail),
+      );
     }
     return TvFormFrame(
       controller: _c,
