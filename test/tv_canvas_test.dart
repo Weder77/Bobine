@@ -1,5 +1,6 @@
 import 'package:bobine/ui/widgets/tv_canvas.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -55,5 +56,74 @@ void main() {
     final box = t.getRect(find.byKey(const ValueKey('stage')));
     expect(box.width / box.height, closeTo(16 / 9, 0.01));
     expect(box.center, const Offset(480, 300));
+  });
+
+  testWidgets('un écran plus grand que la toile (télé 4K) est rempli, pas laissé au centre', (t) async {
+    t.view.devicePixelRatio = 1;
+    t.view.physicalSize = const Size(1920, 1080);
+    addTearDown(t.view.reset);
+    await t.pumpWidget(TvCanvas(child: const SizedBox.expand(key: ValueKey('stage'))));
+    expect(t.getRect(find.byKey(const ValueKey('stage'))), const Rect.fromLTWH(0, 0, 1920, 1080));
+  });
+
+  testWidgets('sans rien de sélectionné, la première flèche sélectionne le premier élément', (t) async {
+    await screen(t, const Size(1920, 1080));
+    await t.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => TvCanvas(child: child!),
+        home: Column(
+          children: [
+            TextButton(onPressed: () {}, child: const Text('Premier')),
+            TextButton(onPressed: () {}, child: const Text('Second')),
+          ],
+        ),
+      ),
+    );
+    String? focused() =>
+        (FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextButton>()?.child as Text?)
+            ?.data;
+    expect(focused(), isNull);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await t.pump();
+    expect(focused(), 'Premier');
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await t.pump();
+    expect(focused(), 'Second');
+  });
+
+  testWidgets('Haut et Bas sortent d’un champ de saisie d’une ligne (sinon la télécommande y reste bloquée)', (
+    t,
+  ) async {
+    await screen(t, const Size(1920, 1080));
+    final a = FocusNode(), b = FocusNode(), c = FocusNode();
+    addTearDown(() => [a, b, c].forEach((n) => n.dispose()));
+    await t.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => TvCanvas(child: child!),
+        home: Scaffold(
+          body: Column(
+            children: [
+              TextField(focusNode: a),
+              TextField(focusNode: b),
+              TextField(focusNode: c, maxLines: 4),
+            ],
+          ),
+        ),
+      ),
+    );
+    a.requestFocus();
+    await t.pump();
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await t.pump();
+    expect(b.hasPrimaryFocus, isTrue);
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await t.pump();
+    expect(a.hasPrimaryFocus, isTrue);
+    // A text of several lines keeps its arrows to move between its lines.
+    c.requestFocus();
+    await t.pump();
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await t.pump();
+    expect(c.hasPrimaryFocus, isTrue);
   });
 }

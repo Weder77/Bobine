@@ -11,7 +11,11 @@ abstract final class Device {
   @visibleForTesting
   static bool? debugTv;
 
-  static bool get isTv => debugTv ?? (!kIsWeb && Platform.isAndroid);
+  static bool get isTv => debugTv ?? _tvByEnv ?? (!kIsWeb && Platform.isAndroid);
+
+  /// BOBINE_TV=1 shows the TV version on a computer (debug builds only), to
+  /// try the remote with the arrow keys without an Android TV.
+  static final bool? _tvByEnv = kReleaseMode || kIsWeb || Platform.environment['BOBINE_TV'] != '1' ? null : true;
 
   /// Sending to another TV from the TV makes no sense.
   static bool get canCast => !isTv;

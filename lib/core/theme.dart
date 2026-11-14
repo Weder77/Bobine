@@ -461,7 +461,11 @@ ThemeData buildTheme([AppPalette p = AppPalette.dark]) {
         foregroundColor: WidgetStateProperty.resolveWith(
           (s) => s.contains(WidgetState.selected) ? p.onAction : p.textSoft,
         ),
-        side: WidgetStatePropertyAll(BorderSide(color: p.borderStrong)),
+        side: focusSide(BorderSide(color: p.borderStrong)),
+        // The selected segment is white: the default focus tint is lost on it.
+        overlayColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.focused) ? p.accent.withValues(alpha: 0.35) : null,
+        ),
         shape: const WidgetStatePropertyAll(StadiumBorder()),
         textStyle: const WidgetStatePropertyAll(
           TextStyle(fontFamily: AppFonts.body, fontWeight: FontWeight.w600, fontSize: 14),

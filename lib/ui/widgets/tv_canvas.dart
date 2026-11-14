@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 /// Lays the whole app out on a fixed 1280 × 720 stage, scaled to fill the
@@ -17,24 +18,45 @@ class TvCanvas extends StatelessWidget {
   /// Margin kept clear of the TV's edges (Android TV guidelines: 5 %).
   static const EdgeInsets safe = EdgeInsets.symmetric(horizontal: 64, vertical: 36);
 
+  /// Up / Down in a one-line text field move to the next field: the text
+  /// field keeps them otherwise (start / end of the text), and a remote has
+  /// no Tab key to get out.
+  static KeyEventResult _leaveTextField(FocusNode node, KeyEvent e) {
+    if (e is KeyUpEvent) return KeyEventResult.ignored;
+    final down = e.logicalKey == LogicalKeyboardKey.arrowDown;
+    if (!down && e.logicalKey != LogicalKeyboardKey.arrowUp) return KeyEventResult.ignored;
+    final focus = FocusManager.instance.primaryFocus;
+    final field = focus?.context?.findAncestorWidgetOfExactType<EditableText>();
+    if (focus == null || field == null || field.maxLines != 1) return KeyEventResult.ignored;
+    focus.focusInDirection(down ? TraversalDirection.down : TraversalDirection.up);
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
     final outer = MediaQuery.maybeOf(context) ?? const MediaQueryData();
-    return ColoredBox(
-      color: const Color(0xFF000000),
-      child: Center(
-        child: FittedBox(
-          fit: BoxFit.contain,
-          child: SizedBox.fromSize(
-            size: size,
-            child: MediaQuery(
-              data: outer.copyWith(
-                size: size,
-                padding: EdgeInsets.zero,
-                viewPadding: EdgeInsets.zero,
-                viewInsets: EdgeInsets.zero,
+    return Focus(
+      canRequestFocus: false,
+      skipTraversal: true,
+      onKeyEvent: _leaveTextField,
+      child: ColoredBox(
+        color: const Color(0xFF000000),
+        // Tight constraints: FittedBox scales up too (a 4K set reports
+        // 1920 × 1080 points), not only down.
+        child: SizedBox.expand(
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: SizedBox.fromSize(
+              size: size,
+              child: MediaQuery(
+                data: outer.copyWith(
+                  size: size,
+                  padding: EdgeInsets.zero,
+                  viewPadding: EdgeInsets.zero,
+                  viewInsets: EdgeInsets.zero,
+                ),
+                child: child,
               ),
-              child: child,
             ),
           ),
         ),
