@@ -4,6 +4,7 @@ import '../services.dart';
 import '../ui/profiles.dart';
 import 'tv_browse.dart';
 import 'tv_focus.dart';
+import 'tv_live.dart';
 import 'tv_shell.dart';
 import 'tv_theme.dart';
 
@@ -20,6 +21,7 @@ class TvShell extends StatelessWidget {
         profile: ProfileAvatar(profile: s.profile, size: 56),
         pageBuilder: (context, tab, setEntry) => switch (tab) {
           TvTab.home || TvTab.films || TvTab.series => TvBrowsePage(tab: tab, setEntry: setEntry),
+          TvTab.live => TvLivePage(setEntry: setEntry),
           _ => _TvSoon(tab: tab, setEntry: setEntry),
         },
       ),
