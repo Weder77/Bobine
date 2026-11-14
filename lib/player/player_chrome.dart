@@ -25,6 +25,13 @@ String playerTime(Duration d) {
 // ------------------------------------------------------------------ buttons
 
 /// 44 px square button of the player bars (transparent, light on hover).
+/// White ring around a player button while it has the remote / keyboard
+/// focus (the hover tint alone is too faint on a TV across the room).
+const focusRingSide = WidgetStateProperty<BorderSide?>.fromMap({
+  WidgetState.focused: BorderSide(color: DarkColors.text, width: 2),
+  WidgetState.any: null,
+});
+
 class PlayerIconButton extends StatelessWidget {
   const PlayerIconButton({super.key, required this.icon, required this.tooltip, required this.onTap, this.size = 22});
   final IconData icon;
@@ -43,7 +50,7 @@ class PlayerIconButton extends StatelessWidget {
         fixedSize: const Size(44, 44),
         minimumSize: const Size(44, 44),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ).copyWith(overlayColor: const WidgetStatePropertyAll(Color(0x24FFFFFF))),
+      ).copyWith(overlayColor: const WidgetStatePropertyAll(Color(0x24FFFFFF)), side: focusRingSide),
       icon: Icon(icon),
     ),
   );
@@ -87,9 +94,12 @@ class PlayerTextButton extends StatelessWidget {
 
 /// Round white play / pause button (52 px).
 class PlayPauseButton extends StatelessWidget {
-  const PlayPauseButton({super.key, required this.player, required this.onTap, this.playing});
+  const PlayPauseButton({super.key, required this.player, required this.onTap, this.playing, this.focusNode});
   final Player player;
   final VoidCallback onTap;
+
+  /// Given the focus when OK of the remote shows the controls.
+  final FocusNode? focusNode;
 
   /// State to show instead of the local player's (casting).
   final bool? playing;
@@ -104,6 +114,7 @@ class PlayPauseButton extends StatelessWidget {
         message: playing ? 'Pause (Espace)' : 'Lecture (Espace)',
         child: IconButton(
           onPressed: onTap,
+          focusNode: focusNode,
           iconSize: 28,
           style:
               IconButton.styleFrom(
@@ -116,6 +127,7 @@ class PlayPauseButton extends StatelessWidget {
                 backgroundColor: WidgetStateProperty.resolveWith(
                   (s) => s.contains(WidgetState.hovered) ? const Color(0xFFE9E4DE) : DarkColors.action,
                 ),
+                side: focusRingSide,
               ),
           icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
         ),
@@ -532,7 +544,7 @@ class PlayerSidePanel extends StatelessWidget {
                   ],
                 ),
               ),
-              Expanded(child: child),
+              Expanded(child: _FocusFirst(child: child)),
               ?footer,
             ],
           ),
@@ -540,6 +552,38 @@ class PlayerSidePanel extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Gives the focus to the first item of [child] when it appears, so a TV
+/// remote can move in a panel just opened (not to the close button above).
+class _FocusFirst extends StatefulWidget {
+  const _FocusFirst({required this.child});
+  final Widget child;
+
+  @override
+  State<_FocusFirst> createState() => _FocusFirstState();
+}
+
+class _FocusFirstState extends State<_FocusFirst> {
+  final _scope = FocusScopeNode(debugLabel: 'panel');
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _scope.focusedChild != null) return;
+      _scope.traversalDescendants.firstOrNull?.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scope.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => FocusScope(node: _scope, child: widget.child);
 }
 
 /// "Chaînes": the programme of every channel, the current one in vermilion.

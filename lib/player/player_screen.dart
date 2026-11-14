@@ -22,6 +22,7 @@ import '../ui/widgets/common.dart';
 import 'cast_view.dart';
 import 'play_items.dart';
 import 'player_chrome.dart';
+import 'player_keys.dart';
 import 'player_session.dart';
 import 'player_service.dart';
 import 'player_widgets.dart';
@@ -87,6 +88,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Source? _source;
 
   final _focus = FocusNode(debugLabel: 'player');
+
+  /// Play / pause: where OK of the remote puts the focus on the controls.
+  final _playButton = FocusNode(debugLabel: 'play');
   final _position = ValueNotifier<Duration>(Duration.zero);
   final _cache = ValueNotifier<CacheState>(const CacheState());
   final _decoder = ValueNotifier<String?>(null);
@@ -254,6 +258,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     _preview.dispose();
     _focus.dispose();
+    _playButton.dispose();
     _position.dispose();
     _cache.dispose();
     _decoder.dispose();
@@ -451,7 +456,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
     _hideTimer = Timer(const Duration(milliseconds: 3500), () {
       if (!mounted || _overControls || _panel != _Panel.none) return;
       if (!_ps.player.state.playing) return;
+      // The buttons fade out: the arrows go back to seeking and zapping.
+      if (_buttonFocused) _focus.requestFocus();
       setState(() => _controls = false);
+    });
+  }
+
+  /// Something else than the player itself has the focus: a button of the
+  /// controls, or an item of an open panel.
+  bool get _buttonFocused {
+    final f = FocusManager.instance.primaryFocus;
+    return f != null && f != _focus;
+  }
+
+  /// OK of the remote, controls hidden: they appear, play / pause focused.
+  void _revealControls() {
+    _showControls();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _controls) _playButton.requestFocus();
     });
   }
 
@@ -758,7 +780,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final step = _s.settings.seekStep * (shift ? 6 : 1);
     final repeat = e is KeyRepeatEvent;
 
-    if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.mediaPlayPause) {
+    // TV remote: arrows and OK go to the controls' buttons once OK showed them.
+    switch (playerKeyRoute(k, controlsVisible: _visible, buttonFocused: _buttonFocused)) {
+      case PlayerKeyRoute.toFocusedButton:
+        _showControls();
+        return KeyEventResult.ignored;
+      case PlayerKeyRoute.revealControls:
+        if (!repeat) _revealControls();
+        return KeyEventResult.handled;
+      case PlayerKeyRoute.handle:
+    }
+
+    if (k == LogicalKeyboardKey.space ||
+        k == LogicalKeyboardKey.keyK ||
+        k == LogicalKeyboardKey.mediaPlayPause ||
+        k == LogicalKeyboardKey.select ||
+        k == LogicalKeyboardKey.enter ||
+        k == LogicalKeyboardKey.numpadEnter ||
+        k == LogicalKeyboardKey.gameButtonA) {
       if (!repeat) _togglePlay();
     } else if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.keyJ) {
       _seekBy(-step);
@@ -1349,6 +1388,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     children: [
                       PlayPauseButton(
                         player: _ps.player,
+                        focusNode: _playButton,
                         onTap: _togglePlay,
                         playing: _casting ? (_cast.playing || _cast.status.state == RemoteState.buffering) : null,
                       ),
