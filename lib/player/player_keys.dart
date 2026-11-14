@@ -57,3 +57,17 @@ TvPlayerOk tvPlayerOk({required bool error, required bool nextShown}) {
   if (nextShown) return TvPlayerOk.nextEpisode;
   return TvPlayerOk.togglePause;
 }
+
+/// What an arrow does in the TV player.
+enum TvPlayerArrow { seekBack, seekForward, zapPrevious, zapNext, channels, options }
+
+/// Live: Up / Down change channel, Left opens the list of channels, Right
+/// the options (favourite, audio, subtitles). Film or episode: Left / Right
+/// go back / forward, Up / Down open audio and subtitles.
+TvPlayerArrow? tvPlayerArrow(LogicalKeyboardKey key, {required bool live}) {
+  if (key == LogicalKeyboardKey.arrowUp) return live ? TvPlayerArrow.zapPrevious : TvPlayerArrow.options;
+  if (key == LogicalKeyboardKey.arrowDown) return live ? TvPlayerArrow.zapNext : TvPlayerArrow.options;
+  if (key == LogicalKeyboardKey.arrowLeft) return live ? TvPlayerArrow.channels : TvPlayerArrow.seekBack;
+  if (key == LogicalKeyboardKey.arrowRight) return live ? TvPlayerArrow.options : TvPlayerArrow.seekForward;
+  return null;
+}

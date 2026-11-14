@@ -6,10 +6,22 @@ import 'tv_theme.dart';
 
 /// A choice of a sheet: a track, a channel, an action.
 class TvSheetOption {
-  const TvSheetOption(this.label, {this.detail, this.icon, this.leading, this.selected = false, required this.onPick});
+  const TvSheetOption(
+    this.label, {
+    this.detail,
+    this.detailOf,
+    this.icon,
+    this.leading,
+    this.selected = false,
+    required this.onPick,
+  });
 
   final String label;
   final String? detail;
+
+  /// [detail] worked out only when the line is shown (the programme on air
+  /// of each of hundreds of channels).
+  final String? Function()? detailOf;
   final IconData? icon;
 
   /// Drawn on the left instead of [icon] (a channel's logo).
@@ -99,59 +111,62 @@ class _TvSheetState extends State<TvSheet> {
     Navigator.of(context).pop();
   }
 
-  Widget _option(int i, TvSheetOption o) => TvFocusable(
-    id: 'opt-$i',
-    onOk: () => _pick(o),
-    revealAxes: const {Axis.vertical},
-    revealPadding: const EdgeInsets.symmetric(vertical: 40),
-    builder: (context, on) => GestureDetector(
-      onTap: () => _pick(o),
-      child: Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          decoration: BoxDecoration(
-            color: on ? Colors.white : const Color(0x14FFFFFF),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Row(
-            children: [
-              if (o.leading != null) ...[o.leading!, const SizedBox(width: 22)],
-              if (o.leading == null && o.icon != null) ...[
-                Icon(o.icon, size: 34, color: on ? TvColors.bg : TvColors.accent),
-                const SizedBox(width: 22),
-              ],
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      o.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: tvText(28, weight: FontWeight.w600, height: 1.1, color: on ? TvColors.bg : Colors.white),
-                    ),
-                    if (o.detail != null) ...[
-                      const SizedBox(height: 8),
+  Widget _option(int i, TvSheetOption o) {
+    final detail = o.detail ?? o.detailOf?.call();
+    return TvFocusable(
+      id: 'opt-$i',
+      onOk: () => _pick(o),
+      revealAxes: const {Axis.vertical},
+      revealPadding: const EdgeInsets.symmetric(vertical: 40),
+      builder: (context, on) => GestureDetector(
+        onTap: () => _pick(o),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            decoration: BoxDecoration(
+              color: on ? Colors.white : const Color(0x14FFFFFF),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                if (o.leading != null) ...[o.leading!, const SizedBox(width: 22)],
+                if (o.leading == null && o.icon != null) ...[
+                  Icon(o.icon, size: 34, color: on ? TvColors.bg : TvColors.accent),
+                  const SizedBox(width: 22),
+                ],
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        o.detail!,
+                        o.label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: tvText(22, height: 1.1, color: on ? TvColors.dim : TvColors.muted),
+                        style: tvText(28, weight: FontWeight.w600, height: 1.1, color: on ? TvColors.bg : Colors.white),
                       ),
+                      if (detail != null) ...[
+                        const SizedBox(height: 8),
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: tvText(22, height: 1.1, color: on ? TvColors.dim : TvColors.muted),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              if (o.selected) Icon(Icons.check_rounded, size: 34, color: on ? TvColors.bg : TvColors.ok),
-            ],
+                if (o.selected) Icon(Icons.check_rounded, size: 34, color: on ? TvColors.bg : TvColors.ok),
+              ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 
   @override
   Widget build(BuildContext context) => TvStage(

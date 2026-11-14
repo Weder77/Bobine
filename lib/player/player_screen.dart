@@ -16,7 +16,10 @@ import '../core/window.dart';
 import '../data/models.dart';
 import '../features/tmdb.dart';
 import '../services.dart';
+import '../tv/tv_cards.dart';
 import '../tv/tv_player_overlay.dart';
+import '../tv/tv_player_sheets.dart';
+import '../tv/tv_sheet.dart';
 import '../ui/back_rules.dart';
 import '../ui/multi_view_screen.dart';
 import '../ui/widgets/common.dart';
@@ -790,6 +793,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
         if (!repeat) _tvOk();
         return KeyEventResult.handled;
       }
+      switch (tvPlayerArrow(k, live: _isLive)) {
+        case TvPlayerArrow.seekBack:
+          _seekBy(-step);
+        case TvPlayerArrow.seekForward:
+          _seekBy(step);
+        case TvPlayerArrow.zapPrevious:
+          if (!repeat) _zap(-1);
+        case TvPlayerArrow.zapNext:
+          if (!repeat) _zap(1);
+        case TvPlayerArrow.channels:
+          if (!repeat) _tvChannels();
+        case TvPlayerArrow.options:
+          if (!repeat) _tvOptions();
+        case null:
+          break;
+      }
+      if (tvPlayerArrow(k, live: _isLive) != null) return KeyEventResult.handled;
     } else {
       // Remote on a computer: arrows and OK go to the controls' buttons once
       // OK showed them.
@@ -873,6 +893,79 @@ class _PlayerScreenState extends State<PlayerScreen> {
       case TvPlayerOk.togglePause:
         _togglePlay();
     }
+  }
+
+  /// The TV's options: the channel (favourite), audio and subtitles.
+  Future<void> _tvOptions() async {
+    _showControls();
+    final ch = _currentChannel;
+    final audio = _ps.player.state.tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
+    final subs = [SubtitleTrack.no(), ..._ps.player.state.tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no')];
+    final fav = ch != null && _s.repo.isFavorite(ch.sourceId, ContentKind.live, ch.extId);
+    await showTvSheet(
+      context,
+      title: _isLive ? 'Options' : 'Audio et sous-titres',
+      subtitle: _isLive && ch != null ? _s.channelName(ch) : null,
+      sections: [
+        if (_isLive && ch != null)
+          TvSheetSection('Chaîne', [
+            TvSheetOption(
+              fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
+              icon: fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              onPick: () {
+                _s.toggleFavorite(ContentKind.live, ch.extId, ch.sourceId);
+                _flash(fav ? 'Retirée des favoris' : 'Ajoutée aux favoris');
+              },
+            ),
+          ]),
+        TvSheetSection(
+          'Audio',
+          audio.isEmpty
+              ? [TvSheetOption('Piste unique', selected: true, onPick: () {})]
+              : tvTrackOptions<AudioTrack>(
+                  audio,
+                  selectedId: _aid,
+                  id: (t) => t.id,
+                  label: audioTrackLabel,
+                  onPick: _selectAudio,
+                ),
+        ),
+        TvSheetSection(
+          'Sous-titres',
+          tvTrackOptions<SubtitleTrack>(
+            subs,
+            selectedId: _sid.isEmpty ? 'no' : _sid,
+            id: (t) => t.id,
+            label: (t, i) => subtitleTrackLabel(t, i - 1),
+            onPick: _selectSubtitle,
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// The TV's list of channels (Left in live): the one on air checked.
+  Future<void> _tvChannels() async {
+    if (_channels.isEmpty) return;
+    _showControls();
+    await showTvSheet(
+      context,
+      title: 'Chaînes',
+      sections: [
+        TvSheetSection(null, [
+          for (final (i, c) in _channels.indexed)
+            TvSheetOption(
+              '${c.number ?? i + 1}   ${_s.channelName(c)}',
+              detailOf: () => _s.epg.now(c)?.title,
+              leading: TvChannelBadge(name: _s.channelName(c), logo: c.logo, size: 56),
+              selected: i == _chIndex,
+              onPick: () {
+                if (i != _chIndex) _playChannel(i);
+              },
+            ),
+        ]),
+      ],
+    );
   }
 
   static String? _digitOf(LogicalKeyboardKey k) {

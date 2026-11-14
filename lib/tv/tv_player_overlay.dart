@@ -256,22 +256,35 @@ class TvPlayerOverlay extends StatelessWidget {
                     ],
                     _bottom(now),
                     const SizedBox(height: 28),
-                    Row(
-                      children: [
-                        if (info.live)
-                          const Row(children: [TvKey('▲'), SizedBox(width: 12), TvKey('▼')])
-                        else
-                          const Row(children: [TvKey('◀'), SizedBox(width: 12), TvKey('▶')]),
-                        const SizedBox(width: 12),
-                        Text(
-                          info.live ? 'Changer de chaîne' : '$seekStep secondes',
-                          style: tvText(26, color: TvColors.soft, height: 1),
-                        ),
-                        const SizedBox(width: 36),
-                        TvKeyHint('OK', nextLabel != null ? 'Épisode suivant' : (paused ? 'Lecture' : 'Pause')),
-                        const SizedBox(width: 36),
-                        const TvKeyHint('Retour', 'Quitter'),
-                      ],
+                    // Shrinks rather than overflow (long labels, big fonts).
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (info.live)
+                            const Row(children: [TvKey('▲'), SizedBox(width: 12), TvKey('▼')])
+                          else
+                            const Row(children: [TvKey('◀'), SizedBox(width: 12), TvKey('▶')]),
+                          const SizedBox(width: 12),
+                          Text(
+                            info.live ? 'Chaîne' : '$seekStep secondes',
+                            style: tvText(26, color: TvColors.soft, height: 1),
+                          ),
+                          const SizedBox(width: 36),
+                          if (info.live) ...[
+                            const TvKeyHint('◀', 'Liste'),
+                            const SizedBox(width: 36),
+                            const TvKeyHint('▶', 'Options'),
+                          ] else
+                            const TvKeyHint('▼', 'Audio et sous-titres'),
+                          const SizedBox(width: 36),
+                          TvKeyHint('OK', nextLabel != null ? 'Épisode suivant' : (paused ? 'Lecture' : 'Pause')),
+                          const SizedBox(width: 36),
+                          const TvKeyHint('Retour', 'Quitter'),
+                        ],
+                      ),
                     ),
                   ],
                 ),
