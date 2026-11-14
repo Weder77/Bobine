@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../core/device.dart';
 import '../cast/cast_device.dart';
 import '../cast/cast_service.dart';
 import '../cast/cast_session.dart';
@@ -774,7 +775,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!repeat) _minimize(floating: true);
     } else if (k == LogicalKeyboardKey.keyV && _isLive && !_casting) {
       if (!repeat) _openMultiView();
-    } else if (k == LogicalKeyboardKey.keyT) {
+    } else if (k == LogicalKeyboardKey.keyT && Device.canCast) {
       if (!repeat) _setPanel(_Panel.cast);
     } else if (k == LogicalKeyboardKey.keyI && !_casting) {
       if (!repeat) setState(() => _showStats = !_showStats);
@@ -1192,8 +1193,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 Expanded(
                   child: Align(alignment: Alignment.centerLeft, child: title),
                 ),
-                CastButton(cast: _cast, onTap: () => _setPanel(_Panel.cast)),
-                const SizedBox(width: 6),
+                if (Device.canCast) ...[
+                  CastButton(cast: _cast, onTap: () => _setPanel(_Panel.cast)),
+                  const SizedBox(width: 6),
+                ],
                 if (_isLive && ch != null && !_casting) ...[
                   PlayerIconButton(
                     icon: Icons.grid_view_rounded,

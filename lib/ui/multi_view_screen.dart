@@ -419,7 +419,7 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
                     ],
                   ),
                 ),
-                for (final l in MultiLayout.values) ...[
+                for (final l in MultiLayout.available) ...[
                   _LayoutButton(layout: l, selected: l == _c.layout, onTap: () => _c.setLayout(l)),
                   const SizedBox(width: 4),
                 ],

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
@@ -355,12 +356,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'Le code est commun à tous les profils.',
         (context) => [ParentalSection(), CategoriesSection()],
       ),
-      _Page(
-        'enregistrements',
-        'Enregistrements',
-        'Les émissions enregistrées et le dossier où elles sont rangées.',
-        (context) => [RecordingsSection()],
-      ),
+      if (Device.canRecord)
+        _Page(
+          'enregistrements',
+          'Enregistrements',
+          'Les émissions enregistrées et le dossier où elles sont rangées.',
+          (context) => [RecordingsSection()],
+        ),
       _Page(
         'tmdb',
         'Fiches TMDB',
@@ -1172,7 +1174,7 @@ class _SourceTile extends StatelessWidget {
 class _Shortcuts extends StatelessWidget {
   const _Shortcuts();
 
-  static const _rows = [
+  static List<(String, String)> get _rows => [
     ('Espace / K', 'Lecture / pause'),
     ('← / →', 'Reculer / avancer (Maj = ×6)'),
     ('↑ / ↓', 'Chaîne précédente / suivante (direct), volume (films)'),
@@ -1188,7 +1190,7 @@ class _Shortcuts extends StatelessWidget {
     ('I', 'Statistiques (codec, décodage, cache, débit)'),
     ('P', 'Mini-lecteur (continuer à regarder en naviguant)'),
     ('O', 'Fenêtre flottante par-dessus les autres apps (Windows)'),
-    ('T', 'Caster sur la télé (Chromecast, Google TV, télés DLNA)'),
+    if (Device.canCast) ('T', 'Caster sur la télé (Chromecast, Google TV, télés DLNA)'),
     ('Clic droit / touche Menu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
     (
       'Manette',

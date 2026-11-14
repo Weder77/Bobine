@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
+import '../core/device.dart';
 import '../core/app_log.dart';
 import '../core/format.dart';
 import '../core/net.dart';
@@ -227,12 +228,14 @@ class _DiagnosticScreenState extends State<DiagnosticScreen> {
             icon: const Icon(Icons.copy_rounded),
             label: const Text('Copier le rapport'),
           ),
-          const SizedBox(width: 8),
-          TextButton.icon(
-            onPressed: _save,
-            icon: const Icon(Icons.save_alt_rounded),
-            label: const Text('Enregistrer…'),
-          ),
+          if (Device.canPickFiles) ...[
+            const SizedBox(width: 8),
+            TextButton.icon(
+              onPressed: _save,
+              icon: const Icon(Icons.save_alt_rounded),
+              label: const Text('Enregistrer…'),
+            ),
+          ],
           const SizedBox(width: 16),
         ],
       ),

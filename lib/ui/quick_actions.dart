@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/open_url.dart';
 import '../core/theme.dart';
@@ -337,14 +338,15 @@ Future<void> showChannelActions(
     QuickAction('Ajouter au multi-écran', Icons.grid_view_rounded, () => MultiViewScreen.open(context, add: c)),
     _favorite(s, ContentKind.live, c.sourceId, c.extId),
     null,
-    QuickAction(
-      now == null ? 'Enregistrer maintenant' : 'Enregistrer « ${now.title} »',
-      Icons.fiber_manual_record_rounded,
-      () {
-        s.recordings.recordNow(c, current: now);
-        _toast(context, 'Enregistrement de « ${now?.title ?? s.channelName(c)} » démarré');
-      },
-    ),
+    if (Device.canRecord)
+      QuickAction(
+        now == null ? 'Enregistrer maintenant' : 'Enregistrer « ${now.title} »',
+        Icons.fiber_manual_record_rounded,
+        () {
+          s.recordings.recordNow(c, current: now);
+          _toast(context, 'Enregistrement de « ${now?.title ?? s.channelName(c)} » démarré');
+        },
+      ),
     QuickAction('Masquer la chaîne', Icons.visibility_off_outlined, () {
       s.repo.setChannelHidden(c.sourceId, c.extId, true);
       s.visibilityChanged();

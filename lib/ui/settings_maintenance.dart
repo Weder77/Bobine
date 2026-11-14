@@ -23,27 +23,28 @@ class BackupSection extends StatelessWidget {
     return SettingsSection(
       title: 'Sauvegarde et diagnostic',
       children: [
-        SettingsOption(
-          title: 'Sauvegarder mes données',
-          subtitle:
-              'Profils, favoris, reprises, catégories rangées, chaînes masquées, rappels et réglages, '
-              'dans un fichier à garder ou à ouvrir sur un autre PC.',
-          child: Wrap(
-            spacing: 8,
-            children: [
-              FilledButton.icon(
-                onPressed: () => _export(context),
-                icon: const Icon(Icons.save_alt_rounded, size: 20),
-                label: const Text('Exporter…'),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => _restore(context),
-                icon: const Icon(Icons.settings_backup_restore_rounded, size: 20),
-                label: const Text('Restaurer…'),
-              ),
-            ],
+        if (Device.canPickFiles)
+          SettingsOption(
+            title: 'Sauvegarder mes données',
+            subtitle:
+                'Profils, favoris, reprises, catégories rangées, chaînes masquées, rappels et réglages, '
+                'dans un fichier à garder ou à ouvrir sur un autre PC.',
+            child: Wrap(
+              spacing: 8,
+              children: [
+                FilledButton.icon(
+                  onPressed: () => _export(context),
+                  icon: const Icon(Icons.save_alt_rounded, size: 20),
+                  label: const Text('Exporter…'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _restore(context),
+                  icon: const Icon(Icons.settings_backup_restore_rounded, size: 20),
+                  label: const Text('Restaurer…'),
+                ),
+              ],
+            ),
           ),
-        ),
         SettingsOption(
           title: 'Diagnostic',
           subtitle: 'Versions, stockage, test de connexion des sources et journal, avec un rapport à copier.',

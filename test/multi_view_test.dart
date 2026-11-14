@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart' show SizedBox, Widget;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:bobine/core/device.dart';
 import 'package:bobine/core/text.dart';
 import 'package:bobine/data/db.dart';
 import 'package:bobine/data/models.dart';
@@ -168,6 +169,50 @@ void main() {
     expect(c.channels.map((x) => x.extId), ['1', '2']);
     expect(engines[3].disposed, isTrue);
     expect(c.selected, 0, reason: 'the channel heard left the screen');
+  });
+
+  test('sur la télé, seul le côte à côte est proposé et 2 chaînes au plus', () {
+    Device.debugTv = true;
+    addTearDown(() => Device.debugTv = null);
+    expect(MultiLayout.available, [MultiLayout.duo]);
+    expect(MultiViewController.maxSlots, 2);
+
+    final (repo, source, ch) = _fixture();
+    final engines = <FakeEngine>[];
+    final c = MultiViewController(
+      repo: repo,
+      source: source,
+      engine: () {
+        engines.add(FakeEngine());
+        return engines.last;
+      },
+    )..restore();
+    c.add(ch[0]);
+    c.add(ch[1]);
+    // Full: the second slot changes channel, no third player.
+    c.add(ch[2]);
+    expect(c.layout, MultiLayout.duo);
+    expect(engines, hasLength(2));
+    expect(c.channels.map((x) => x.extId), ['1', '3']);
+  });
+
+  test("sur la télé, un multi-écran de 4 chaînes enregistré sur l'ordinateur revient à 2", () async {
+    final (repo, source, ch) = _fixture();
+    final desk = MultiViewController(repo: repo, source: source, engine: FakeEngine.new)..restore();
+    for (final x in ch.take(4)) {
+      desk.add(x);
+    }
+    desk.select(3);
+    await desk.stopAll();
+    desk.dispose();
+
+    Device.debugTv = true;
+    addTearDown(() => Device.debugTv = null);
+    final tv = MultiViewController(repo: repo, source: source, engine: FakeEngine.new)..restore();
+    expect(tv.layout, MultiLayout.duo);
+    expect(tv.channels.map((x) => x.extId), ['1', '2']);
+    expect(tv.selected, lessThan(2));
+    tv.dispose();
   });
 
   test('the multi-view comes back as it was, with the channel opened from elsewhere', () async {

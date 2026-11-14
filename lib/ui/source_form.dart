@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/net.dart';
 import '../core/text.dart';
@@ -314,19 +315,22 @@ class _SourceFormState extends State<SourceForm> {
                 child: TextField(
                   controller: _m3u,
                   onChanged: _onM3uChanged,
-                  decoration: const InputDecoration(
-                    labelText: 'URL ou fichier de la playlist',
+                  decoration: InputDecoration(
+                    labelText: Device.canPickFiles ? 'URL ou fichier de la playlist' : 'URL de la playlist',
                     hintText: 'https://… .m3u / .m3u8',
-                    prefixIcon: Icon(Icons.link, size: 20),
+                    prefixIcon: const Icon(Icons.link, size: 20),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              OutlinedButton.icon(
-                onPressed: _pickFile,
-                icon: const Icon(Icons.folder_open),
-                label: const Text('Parcourir'),
-              ),
+              // Most TVs have no document picker: the address only.
+              if (Device.canPickFiles) ...[
+                const SizedBox(width: 10),
+                OutlinedButton.icon(
+                  onPressed: _pickFile,
+                  icon: const Icon(Icons.folder_open),
+                  label: const Text('Parcourir'),
+                ),
+              ],
             ],
           ),
         const SizedBox(height: 6),

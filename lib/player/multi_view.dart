@@ -7,6 +7,7 @@ import 'package:flutter/widgets.dart' show BoxFit, Color, Widget;
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../core/device.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
 import 'play_items.dart';
@@ -24,6 +25,12 @@ enum MultiLayout {
   const MultiLayout(this.label, this.slots);
   final String label;
   final int slots;
+
+  /// The layouts this device can show (all of them, or side by side on a TV).
+  static List<MultiLayout> get available => [
+    for (final l in values)
+      if (l.slots <= MultiViewController.maxSlots) l,
+  ];
 
   /// Slots on a 1 × 1 stage; the first one is the big one where there is one.
   List<Rect> get rects => switch (this) {
@@ -280,7 +287,8 @@ class MultiViewController extends ChangeNotifier {
   /// Name shown for a channel (cleaned or not, as in the rest of the app).
   final String Function(Channel) channelName;
 
-  static const maxSlots = 4;
+  /// Four on a computer, two on a TV box (its hardware decoders).
+  static int get maxSlots => Device.maxMultiSlots;
   final List<MultiSlot?> slots = List.filled(maxSlots, null);
   MultiLayout layout = MultiLayout.duo;
 
@@ -314,7 +322,8 @@ class MultiViewController extends ChangeNotifier {
   void restore({Channel? add}) {
     final saved = repo.kvGetJson(_key);
     if (saved != null) {
-      layout = MultiLayout.values.where((l) => l.name == saved['layout']).firstOrNull ?? MultiLayout.duo;
+      // Saved on a computer with more channels than this device can play.
+      layout = MultiLayout.available.where((l) => l.name == saved['layout']).firstOrNull ?? MultiLayout.duo;
       final ids = (saved['channels'] as List? ?? const []).take(maxSlots).toList();
       for (var i = 0; i < ids.length; i++) {
         final ext = ids[i];
