@@ -1191,7 +1191,7 @@ class _Shortcuts extends StatelessWidget {
     ('P', 'Mini-lecteur (continuer à regarder en naviguant)'),
     ('O', 'Fenêtre flottante par-dessus les autres apps (Windows)'),
     if (Device.canCast) ('T', 'Caster sur la télé (Chromecast, Google TV, télés DLNA)'),
-    ('Clic droit / touche Menu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
+    ('Clic droit / Menu / OK maintenu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
     (
       'Manette',
       'Croix / stick : se déplacer · A : valider · B : retour · X : pause · Y : actions rapides (plein écran dans le lecteur)',
