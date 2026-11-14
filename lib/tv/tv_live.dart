@@ -164,7 +164,7 @@ class _TvLivePageState extends State<TvLivePage> {
             separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (context, i) {
               final e = cat.entries[i];
-              return _pill(e.id, e.label, e.id == cat.cat);
+              return _pill(e.id, tvCategoryLabel(e.label), e.id == cat.cat);
             },
           ),
         ),

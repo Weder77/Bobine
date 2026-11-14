@@ -160,4 +160,21 @@ void main() {
     final series = tvCatalogItems(repo, id, TvTab.series, 'all');
     expect(series.single.kind, TvItemKind.series);
   });
+
+  test('noms de catégories : sans préfixe de pays ni décorations, en minuscules', () {
+    expect(tvCategoryLabel('FR - DRAME'), 'Drame');
+    expect(tvCategoryLabel('|FR| Films 4K'), 'Films 4K');
+    expect(tvCategoryLabel('[VOD] Comédie ★'), 'Comédie');
+    expect(tvCategoryLabel('Policier · Thriller'), 'Policier · Thriller');
+    expect(tvCategoryLabel('Sci-Fi'), 'Sci-Fi');
+    expect(tvCategoryLabel('FR | '), 'FR | ');
+  });
+
+  test('les pastilles et les rangées montrent les noms nettoyés', () {
+    final (repo, id) = _fixture();
+    repo.db.execute("UPDATE categories SET name = 'FR - ACTION' WHERE id = 20");
+    expect(tvCatalogPills(repo, id, TvTab.films).map((p) => p.label), contains('Action'));
+    expect(_rows(repo, id, TvTab.films).map((r) => r.title), contains('Action'));
+    expect(tvCatalogItems(repo, id, TvTab.films, 'c:20').first.kicker, 'Film · Action');
+  });
 }

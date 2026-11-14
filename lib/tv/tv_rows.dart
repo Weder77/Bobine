@@ -70,6 +70,32 @@ class TvRow {
   final List<TvItem> Function()? all;
 }
 
+final _categoryPrefix = RegExp(r'^\s*(\|[^|]{1,6}\|\s*|\[[^\]]{1,6}\]\s*|[A-Za-z]{2,3}\s*[:|\-]\s+|[A-Za-z]{2,3}:\s*)');
+
+/// A provider's category as the TV shows it: without a country prefix or
+/// decorations ("FR - DRAME" → "Drame", "[VOD] Comédie ★" → "Comédie"),
+/// qualities kept ("Films 4K"). Nothing left: the name as it was.
+String tvCategoryLabel(String name) {
+  var s = name.replaceFirst(_categoryPrefix, '');
+  s = s.replaceAll(RegExp(r"[^\p{L}\p{N}\s+&'!.\-·/()]", unicode: true), ' ');
+  s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  s = s.replaceAll(RegExp(r'^[\-.|:]+|[\-.|:]+$'), '').trim();
+  if (s.isEmpty) return name;
+  // All capitals ("DRAME"): words of 4 letters or more get a capital initial
+  // only; acronyms (VOD, TV, USA) stay as they are.
+  if (s == s.toUpperCase() && s != s.toLowerCase()) {
+    s = s
+        .split(' ')
+        .map((w) {
+          final letters = w.replaceAll(RegExp(r'[^\p{L}]', unicode: true), '');
+          if (letters.length < 4) return w;
+          return w[0] + w.substring(1).toLowerCase();
+        })
+        .join(' ');
+  }
+  return s;
+}
+
 /// A pill above Films or Séries: À la une (the rows), Tout, a category.
 class TvPill {
   const TvPill(this.id, this.label);
@@ -89,14 +115,15 @@ List<TvPill> tvCatalogPills(Repository repo, int sourceId, TvTab tab) {
   return [
     const TvPill('une', 'À la une'),
     const TvPill('all', 'Tout'),
-    for (final c in repo.categories(sourceId, kind)) TvPill('c:${c.id}', c.name),
+    for (final c in repo.categories(sourceId, kind)) TvPill('c:${c.id}', tvCategoryLabel(c.name)),
   ];
 }
 
 /// Everything a pill holds: all the films or series, or a category's.
 List<TvItem> tvCatalogItems(Repository repo, int sourceId, TvTab tab, String pill) {
   final category = pill.startsWith('c:') ? int.tryParse(pill.substring(2)) : null;
-  final label = category == null ? null : repo.categoryName(category);
+  final name = category == null ? null : repo.categoryName(category);
+  final label = name == null ? null : tvCategoryLabel(name);
   if (tab == TvTab.series) {
     return [for (final x in repo.series(sourceId, categoryId: category)) tvSeries(x, 'Série · ${label ?? 'Tout'}')];
   }
@@ -248,9 +275,10 @@ List<TvRow> tvRows({
         for (final (i, m) in top.indexed) tvMovie(m, 'N° ${i + 1} · Top 10 des films', number: '${i + 1}'),
       ]);
       for (final c in repo.categories(sourceId, ContentKind.movie).take(4)) {
+        final name = tvCategoryLabel(c.name);
         addCut(
-          c.name,
-          (n) => [for (final m in repo.movies(sourceId, categoryId: c.id, limit: n)) tvMovie(m, 'Film · ${c.name}')],
+          name,
+          (n) => [for (final m in repo.movies(sourceId, categoryId: c.id, limit: n)) tvMovie(m, 'Film · $name')],
         );
       }
       addCut(
@@ -278,9 +306,10 @@ List<TvRow> tvRows({
         for (final (i, s) in top.indexed) tvSeries(s, 'N° ${i + 1} · Top 10 des séries', number: '${i + 1}'),
       ]);
       for (final c in repo.categories(sourceId, ContentKind.series).take(4)) {
+        final name = tvCategoryLabel(c.name);
         addCut(
-          c.name,
-          (n) => [for (final s in repo.series(sourceId, categoryId: c.id, limit: n)) tvSeries(s, 'Série · ${c.name}')],
+          name,
+          (n) => [for (final s in repo.series(sourceId, categoryId: c.id, limit: n)) tvSeries(s, 'Série · $name')],
         );
       }
     default:

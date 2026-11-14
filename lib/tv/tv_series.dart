@@ -58,6 +58,10 @@ class TvSeriesScreen extends StatefulWidget {
 
 class _TvSeriesScreenState extends State<TvSeriesScreen> {
   final _c = TvFocusController(initial: 'play');
+
+  /// The episodes of the season shown (a lazy row: the one to resume may
+  /// not be built until the row has scrolled to it).
+  final _episodes = ScrollController();
   List<Episode>? _eps;
   Map<String, ProgressEntry> _progress = const {};
   int? _season;
@@ -73,7 +77,7 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
       String? known(String? id) => id != null && _c.isRegistered(id) ? id : null;
       final season = known('season-$_season');
       if (dir == TvDir.down && (from == 'play' || from == 'list')) return season;
-      if (dir == TvDir.down && (from?.startsWith('season-') ?? false)) return known(_firstEpisodeId());
+      if (dir == TvDir.down && (from?.startsWith('season-') ?? false)) return _enterEpisodes(from!);
       if (dir == TvDir.up && (from?.startsWith('ep-') ?? false)) return season;
       if (dir == TvDir.up && (from?.startsWith('season-') ?? false)) return 'play';
       return null;
@@ -81,10 +85,48 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
     _load();
   }
 
+  AppServices? _s;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final s = AppScope.of(context);
+    if (s != _s) {
+      // A position saved as the player closes (after this page came back),
+      // an episode marked as seen: the buttons and the bars follow.
+      _s?.library.removeListener(_onLibrary);
+      _s = s..library.addListener(_onLibrary);
+    }
+  }
+
+  void _onLibrary() {
+    if (mounted && _eps != null) _refresh();
+  }
+
   @override
   void dispose() {
+    _s?.library.removeListener(_onLibrary);
     _c.dispose();
+    _episodes.dispose();
     super.dispose();
+  }
+
+  /// Into the episodes: the one to resume (or the first), the row scrolled
+  /// to it first when it is not built yet; [from] keeps the remote meanwhile.
+  String? _enterEpisodes(String from) {
+    final id = _firstEpisodeId();
+    if (id == null) return null;
+    if (_c.isRegistered(id)) return id;
+    final i = _inSeason.indexWhere((e) => 'ep-${e.extId}' == id);
+    if (i >= 0 && _episodes.hasClients) {
+      // A card is 400 wide, 24 apart.
+      _episodes.jumpTo((i * 424.0).clamp(0, _episodes.position.maxScrollExtent));
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _c.isRegistered(id)) _c.focus(id, dir: TvDir.down);
+    });
+    WidgetsBinding.instance.ensureVisualUpdate();
+    return from;
   }
 
   String? _firstEpisodeId() {
@@ -99,7 +141,10 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
     final id = _c.id;
     if (id != null && id.startsWith('season-')) {
       final n = int.tryParse(id.substring(7));
-      if (n != null && n != _season) setState(() => _season = n);
+      if (n != null && n != _season) {
+        setState(() => _season = n);
+        if (_episodes.hasClients) _episodes.jumpTo(0);
+      }
     }
   }
 
@@ -171,7 +216,10 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
 
   Widget _seasonPill(int n) => TvFocusable(
     id: 'season-$n',
-    onOk: () => _c.focus(_firstEpisodeId(), dir: TvDir.down),
+    onOk: () {
+      final to = _enterEpisodes('season-$n');
+      if (to != null) _c.focus(to, dir: TvDir.down);
+    },
     revealAxes: const {Axis.horizontal},
     builder: (context, on) {
       final current = n == _season;
@@ -401,6 +449,7 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
                     top: 720,
                     height: 300,
                     child: ListView.separated(
+                      controller: _episodes,
                       scrollDirection: Axis.horizontal,
                       clipBehavior: Clip.none,
                       padding: const EdgeInsets.fromLTRB(96, 22, 96, 30),
