@@ -129,6 +129,17 @@ void main() {
       expect(exits, 1);
     });
 
+    testWidgets('la loupe est un onglet, entre Séries et la roue', (t) async {
+      await pump(t);
+      await key(t, LogicalKeyboardKey.arrowUp);
+      for (var i = 0; i < 5; i++) {
+        await key(t, LogicalKeyboardKey.arrowRight);
+      }
+      expect(c.id, 'nav-search');
+      await key(t, LogicalKeyboardKey.arrowRight);
+      expect(c.id, 'nav-settings');
+    });
+
     testWidgets('OK sur un onglet entre dans sa page', (t) async {
       await pump(t);
       await key(t, LogicalKeyboardKey.arrowUp);

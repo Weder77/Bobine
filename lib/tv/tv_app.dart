@@ -5,6 +5,7 @@ import '../ui/profiles.dart';
 import 'tv_browse.dart';
 import 'tv_guide.dart';
 import 'tv_live.dart';
+import 'tv_search.dart';
 import 'tv_settings.dart';
 import 'tv_shell.dart';
 
@@ -23,6 +24,7 @@ class TvShell extends StatelessWidget {
           TvTab.home || TvTab.films || TvTab.series => TvBrowsePage(tab: tab, setEntry: setEntry),
           TvTab.live => TvLivePage(setEntry: setEntry),
           TvTab.guide => TvGuidePage(setEntry: setEntry),
+          TvTab.search => TvSearchPage(setEntry: setEntry),
           TvTab.settings => TvSettingsPage(setEntry: setEntry),
         },
       ),

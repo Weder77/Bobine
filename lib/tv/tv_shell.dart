@@ -9,7 +9,7 @@ import 'tv_stage.dart';
 import 'tv_theme.dart';
 
 /// Pages of the TV version.
-enum TvTab { home, live, guide, films, series, settings }
+enum TvTab { home, live, guide, films, series, search, settings }
 
 const _tabLabels = {
   TvTab.home: 'Accueil',
@@ -222,11 +222,12 @@ class _TvShellViewState extends State<TvShellView> {
     },
   );
 
-  Widget _gear() => TvFocusable(
-    id: _nav(TvTab.settings),
+  /// A round tab with an icon: Recherche, Réglages.
+  Widget _iconTab(TvTab tab, IconData icon) => TvFocusable(
+    id: _nav(tab),
     onOk: _enter,
     builder: (context, on) {
-      final current = _tab == TvTab.settings;
+      final current = _tab == tab;
       return AnimatedScale(
         scale: on ? 1.05 : 1,
         duration: const Duration(milliseconds: 150),
@@ -243,7 +244,7 @@ class _TvShellViewState extends State<TvShellView> {
                 : Colors.transparent,
           ),
           child: Icon(
-            Icons.settings_outlined,
+            icon,
             size: 32,
             color: on
                 ? TvColors.bg
@@ -302,7 +303,9 @@ class _TvShellViewState extends State<TvShellView> {
                   ),
                 ),
               ),
-              _gear(),
+              _iconTab(TvTab.search, Icons.search_rounded),
+              const SizedBox(width: 10),
+              _iconTab(TvTab.settings, Icons.settings_outlined),
               const SizedBox(width: 24),
               Text('$hh:$mm', style: tvMono(30)),
               if (widget.profile != null) ...[const SizedBox(width: 24), widget.profile!],
