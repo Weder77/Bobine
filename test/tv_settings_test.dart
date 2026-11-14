@@ -54,4 +54,10 @@ void main() {
     expect(st.audioLang, '');
     expect(r.value(), 'Version originale');
   });
+
+  test('Compte Bobine : l’adresse du compte, sinon Non connecté', () {
+    expect(tvAccountValue(signedIn: true, email: 'moi@exemple.fr'), 'moi@exemple.fr');
+    expect(tvAccountValue(signedIn: true, email: null), 'Connecté');
+    expect(tvAccountValue(signedIn: false, email: 'en-attente@exemple.fr'), 'Non connecté');
+  });
 }

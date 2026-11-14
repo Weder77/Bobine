@@ -80,6 +80,11 @@ class TvFocusController extends ChangeNotifier {
 
   bool isRegistered(String id) => _items.containsKey(id);
 
+  VoidCallback? _takeKeys;
+
+  /// Gives the keys back to the screen (a text field stopped typing).
+  void takeKeys() => _takeKeys?.call();
+
   void focus(String? id, {TvDir? dir}) {
     if (id == null || id == _id) return;
     _id = id;
@@ -187,25 +192,39 @@ class _TvFocusScopeState extends State<TvFocusScope> {
   @override
   void initState() {
     super.initState();
-    widget.controller._origin = _box;
+    _attach();
+    // A screen shown in place of another one (first launch: the choice, then
+    // the form) takes the keys even if the one before had them.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_node.hasFocus) _node.requestFocus();
+    });
   }
 
   @override
   void didUpdateWidget(TvFocusScope old) {
     super.didUpdateWidget(old);
+    _attach();
+  }
+
+  void _attach() {
     widget.controller._origin = _box;
+    widget.controller._takeKeys = _node.requestFocus;
   }
 
   RenderBox? _box() => _origin.currentContext?.findRenderObject() as RenderBox?;
 
   @override
   void dispose() {
+    if (widget.controller._takeKeys == _node.requestFocus) widget.controller._takeKeys = null;
     _node.dispose();
     super.dispose();
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is KeyUpEvent) return KeyEventResult.ignored;
+    // A text field is typing: its keys (Effacer, the arrows in the text) are
+    // its own; it gives the remote back itself ([TvTextField]).
+    if (FocusManager.instance.primaryFocus != _node) return KeyEventResult.ignored;
     final k = e.logicalKey;
     final dir = _arrows[k];
     if (dir != null) {

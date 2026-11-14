@@ -12,6 +12,7 @@ import 'ui/profiles.dart';
 import 'ui/shell.dart';
 import 'ui/widgets/tv_canvas.dart';
 import 'tv/tv_app.dart';
+import 'tv/tv_welcome.dart';
 
 class BobineApp extends StatefulWidget {
   const BobineApp({super.key, required this.services});
@@ -137,7 +138,7 @@ class _RootGate extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([s.settings, s.library]),
       builder: (context, _) {
-        if (s.activeSource == null) return const OnboardingScreen();
+        if (s.activeSource == null) return Device.isTv ? const TvWelcomeScreen() : const OnboardingScreen();
         if (!s.profileChosen) {
           return ProfilePickerScreen(
             onChosen: () {

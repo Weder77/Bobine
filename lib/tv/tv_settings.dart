@@ -3,10 +3,11 @@ import 'package:flutter/material.dart';
 import '../core/version.dart';
 import '../data/settings.dart';
 import '../services.dart';
-import '../ui/onboarding_screen.dart';
 import '../ui/widgets/pin_dialog.dart';
+import 'tv_account.dart';
 import 'tv_focus.dart';
 import 'tv_rows.dart';
+import 'tv_sources.dart';
 import 'tv_theme.dart';
 
 /// One line of Réglages: ← → change its value, OK runs [ok] (actions).
@@ -26,6 +27,10 @@ class TvSetting {
 }
 
 /// Next index of a list of [n] values, going round.
+/// The Compte Bobine line: who is signed in.
+String tvAccountValue({required bool signedIn, String? email}) =>
+    !signedIn ? 'Non connecté' : (email == null || email.isEmpty ? 'Connecté' : email);
+
 int _step(int i, int delta, int n) => ((i + delta) % n + n) % n;
 
 /// A setting stored in [AppSettings] as one of fixed [codes].
@@ -164,17 +169,14 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
     }
   }
 
-  void _addSource(AppServices s) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (ctx) => OnboardingScreen(
-          onSourceAdded: (id) {
-            s.selectSource(id);
-            Navigator.of(ctx).pop();
-          },
-        ),
-      ),
-    );
+  Future<void> _account() async {
+    await TvAccountView.open(context);
+    _changed();
+  }
+
+  Future<void> _sources() async {
+    await TvSourcesView.open(context);
+    _changed();
   }
 
   List<TvSetting> _rows(AppServices s) {
@@ -196,8 +198,17 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
         change: (_) => _parental(s),
       ),
       TvSetting(
+        label: 'Compte Bobine',
+        help:
+            'Garde tes sources, profils, favoris et reprises en phase avec tes autres appareils. '
+            'OK pour voir ton compte, te connecter ou te déconnecter.',
+        value: () => tvAccountValue(signedIn: s.sync.signedIn, email: s.sync.email),
+        ok: _account,
+        okLabel: 'Voir le compte',
+      ),
+      TvSetting(
         label: 'Source',
-        help: '← → passe d’une source à l’autre. OK pour en ajouter une ou te connecter à ton compte Bobine.',
+        help: '← → passe d’une source à l’autre. OK pour en choisir une ou en ajouter une.',
         value: () => src?.name ?? 'Aucune',
         change: sources.length < 2
             ? null
@@ -205,8 +216,8 @@ class _TvSettingsPageState extends State<TvSettingsPage> {
                 final i = sources.indexWhere((x) => x.id == src?.id);
                 s.selectSource(sources[_step(i < 0 ? 0 : i, d, sources.length)].id);
               },
-        ok: () => _addSource(s),
-        okLabel: 'Ajouter une source',
+        ok: _sources,
+        okLabel: 'Gérer les sources',
       ),
       TvSetting(
         label: 'Actualiser les chaînes',

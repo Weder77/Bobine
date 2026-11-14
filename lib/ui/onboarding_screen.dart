@@ -14,11 +14,7 @@ import 'widgets/common.dart';
 /// back by the sync), or add a playlist without an account (nothing leaves
 /// this device).
 class OnboardingScreen extends StatelessWidget {
-  const OnboardingScreen({super.key, this.onSourceAdded});
-
-  /// Opened again later (TV: Réglages → Source): what to do with the source
-  /// just added. On the first launch the app opens by itself.
-  final ValueChanged<int>? onSourceAdded;
+  const OnboardingScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -52,8 +48,8 @@ class OnboardingScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 28),
                     OnboardingChoice(
-                      account: (context) => _AccountStep(onSourceAdded: onSourceAdded),
-                      playlist: (context) => _Panel(child: SourceForm(onSaved: onSourceAdded ?? (_) {})),
+                      account: (context) => const _AccountStep(),
+                      playlist: (context) => _Panel(child: SourceForm(onSaved: (_) {})),
                     ),
                     const SizedBox(height: 18),
                     Text(
@@ -226,8 +222,7 @@ class _Panel extends StatelessWidget {
 /// sources back and the app opens by itself; an account without any source
 /// yet gets the playlist form, whose source then goes to the account.
 class _AccountStep extends StatelessWidget {
-  const _AccountStep({this.onSourceAdded});
-  final ValueChanged<int>? onSourceAdded;
+  const _AccountStep();
 
   @override
   Widget build(BuildContext context) {
@@ -253,7 +248,7 @@ class _AccountStep extends StatelessWidget {
             if (fetching)
               const Center(child: CircularProgressIndicator())
             else
-              _Panel(child: SourceForm(onSaved: onSourceAdded ?? (_) {})),
+              _Panel(child: SourceForm(onSaved: (_) {})),
           ],
         );
       },
