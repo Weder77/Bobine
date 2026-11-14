@@ -2,6 +2,7 @@ import 'package:bobine/data/models.dart';
 import 'package:bobine/player/player_keys.dart';
 import 'package:bobine/tv/tv_player_overlay.dart';
 import 'package:bobine/tv/tv_player_sheets.dart';
+import 'package:bobine/tv/tv_stage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -159,5 +160,20 @@ void main() {
     );
     expect(find.text('Liste'), findsOneWidget);
     expect(find.text('Options'), findsOneWidget);
+  });
+
+  testWidgets('l’habillage laisse voir la vidéo (pas de fond noir sur l’image)', (t) async {
+    await pump(
+      t,
+      const TvPlayerOverlay(
+        info: TvPlayerInfo.vod(kicker: 'Film', title: 'Le Voyage'),
+        visible: true,
+        paused: false,
+        position: Duration.zero,
+        duration: Duration(minutes: 90),
+        seekStep: 10,
+      ),
+    );
+    expect(t.widget<TvStage>(find.byType(TvStage)).background.a, 0);
   });
 }

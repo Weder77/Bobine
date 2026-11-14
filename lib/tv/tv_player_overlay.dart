@@ -202,7 +202,9 @@ class TvPlayerOverlay extends StatelessWidget {
     final now = DateTime.now();
     final show = visible || paused || nextLabel != null;
     return IgnorePointer(
+      // Transparent around and under: the video is behind.
       child: TvStage(
+        background: const Color(0x00000000),
         child: Stack(
           children: [
             AnimatedOpacity(
