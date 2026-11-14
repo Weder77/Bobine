@@ -1181,7 +1181,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
           opacity: vis ? 1 : 0,
           duration: const Duration(milliseconds: 300),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 28),
+            // On a TV, clear of the edges the set may crop (TvCanvas.safe).
+            padding: Device.isTv
+                ? const EdgeInsets.symmetric(horizontal: 64, vertical: 36)
+                : const EdgeInsets.symmetric(horizontal: 48, vertical: 28),
             child: Row(
               children: [
                 RoundGlassButton(
@@ -1280,7 +1283,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
               _showControls();
             },
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(48, 0, 48, 30),
+              padding: Device.isTv
+                  ? const EdgeInsets.fromLTRB(64, 0, 64, 36)
+                  : const EdgeInsets.fromLTRB(48, 0, 48, 30),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,

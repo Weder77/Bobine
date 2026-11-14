@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../features/updater.dart';
@@ -18,6 +19,7 @@ import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
+import 'widgets/tv_canvas.dart';
 
 /// Pages of the main shell.
 
@@ -228,67 +230,71 @@ class _AppShellState extends State<AppShell> {
     return ShellNavigation(
       goTo: _go,
       child: Scaffold(
-        body: Column(
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  for (var i = 0; i < ShellTab.count; i++)
-                    if (_built.contains(i) && i != ShellTab.search)
-                      Offstage(
-                        key: ValueKey(i), // keeps each tab's state when others get built
-                        offstage: i != _index,
-                        // Hidden tabs stay out of the arrow / Tab navigation.
-                        child: ExcludeFocus(
-                          excluding: i != _index || _searchOpen,
-                          child: TickerMode(
-                            enabled: i == _index && !_searchOpen,
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: (n) => _onScroll(i, n),
-                              // Hero pages run under the header, the others start below it.
-                              child: Padding(
-                                padding: EdgeInsets.only(top: _heroPage(i) ? 0 : kTopBarHeight),
-                                child: _page(i),
+        body: Padding(
+          // On a TV, everything stays clear of the edges the set may crop.
+          padding: Device.isTv ? TvCanvas.safe : EdgeInsets.zero,
+          child: Column(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    for (var i = 0; i < ShellTab.count; i++)
+                      if (_built.contains(i) && i != ShellTab.search)
+                        Offstage(
+                          key: ValueKey(i), // keeps each tab's state when others get built
+                          offstage: i != _index,
+                          // Hidden tabs stay out of the arrow / Tab navigation.
+                          child: ExcludeFocus(
+                            excluding: i != _index || _searchOpen,
+                            child: TickerMode(
+                              enabled: i == _index && !_searchOpen,
+                              child: NotificationListener<ScrollNotification>(
+                                onNotification: (n) => _onScroll(i, n),
+                                // Hero pages run under the header, the others start below it.
+                                child: Padding(
+                                  padding: EdgeInsets.only(top: _heroPage(i) ? 0 : kTopBarHeight),
+                                  child: _page(i),
+                                ),
                               ),
                             ),
                           ),
                         ),
+                    if (_searchOpen)
+                      Positioned.fill(
+                        top: kTopBarHeight,
+                        child: ColoredBox(
+                          color: AppColors.bg,
+                          child: SearchScreen(controller: _searchCtl, onClose: _closeSearch),
+                        ),
                       ),
-                  if (_searchOpen)
-                    Positioned.fill(
-                      top: kTopBarHeight,
-                      child: ColoredBox(
-                        color: AppColors.bg,
-                        child: SearchScreen(controller: _searchCtl, onClose: _closeSearch),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      child: ListenableBuilder(
+                        listenable: Listenable.merge([_movies, _series]),
+                        builder: (context, _) {
+                          final catalog = _searchOpen ? null : _catalog;
+                          return _TopBar(
+                            index: _index,
+                            onSelect: _go,
+                            opaque: opaque || catalog?.mode == CatalogMode.grid,
+                            searchOpen: _searchOpen,
+                            searchController: _searchCtl,
+                            searchFocus: _searchFocus,
+                            onOpenSearch: _openSearch,
+                            onCloseSearch: _closeSearch,
+                            subBar: catalog == null ? null : CatalogSubBar(controller: catalog),
+                          );
+                        },
                       ),
                     ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    child: ListenableBuilder(
-                      listenable: Listenable.merge([_movies, _series]),
-                      builder: (context, _) {
-                        final catalog = _searchOpen ? null : _catalog;
-                        return _TopBar(
-                          index: _index,
-                          onSelect: _go,
-                          opaque: opaque || catalog?.mode == CatalogMode.grid,
-                          searchOpen: _searchOpen,
-                          searchController: _searchCtl,
-                          searchFocus: _searchFocus,
-                          onOpenSearch: _openSearch,
-                          onCloseSearch: _closeSearch,
-                          subBar: catalog == null ? null : CatalogSubBar(controller: catalog),
-                        );
-                      },
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            const _ImportBanner(),
-          ],
+              const _ImportBanner(),
+            ],
+          ),
         ),
       ),
     );
