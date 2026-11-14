@@ -11,6 +11,7 @@ import 'ui/onboarding_screen.dart';
 import 'ui/profiles.dart';
 import 'ui/shell.dart';
 import 'ui/widgets/tv_canvas.dart';
+import 'tv/tv_app.dart';
 
 class BobineApp extends StatefulWidget {
   const BobineApp({super.key, required this.services});
@@ -146,7 +147,8 @@ class _RootGate extends StatelessWidget {
             },
           );
         }
-        return const AppShell();
+        // The TV has its own simple version (big items, the remote only).
+        return Device.isTv ? const TvShell() : const AppShell();
       },
     );
   }
