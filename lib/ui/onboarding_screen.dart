@@ -110,27 +110,34 @@ class _OnboardingChoiceState extends State<OnboardingChoice> {
         ],
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => _choose(null),
-            icon: const Icon(Icons.arrow_back_rounded, size: 18),
-            label: const Text('Autre choix'),
+    // Back of the TV remote returns to the choice (not out of Bobine).
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _choose(null);
+      },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: () => _choose(null),
+              icon: const Icon(Icons.arrow_back_rounded, size: 18),
+              label: const Text('Autre choix'),
+            ),
           ),
-        ),
-        const SizedBox(height: 8),
-        if (way == _Way.playlist) ...[
-          Text(
-            'Sans compte, rien n’est synchronisé : tout reste sur cet appareil.',
-            style: TextStyle(color: AppColors.muted, fontSize: 13),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 8),
+          if (way == _Way.playlist) ...[
+            Text(
+              'Sans compte, rien n’est synchronisé : tout reste sur cet appareil.',
+              style: TextStyle(color: AppColors.muted, fontSize: 13),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Builder(builder: way == _Way.account ? widget.account : widget.playlist),
         ],
-        Builder(builder: way == _Way.account ? widget.account : widget.playlist),
-      ],
+      ),
     );
   }
 }

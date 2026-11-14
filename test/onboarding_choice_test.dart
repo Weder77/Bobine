@@ -56,4 +56,15 @@ void main() {
     await t.pumpAndSettle();
     expect(find.text('FORMULAIRE COMPTE'), findsOneWidget);
   });
+
+  testWidgets('Retour de la télécommande revient au choix au lieu de quitter Bobine', (t) async {
+    await pump(t);
+    await t.tap(find.text('Ajouter une playlist sans compte'));
+    await t.pumpAndSettle();
+    final handled = await t.binding.handlePopRoute();
+    await t.pumpAndSettle();
+    expect(handled, isTrue, reason: 'Back must not reach the system (it would close the app)');
+    expect(find.text('Me connecter à mon compte Bobine'), findsOneWidget);
+    expect(find.text('FORMULAIRE PLAYLIST'), findsNothing);
+  });
 }
