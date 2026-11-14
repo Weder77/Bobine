@@ -171,4 +171,22 @@ void main() {
     await t.pump();
     expect(left.hasPrimaryFocus, isTrue);
   });
+
+  testWidgets('le clavier virtuel ouvert est transmis à la toile, à son échelle', (t) async {
+    await screen(t, const Size(1920, 1080)); // 960 × 540 points
+    t.view.viewInsets = const FakeViewPadding(bottom: 540); // keyboard: half the screen
+    late EdgeInsets insets;
+    await t.pumpWidget(
+      TvCanvas(
+        child: Builder(
+          builder: (context) {
+            insets = MediaQuery.viewInsetsOf(context);
+            return const SizedBox.expand();
+          },
+        ),
+      ),
+    );
+    // Half the 720-point stage, so a Scaffold lifts the field above the keyboard.
+    expect(insets.bottom, closeTo(360, 0.01));
+  });
 }

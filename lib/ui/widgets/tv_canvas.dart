@@ -43,6 +43,13 @@ class TvCanvas extends StatelessWidget {
     return KeyEventResult.handled;
   }
 
+  /// Stage points per screen point (the stage is letterboxed to 16:9).
+  static double _scale(Size screen) {
+    if (screen.isEmpty) return 1;
+    final fit = (screen.width / size.width).clamp(0.0, screen.height / size.height);
+    return fit == 0 ? 1 : 1 / fit;
+  }
+
   @override
   Widget build(BuildContext context) {
     final outer = MediaQuery.maybeOf(context) ?? const MediaQueryData();
@@ -64,7 +71,9 @@ class TvCanvas extends StatelessWidget {
                   size: size,
                   padding: EdgeInsets.zero,
                   viewPadding: EdgeInsets.zero,
-                  viewInsets: EdgeInsets.zero,
+                  // The on-screen keyboard, in stage points: a Scaffold then
+                  // lifts the field being typed above it.
+                  viewInsets: outer.viewInsets * _scale(outer.size),
                 ),
                 child: child,
               ),
