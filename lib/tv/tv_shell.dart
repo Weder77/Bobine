@@ -238,11 +238,21 @@ class _TvShellViewState extends State<TvShellView> {
             children: [
               const BobineLogo(height: 64),
               const SizedBox(width: 56),
-              for (final MapEntry(key: t, value: label) in _tabLabels.entries) ...[
-                _pill(t, label),
-                const SizedBox(width: 10),
-              ],
-              const Spacer(),
+              // Shrinks rather than overflow if a font is wider than Geist.
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Row(
+                    children: [
+                      for (final MapEntry(key: t, value: label) in _tabLabels.entries) ...[
+                        _pill(t, label),
+                        const SizedBox(width: 10),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
               _gear(),
               const SizedBox(width: 24),
               Text('$hh:$mm', style: tvMono(30)),
