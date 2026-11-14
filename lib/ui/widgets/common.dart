@@ -199,6 +199,40 @@ class _ContextMenuIntent extends Intent {
   const _ContextMenuIntent();
 }
 
+/// Gives the focus to the first focusable widget of [child] when it
+/// appears (the main action of a page, for a TV remote). Unlike a focus
+/// scope, the arrows then leave it freely.
+class FocusFirstChild extends StatefulWidget {
+  const FocusFirstChild({super.key, required this.child, this.enabled = true});
+  final Widget child;
+  final bool enabled;
+
+  @override
+  State<FocusFirstChild> createState() => _FocusFirstChildState();
+}
+
+class _FocusFirstChildState extends State<FocusFirstChild> {
+  final _node = FocusNode(debugLabel: 'focus first', canRequestFocus: false, skipTraversal: true);
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.enabled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _node.traversalDescendants.firstOrNull?.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(focusNode: _node, child: widget.child);
+}
+
 /// White ring around [child] while something inside it has the keyboard /
 /// gamepad focus (for menus and buttons whose own focus effect is hidden
 /// under the glass).

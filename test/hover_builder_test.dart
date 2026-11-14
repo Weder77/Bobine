@@ -80,4 +80,33 @@ void main() {
     await t.sendKeyUpEvent(LogicalKeyboardKey.select);
     expect((acts, menu), (1, 1));
   });
+
+  testWidgets('FocusFirstChild sélectionne le premier bouton de son groupe, les flèches en sortent', (t) async {
+    await t.pumpWidget(
+      MaterialApp(
+        home: Column(
+          children: [
+            TextButton(onPressed: () {}, child: const Text('Retour')),
+            FocusFirstChild(
+              child: Row(
+                children: [
+                  TextButton(onPressed: () {}, child: const Text('Lecture')),
+                  TextButton(onPressed: () {}, child: const Text('Favori')),
+                ],
+              ),
+            ),
+            TextButton(onPressed: () {}, child: const Text('Similaires')),
+          ],
+        ),
+      ),
+    );
+    await t.pump();
+    String? focused() =>
+        (FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextButton>()?.child as Text?)
+            ?.data;
+    expect(focused(), 'Lecture');
+    await t.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await t.pump();
+    expect(focused(), 'Similaires');
+  });
 }
