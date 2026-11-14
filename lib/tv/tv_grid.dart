@@ -18,7 +18,7 @@ class TvPosterGrid extends StatelessWidget {
     required this.items,
     this.controller,
     this.upFromTop,
-    this.padding = const EdgeInsets.fromLTRB(96, 16, 96, 80),
+    this.padding = const EdgeInsets.fromLTRB(96, 28, 96, 80),
   });
 
   static const columns = 7;
@@ -32,7 +32,9 @@ class TvPosterGrid extends StatelessWidget {
   Widget build(BuildContext context) => GridView.builder(
     controller: controller,
     physics: const NeverScrollableScrollPhysics(),
-    clipBehavior: Clip.none,
+    // Scrolled posters stay in the grid, not over the pills and the tabs;
+    // the padding above leaves room for the lifted poster and its ring.
+    clipBehavior: Clip.hardEdge,
     padding: padding,
     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
       crossAxisCount: columns,
@@ -164,7 +166,7 @@ class _TvGridScreenState extends State<TvGridScreen> {
                 Positioned(
                   left: 0,
                   right: 0,
-                  top: 250,
+                  top: 238,
                   bottom: 0,
                   child: TvPosterGrid(items: items, controller: _grid),
                 ),

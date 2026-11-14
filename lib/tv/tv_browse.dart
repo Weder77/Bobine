@@ -479,6 +479,8 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
     final rows = _rows;
     final grid = _gridItems;
     widget.setEntry(() {
+      // Down from the tabs: the filters first (then Down again into them).
+      if (_pills.isNotEmpty) return _pillId;
       if (_pill == 'une') return featured != null ? 'hero-play' : _firstCard;
       return grid.isEmpty ? _pillId : tvGridId(grid.first);
     });
@@ -632,7 +634,7 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
         Positioned(
           left: 0,
           right: 0,
-          top: 306,
+          top: 294,
           bottom: 0,
           child: items.isEmpty
               ? Padding(

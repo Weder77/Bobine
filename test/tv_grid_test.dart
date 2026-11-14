@@ -63,4 +63,17 @@ void main() {
     );
     expect(find.text('1 série'), findsOneWidget);
   });
+
+  testWidgets('en défilant, les affiches restent dans la grille (pas sur les pastilles ni les onglets)', (t) async {
+    await t.pumpWidget(
+      MaterialApp(
+        home: TvFocusScope(
+          controller: TvFocusController(),
+          onBack: () {},
+          child: TvPosterGrid(items: items),
+        ),
+      ),
+    );
+    expect(t.widget<GridView>(find.byType(GridView)).clipBehavior, Clip.hardEdge);
+  });
 }

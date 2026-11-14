@@ -120,7 +120,8 @@ class _TvLivePageState extends State<TvLivePage> {
     final tiles = cat.tiles;
     final list = cat.playList;
     final now = DateTime.now();
-    widget.setEntry(() => tiles.isNotEmpty ? 'ch-${tiles.first.channel.extId}' : 'grp-${cat.cat}');
+    // Down from the tabs: the groups first (then Down again into the channels).
+    widget.setEntry(() => 'grp-${cat.cat}');
     return Stack(
       children: [
         Positioned(
