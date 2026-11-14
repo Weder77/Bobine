@@ -189,4 +189,13 @@ void main() {
     // Half the 720-point stage, so a Scaffold lifts the field above the keyboard.
     expect(insets.bottom, closeTo(360, 0.01));
   });
+
+  testWidgets('sur la télé, l’élément sélectionné est cerclé dès l’ouverture (pas d’écran tactile)', (t) async {
+    addTearDown(() => FocusManager.instance.highlightStrategy = FocusHighlightStrategy.automatic);
+    await t.pumpWidget(TvCanvas(child: const SizedBox.expand()));
+    expect(FocusManager.instance.highlightMode, FocusHighlightMode.traditional);
+    // Even after a touch (a phone remote app, a mouse).
+    await t.tapAt(const Offset(10, 10));
+    expect(FocusManager.instance.highlightMode, FocusHighlightMode.traditional);
+  });
 }

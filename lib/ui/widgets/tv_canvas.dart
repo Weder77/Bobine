@@ -52,6 +52,9 @@ class TvCanvas extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A TV has no touch screen: the focus ring shows from the start, not
+    // only after the first key of the remote.
+    FocusManager.instance.highlightStrategy = FocusHighlightStrategy.alwaysTraditional;
     final outer = MediaQuery.maybeOf(context) ?? const MediaQueryData();
     return Focus(
       canRequestFocus: false,
