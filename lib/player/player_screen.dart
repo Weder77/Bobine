@@ -456,7 +456,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!_controls) setState(() => _controls = true);
     _hideTimer?.cancel();
     if (sticky) return;
-    _hideTimer = Timer(const Duration(milliseconds: 3500), () {
+    // A TV is read from the sofa: a little longer.
+    _hideTimer = Timer(Duration(milliseconds: Device.isTv ? 5000 : 3500), () {
       if (!mounted || _overControls || _panel != _Panel.none) return;
       if (!_ps.player.state.playing) return;
       // The buttons fade out: the arrows go back to seeking and zapping.

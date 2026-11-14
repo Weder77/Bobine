@@ -111,6 +111,11 @@ class TvFocusController extends ChangeNotifier {
         (current.state.widget.onSide?.call(dir) ?? false)) {
       return true;
     }
+    final own = current?.state.widget.onMove?.call(dir);
+    if (own != null && isRegistered(own)) {
+      focus(own, dir: dir);
+      return true;
+    }
     final forced = before?.call(_id, dir);
     if (forced != null) {
       focus(forced, dir: dir);
@@ -221,7 +226,11 @@ class _TvFocusScopeState extends State<TvFocusScope> {
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
-    if (e is KeyUpEvent) return KeyEventResult.ignored;
+    if (e is KeyUpEvent) {
+      // Android (up to 15) tracks every key pressed: a release of Retour left
+      // to it becomes a second Retour (onBackPressed → the PopScopes).
+      return _back.contains(e.logicalKey) ? KeyEventResult.handled : KeyEventResult.ignored;
+    }
     // A text field is typing: its keys (Effacer, the arrows in the text) are
     // its own; it gives the remote back itself ([TvTextField]).
     if (FocusManager.instance.primaryFocus != _node) return KeyEventResult.ignored;
@@ -265,6 +274,7 @@ class TvFocusable extends StatefulWidget {
     required this.builder,
     this.onOk,
     this.onSide,
+    this.onMove,
     this.revealAxes = const {Axis.horizontal, Axis.vertical},
     this.revealPadding = const EdgeInsets.symmetric(horizontal: 96, vertical: 48),
   });
@@ -275,6 +285,11 @@ class TvFocusable extends StatefulWidget {
 
   /// ← → kept by the item (a setting changes value): true when handled.
   final bool Function(TvDir dir)? onSide;
+
+  /// The item an arrow goes to from this one, when not the nearest (Up from
+  /// a row goes to the row above, not to what happens to be nearer); null,
+  /// or an item not built, leaves it to the nearest.
+  final String? Function(TvDir dir)? onMove;
 
   final Set<Axis> revealAxes;
   final EdgeInsets revealPadding;

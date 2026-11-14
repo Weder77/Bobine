@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../../core/device.dart';
+import '../../tv/tv_stage.dart';
 
 /// Lays the whole app out on a fixed 1280 × 720 stage, scaled to fill the
 /// screen (letterboxed when the screen is not 16:9).
@@ -84,6 +85,9 @@ class TvCanvas extends StatelessWidget {
                   // The on-screen keyboard, in stage points: a Scaffold then
                   // lifts the field being typed above it.
                   viewInsets: outer.viewInsets * _scale(outer.size),
+                  // Pictures decoded at the pixels they cover, not at the
+                  // screen's ratio over a stage drawn smaller.
+                  devicePixelRatio: stagePixelRatio(context, size, outer.devicePixelRatio),
                 ),
                 child: child,
               ),

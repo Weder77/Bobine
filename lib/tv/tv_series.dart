@@ -274,139 +274,143 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
     ].join('   ·   ');
     return PopScope(
       canPop: true,
-      child: TvStage(
-        child: Material(
-          color: TvColors.bg,
-          child: TvFocusScope(
-            controller: _c,
-            onBack: () => Navigator.of(context).maybePop(),
-            child: Stack(
-              children: [
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  width: 1920,
-                  height: 900,
-                  child: TvPicture(url: _sr.backdrop ?? _sr.poster, tintKey: 's-${_sr.extId}', decodeWidth: 1280),
-                ),
-                const Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [Color(0xFF0D0C0B), Color(0xEB0D0C0B), Color(0x730D0C0B), Color(0x000D0C0B)],
-                          stops: [0, 0.30, 0.54, 0.74],
+      child: Scaffold(
+        // Scaffold: where the messages of the app (wrong code, locked…) show.
+        backgroundColor: TvColors.bg,
+        body: TvStage(
+          child: Material(
+            color: TvColors.bg,
+            child: TvFocusScope(
+              controller: _c,
+              onBack: () => Navigator.of(context).maybePop(),
+              child: Stack(
+                children: [
+                  Positioned(
+                    left: 0,
+                    top: 0,
+                    width: 1920,
+                    height: 900,
+                    child: TvPicture(url: _sr.backdrop ?? _sr.poster, tintKey: 's-${_sr.extId}', decodeWidth: 1280),
+                  ),
+                  const Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [Color(0xFF0D0C0B), Color(0xEB0D0C0B), Color(0x730D0C0B), Color(0x000D0C0B)],
+                            stops: [0, 0.30, 0.54, 0.74],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                const Positioned.fill(
-                  child: IgnorePointer(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.bottomCenter,
-                          end: Alignment.topCenter,
-                          colors: [Color(0xFF0D0C0B), Color(0xF20D0C0B), Color(0x000D0C0B)],
-                          stops: [0, 0.42, 0.75],
+                  const Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.bottomCenter,
+                            end: Alignment.topCenter,
+                            colors: [Color(0xFF0D0C0B), Color(0xF20D0C0B), Color(0x000D0C0B)],
+                            stops: [0, 0.42, 0.75],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                Positioned(
-                  left: 96,
-                  bottom: 470,
-                  width: 1100,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text('SÉRIE', style: tvKicker()),
-                      const SizedBox(height: 20),
-                      Text(
-                        _sr.name.toUpperCase(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: tvTitle(tvTitleSize(_sr.name, 116), height: 0.88),
-                      ),
-                      if (meta.isNotEmpty) ...[
+                  Positioned(
+                    left: 96,
+                    bottom: 470,
+                    width: 1100,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text('SÉRIE', style: tvKicker()),
                         const SizedBox(height: 20),
-                        Text(meta, style: tvText(26, color: TvColors.soft)),
-                      ],
-                      if (_sr.plot != null && _sr.plot!.isNotEmpty) ...[
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: 860,
-                          child: Text(
-                            _sr.plot!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: tvText(26, weight: FontWeight.w400, height: 1.45, color: TvColors.soft),
-                          ),
+                        Text(
+                          _sr.name.toUpperCase(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: tvTitle(tvTitleSize(_sr.name, 116), height: 0.88),
                         ),
-                      ],
-                      const SizedBox(height: 30),
-                      Row(
-                        children: [
-                          _button(
-                            'play',
-                            Icons.play_arrow_rounded,
-                            primary?.label ?? 'Chargement…',
-                            () => primary == null ? null : _play(primary.episode),
-                            strong: true,
-                          ),
-                          const SizedBox(width: 18),
-                          _button(
-                            'list',
-                            inList ? Icons.check_rounded : Icons.add_rounded,
-                            inList ? 'Dans ma liste' : 'Ma liste',
-                            () => setState(() => s.toggleFavorite(ContentKind.series, _sr.extId, _sr.sourceId)),
+                        if (meta.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          Text(meta, style: tvText(26, color: TvColors.soft)),
+                        ],
+                        if (_sr.plot != null && _sr.plot!.isNotEmpty) ...[
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: 860,
+                            child: Text(
+                              _sr.plot!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: tvText(26, weight: FontWeight.w400, height: 1.45, color: TvColors.soft),
+                            ),
                           ),
                         ],
-                      ),
-                    ],
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 640,
-                  height: 64,
-                  child: eps == null
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 96),
-                          child: Text('Chargement des épisodes…', style: tvText(26, color: TvColors.muted)),
-                        )
-                      : eps.isEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 96),
-                          child: Text('Aucun épisode chez le fournisseur.', style: tvText(26, color: TvColors.muted)),
-                        )
-                      : ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.symmetric(horizontal: 96),
-                          itemCount: seasons.length,
-                          separatorBuilder: (_, _) => const SizedBox(width: 12),
-                          itemBuilder: (context, i) => Center(child: _seasonPill(seasons[i])),
+                        const SizedBox(height: 30),
+                        Row(
+                          children: [
+                            _button(
+                              'play',
+                              Icons.play_arrow_rounded,
+                              primary?.label ?? 'Chargement…',
+                              () => primary == null ? null : _play(primary.episode),
+                              strong: true,
+                            ),
+                            const SizedBox(width: 18),
+                            _button(
+                              'list',
+                              inList ? Icons.check_rounded : Icons.add_rounded,
+                              inList ? 'Dans ma liste' : 'Ma liste',
+                              () => setState(() => s.toggleFavorite(ContentKind.series, _sr.extId, _sr.sourceId)),
+                            ),
+                          ],
                         ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  top: 720,
-                  height: 300,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    clipBehavior: Clip.none,
-                    padding: const EdgeInsets.fromLTRB(96, 22, 96, 30),
-                    itemCount: _inSeason.length,
-                    separatorBuilder: (_, _) => const SizedBox(width: 24),
-                    itemBuilder: (context, i) => _episode(_inSeason[i]),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 640,
+                    height: 64,
+                    child: eps == null
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 96),
+                            child: Text('Chargement des épisodes…', style: tvText(26, color: TvColors.muted)),
+                          )
+                        : eps.isEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 96),
+                            child: Text('Aucun épisode chez le fournisseur.', style: tvText(26, color: TvColors.muted)),
+                          )
+                        : ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 96),
+                            itemCount: seasons.length,
+                            separatorBuilder: (_, _) => const SizedBox(width: 12),
+                            itemBuilder: (context, i) => Center(child: _seasonPill(seasons[i])),
+                          ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    top: 720,
+                    height: 300,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      clipBehavior: Clip.none,
+                      padding: const EdgeInsets.fromLTRB(96, 22, 96, 30),
+                      itemCount: _inSeason.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 24),
+                      itemBuilder: (context, i) => _episode(_inSeason[i]),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

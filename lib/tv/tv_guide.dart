@@ -59,6 +59,15 @@ class _TvGuidePageState extends State<TvGuidePage> {
   /// Focus id → channel and programme (null: no guide for the channel).
   final Map<String, (ChannelTile, Program?)> _cells = {};
 
+  /// Reminders set, read once a build (not once a programme shown).
+  Set<String> _reminded = const {};
+
+  static String _reminderKey(int sourceId, String channelExt, DateTime start) =>
+      '$sourceId|$channelExt|${start.millisecondsSinceEpoch ~/ 1000}';
+
+  bool _hasReminder(ChannelTile t, Program p) =>
+      _reminded.contains(_reminderKey(t.channel.sourceId, t.channel.extId, p.start));
+
   @override
   void initState() {
     super.initState();
@@ -133,10 +142,12 @@ class _TvGuidePageState extends State<TvGuidePage> {
 
   Widget _block(AppServices s, ChannelTile t, Program? p) {
     final id = _id(t, p);
+    // What the grid showed over a long evening of scrolling: not kept forever.
+    if (_cells.length > 3000 && !_cells.containsKey(id)) _cells.clear();
     _cells[id] = (t, p);
     final live = p != null && p.isLiveAt(_now);
     final past = p != null && !p.stop.isAfter(_now);
-    final reminded = p != null && s.repo.hasReminder(t.channel.sourceId, t.channel.extId, p.start);
+    final reminded = p != null && _hasReminder(t, p);
     final a = p == null ? 0.0 : _x(p.start.isBefore(_r0) ? _r0 : p.start);
     final b = p == null ? _hours * 60 * _px : _x(p.stop.isAfter(_r1) ? _r1 : p.stop);
     return Positioned(
@@ -352,7 +363,7 @@ class _TvGuidePageState extends State<TvGuidePage> {
     if (cell == null) return const SizedBox.shrink();
     final (t, p) = cell;
     final live = p != null && p.isLiveAt(_now);
-    final reminded = p != null && s.repo.hasReminder(t.channel.sourceId, t.channel.extId, p.start);
+    final reminded = p != null && _hasReminder(t, p);
     final future = p != null && _now.isBefore(p.start);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -452,6 +463,7 @@ class _TvGuidePageState extends State<TvGuidePage> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final tiles = _tiles;
+    _reminded = {for (final r in s.repo.reminders()) _reminderKey(r.sourceId, r.channelExt, r.start)};
     widget.setEntry(() {
       if (tiles.isEmpty) return null;
       final t = tiles.first;

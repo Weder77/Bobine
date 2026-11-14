@@ -62,8 +62,26 @@ class TvShellView extends StatefulWidget {
 
 class _TvShellViewState extends State<TvShellView> {
   final _c = TvFocusController();
+
+  /// The page shown (the tab with the remote may not be it yet: [_switch]).
   TvTab _tab = TvTab.home;
+
+  /// Passing over tabs does not build their pages (a big source groups
+  /// thousands of channels for Direct and Guide TV): the page follows once
+  /// the remote stays on a tab.
+  Timer? _switch;
   String? Function()? _entry;
+
+  /// The page [_entry] comes from: right after a switch, the new page may
+  /// not be built yet, and the old one keeps setting its own until it goes.
+  TvTab? _entryTab;
+
+  void _setEntry(TvTab tab, String? Function() entry) {
+    if (tab != _tab) return;
+    _entry = entry;
+    _entryTab = tab;
+  }
+
   bool _hint = true;
   Timer? _hintTimer;
   Timer? _clock;
@@ -84,8 +102,16 @@ class _TvShellViewState extends State<TvShellView> {
     _c.before = (from, dir) {
       if (from == null || !_c.isRegistered(from)) return _nav(_tab);
       if (_isNav(from) && dir == TvDir.down) {
+        final t = _tabOf(from);
+        if (t != _tab || _entryTab != t) {
+          // Not shown yet (or not built yet): now, and into it once built.
+          _show(t);
+          _enter();
+          return from;
+        }
         final e = _entry?.call();
-        return e != null && _c.isRegistered(e) ? e : from;
+        // Not built (a lazy list scrolled away): the nearest item below.
+        return e != null && _c.isRegistered(e) ? e : null;
       }
       return null;
     };
@@ -99,6 +125,7 @@ class _TvShellViewState extends State<TvShellView> {
   void dispose() {
     _hintTimer?.cancel();
     _clock?.cancel();
+    _switch?.cancel();
     _c.dispose();
     super.dispose();
   }
@@ -107,24 +134,43 @@ class _TvShellViewState extends State<TvShellView> {
     if (mounted && _hint) setState(() => _hint = false);
   }
 
-  void _onFocus() {
-    _hideHint();
-    final id = _c.id;
-    if (!_isNav(id)) return;
-    final t = TvTab.values.byName(id!.substring(4));
+  TvTab _tabOf(String navId) => TvTab.values.byName(navId.substring(4));
+
+  void _show(TvTab t) {
+    _switch?.cancel();
     if (t != _tab) setState(() => _tab = t);
   }
 
+  void _onFocus() {
+    // The first focus (set by the app, not a key) leaves the hint up.
+    if (_c.lastDir != null) _hideHint();
+    final id = _c.id;
+    _switch?.cancel();
+    if (!_isNav(id)) return;
+    final t = _tabOf(id!);
+    if (t != _tab) _switch = Timer(const Duration(milliseconds: 300), () => _show(t));
+  }
+
+  /// OK on a tab, or Down from it: its page, its first item.
   void _enter() {
+    final id = _c.id;
+    if (_isNav(id)) _show(_tabOf(id!));
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Still not built: the next Down or OK tries again.
+      if (!mounted || !_isNav(_c.id) || _entryTab != _tab) return;
       final e = _entry?.call();
-      if (e != null && _c.isRegistered(e)) _c.focus(e, dir: TvDir.down);
+      if (e != null && _c.isRegistered(e)) {
+        _c.focus(e, dir: TvDir.down);
+      } else {
+        _c.move(TvDir.down);
+      }
     });
   }
 
   void _back() {
     _hideHint();
-    switch (tvBack(onNav: _isNav(_c.id), tab: _tab)) {
+    final onNav = _isNav(_c.id);
+    switch (tvBack(onNav: onNav, tab: onNav ? _tabOf(_c.id!) : _tab)) {
       case TvBackRule.toNav:
         _c.focus(_nav(_tab));
       case TvBackRule.toHome:
@@ -301,21 +347,33 @@ class _TvShellViewState extends State<TvShellView> {
     onPopInvokedWithResult: (didPop, _) {
       if (!didPop) _back();
     },
-    child: TvStage(
-      // Material: text styles and ink for everything below.
-      child: Material(
-        color: TvColors.bg,
-        child: TvFocusScope(
-          controller: _c,
-          onBack: _back,
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: KeyedSubtree(key: ValueKey(_tab), child: widget.pageBuilder(context, _tab, (e) => _entry = e)),
-              ),
-              Positioned.fill(child: _topBar()),
-              _hintBubble(),
-            ],
+    child: Scaffold(
+      // Scaffold: where the messages of the app (wrong code, locked…) show.
+      backgroundColor: TvColors.bg,
+      body: TvStage(
+        // Material: text styles and ink for everything below.
+        child: Material(
+          color: TvColors.bg,
+          child: TvFocusScope(
+            controller: _c,
+            onBack: _back,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: Builder(
+                    builder: (context) {
+                      final tab = _tab;
+                      return KeyedSubtree(
+                        key: ValueKey(tab),
+                        child: widget.pageBuilder(context, tab, (e) => _setEntry(tab, e)),
+                      );
+                    },
+                  ),
+                ),
+                Positioned.fill(child: _topBar()),
+                _hintBubble(),
+              ],
+            ),
           ),
         ),
       ),

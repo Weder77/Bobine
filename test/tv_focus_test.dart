@@ -90,6 +90,46 @@ void main() {
       expect(backs, 2);
     });
 
+    testWidgets('Retour lâché est gardé aussi (Android en ferait un second Retour)', (t) async {
+      await pump(t);
+      expect(await t.sendKeyDownEvent(LogicalKeyboardKey.escape), isTrue);
+      expect(await t.sendKeyUpEvent(LogicalKeyboardKey.escape), isTrue);
+      expect(backs, 1);
+    });
+
+    testWidgets('un élément peut désigner son voisin pour une flèche', (t) async {
+      final c = TvFocusController(initial: 'a');
+      Widget item(String id, double left, {String? Function(TvDir)? onMove}) => Positioned(
+        left: left,
+        top: 0,
+        child: TvFocusable(
+          id: id,
+          onMove: onMove,
+          builder: (context, focused) => const SizedBox(width: 100, height: 60),
+        ),
+      );
+      await t.pumpWidget(
+        MaterialApp(
+          home: TvFocusScope(
+            controller: c,
+            onBack: () {},
+            child: Stack(
+              children: [
+                item('a', 0, onMove: (d) => d == TvDir.right ? 'c' : null),
+                item('b', 150),
+                item('c', 300),
+              ],
+            ),
+          ),
+        ),
+      );
+      await t.pump();
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+      expect(c.id, 'c');
+      await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+      expect(c.id, 'b');
+    });
+
     testWidgets('au bord, la flèche ne fait rien', (t) async {
       final c = await pump(t);
       await t.sendKeyEvent(LogicalKeyboardKey.arrowLeft);

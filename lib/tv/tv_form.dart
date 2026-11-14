@@ -84,14 +84,17 @@ class _TvTextFieldState extends State<TvTextField> {
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
-    if (e is KeyUpEvent) return KeyEventResult.ignored;
     final k = e.logicalKey;
+    final back =
+        k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack || k == LogicalKeyboardKey.gameButtonB;
+    // Its release too: Android would make it a Retour of its own.
+    if (e is KeyUpEvent) return back ? KeyEventResult.handled : KeyEventResult.ignored;
     if (k == LogicalKeyboardKey.arrowUp || k == LogicalKeyboardKey.arrowDown) {
       _stop();
       _c?.move(k == LogicalKeyboardKey.arrowUp ? TvDir.up : TvDir.down);
       return KeyEventResult.handled;
     }
-    if (k == LogicalKeyboardKey.escape || k == LogicalKeyboardKey.goBack || k == LogicalKeyboardKey.gameButtonB) {
+    if (back) {
       _stop();
       return KeyEventResult.handled;
     }
@@ -350,54 +353,58 @@ class TvFormFrame extends StatelessWidget {
     onPopInvokedWithResult: (didPop, _) {
       if (!didPop) onBack();
     },
-    child: TvStage(
-      child: Material(
-        color: TvColors.bg,
-        child: TvFocusScope(
-          controller: controller,
-          onBack: onBack,
-          child: Stack(
-            children: [
-              Positioned(
-                left: 96,
-                top: 96,
-                right: 96,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(title.toUpperCase(), style: tvTitle(84)),
-                    if (subtitle != null) ...[
-                      const SizedBox(height: 14),
-                      Text(subtitle!, style: tvText(28, height: 1.35, color: TvColors.soft)),
+    child: Scaffold(
+      // Scaffold: where the messages of the app (wrong code, locked…) show.
+      backgroundColor: TvColors.bg,
+      body: TvStage(
+        child: Material(
+          color: TvColors.bg,
+          child: TvFocusScope(
+            controller: controller,
+            onBack: onBack,
+            child: Stack(
+              children: [
+                Positioned(
+                  left: 96,
+                  top: 96,
+                  right: 96,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title.toUpperCase(), style: tvTitle(84)),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 14),
+                        Text(subtitle!, style: tvText(28, height: 1.35, color: TvColors.soft)),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              Positioned(
-                left: 96,
-                top: subtitle == null ? 250 : 300,
-                width: 1040,
-                bottom: 130,
-                child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  clipBehavior: Clip.none,
-                  padding: const EdgeInsets.only(top: 8, bottom: 48),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+                Positioned(
+                  left: 96,
+                  top: subtitle == null ? 250 : 300,
+                  width: 1040,
+                  bottom: 130,
+                  child: SingleChildScrollView(
+                    physics: const NeverScrollableScrollPhysics(),
+                    clipBehavior: Clip.none,
+                    padding: const EdgeInsets.only(top: 8, bottom: 48),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+                  ),
                 ),
-              ),
-              if (side != null) Positioned(left: 1230, top: subtitle == null ? 258 : 308, width: 594, child: side!),
-              Positioned(
-                left: 96,
-                bottom: 56,
-                child: Row(
-                  children: [
-                    const TvKeyHint('OK', 'Choisir'),
-                    const SizedBox(width: 36),
-                    TvKeyHint('Retour', backLabel),
-                  ],
+                if (side != null) Positioned(left: 1230, top: subtitle == null ? 258 : 308, width: 594, child: side!),
+                Positioned(
+                  left: 96,
+                  bottom: 56,
+                  child: Row(
+                    children: [
+                      const TvKeyHint('OK', 'Choisir'),
+                      const SizedBox(width: 36),
+                      TvKeyHint('Retour', backLabel),
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

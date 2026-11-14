@@ -52,6 +52,7 @@ class _TvLivePageState extends State<TvLivePage> {
   @override
   void dispose() {
     _tick?.cancel();
+    _select?.cancel();
     _c?.removeListener(_onFocus);
     _cat?.dispose();
     _grid.dispose();
@@ -62,24 +63,43 @@ class _TvLivePageState extends State<TvLivePage> {
     if (mounted) setState(() {});
   }
 
-  /// Arriving on a pill shows its group (as the tabs of the top bar).
+  /// Arriving on a pill shows its group (as the tabs of the top bar), once
+  /// the remote stays on it: each group loads its channels (and is kept as
+  /// the last one), passing over pills does not.
+  Timer? _select;
+
   void _onFocus() {
     final id = _c?.id;
+    _select?.cancel();
+    if (id == null || _cat == null || !id.startsWith('grp-')) return;
+    _select = Timer(const Duration(milliseconds: 300), () => _show(id.substring(4)));
+  }
+
+  void _show(String entry) {
+    _select?.cancel();
     final cat = _cat;
-    if (id == null || cat == null || !id.startsWith('grp-')) return;
-    final entry = id.substring(4);
-    if (entry != cat.cat) {
-      cat.select(entry);
-      if (_grid.hasClients) _grid.jumpTo(0);
-    }
+    if (!mounted || cat == null || entry == cat.cat) return;
+    cat.select(entry);
+    if (_grid.hasClients) _grid.jumpTo(0);
+  }
+
+  /// The group of a pill now, then its first channel.
+  void _enter(String entry) {
+    _show(entry);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final first = _cat?.tiles.firstOrNull;
+      if (mounted && first != null) _c?.focus('ch-${first.channel.extId}', dir: TvDir.down);
+    });
   }
 
   Widget _pill(String id, String label, bool current) => TvFocusable(
     id: 'grp-$id',
     revealAxes: const {Axis.horizontal},
-    onOk: () {
-      final first = _cat?.tiles.firstOrNull;
-      if (first != null) _c?.focus('ch-${first.channel.extId}', dir: TvDir.down);
+    onOk: () => _enter(id),
+    onMove: (d) {
+      if (d != TvDir.down) return null;
+      _enter(id);
+      return 'grp-$id';
     },
     builder: (context, on) => AnimatedScale(
       scale: on ? 1.05 : 1,
@@ -199,6 +219,9 @@ class _TvLivePageState extends State<TvLivePage> {
                     final it = tvChannel(t.channel, s.epg, t.name, now, list);
                     return TvFocusable(
                       id: 'ch-${t.channel.extId}',
+                      // Up from the first line: the pill of this group (the one
+                      // above may be another, which would change the group).
+                      onMove: i < 4 ? (d) => d == TvDir.up ? 'grp-${cat.cat}' : null : null,
                       revealAxes: const {Axis.vertical},
                       revealPadding: const EdgeInsets.only(top: 40, bottom: 48),
                       onOk: () => Launch.channel(context, t.channel, list),

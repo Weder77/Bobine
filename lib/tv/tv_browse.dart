@@ -52,6 +52,19 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
   Timer? _tick;
   int? _row;
 
+  /// Card ids by row: the row and the item (positions change when "Reprendre"
+  /// comes or goes; the card with the remote must stay the same one).
+  List<List<String>> _ids = const [];
+  Map<String, (int, int)> _where = const {};
+
+  /// Last card with the remote in each row (by title): Up and Down land there.
+  final Map<String, String> _last = {};
+
+  /// The big picture follows the remote once it stays on a card (a row run
+  /// through does not load every picture).
+  TvItem? _picture;
+  Timer? _pictureTimer;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -78,6 +91,7 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
   @override
   void dispose() {
     _tick?.cancel();
+    _pictureTimer?.cancel();
     _s?.library.removeListener(_reload);
     _c?.removeListener(_onFocus);
     _scroll.dispose();
@@ -99,24 +113,69 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
       ...rows.where((r) => r.title == preferred),
       ...rows.where((r) => r.style == TvRowStyle.poster || r.style == TvRowStyle.top),
     ];
+    final was = _pos(_c?.id);
+    final wasRow = was == null || was.$1 >= _rows.length ? null : _rows[was.$1].title;
+    final ids = <List<String>>[];
+    final where = <String, (int, int)>{};
+    for (final (ri, row) in rows.indexed) {
+      final line = <String>[];
+      for (final (i, it) in row.items.indexed) {
+        var id = 'c:${row.title}:${it.key}';
+        if (where.containsKey(id)) id = '$id#$i';
+        where[id] = (ri, i);
+        line.add(id);
+      }
+      ids.add(line);
+    }
     if (!mounted) return;
     setState(() {
       _rows = rows;
+      _ids = ids;
+      _where = where;
       _featured = pool.isEmpty ? null : pool.first.items.first;
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _keepFocus(wasRow));
   }
 
-  (int, int)? _pos(String? id) {
-    if (id == null || !id.startsWith('r')) return null;
-    final parts = id.substring(1).split('-');
-    if (parts.length != 2) return null;
-    final r = int.tryParse(parts[0]), i = int.tryParse(parts[1]);
-    return r == null || i == null ? null : (r, i);
+  /// After a reload: the card with the remote went away (a film finished
+  /// leaves "Reprendre"): its row's first card, or the buttons; its row
+  /// moved: the rows follow.
+  void _keepFocus(String? title) {
+    final c = _c, id = c?.id;
+    if (!mounted || c == null || id == null || !id.startsWith('c:')) return;
+    if (!_where.containsKey(id)) {
+      final ri = _rows.indexWhere((r) => r.title == title);
+      final to = ri >= 0 && _ids[ri].isNotEmpty ? _ids[ri].first : (_featured != null ? 'hero-play' : _firstCard);
+      _last.remove(title);
+      if (to != null) c.focus(to);
+      return;
+    }
+    _row = null;
+    _onFocus();
+  }
+
+  String? get _firstCard => _ids.isEmpty || _ids.first.isEmpty ? null : _ids.first.first;
+
+  (int, int)? _pos(String? id) => id == null ? null : _where[id];
+
+  /// Where Up / Down go from a card of row [ri] (null: the nearest).
+  String? _moveFrom(int ri, TvDir d) => switch (d) {
+    TvDir.up => ri == 0 ? (_featured != null ? 'hero-play' : null) : _rowTarget(ri - 1),
+    TvDir.down => ri + 1 < _rows.length ? _rowTarget(ri + 1) : null,
+    _ => null,
+  };
+
+  String? _rowTarget(int ri) {
+    final last = _last[_rows[ri].title];
+    if (last != null && (_c?.isRegistered(last) ?? false)) return last;
+    return _ids[ri].isEmpty ? null : _ids[ri].first;
   }
 
   void _onFocus() {
-    final pos = _pos(_c?.id);
+    final id = _c?.id;
+    final pos = _pos(id);
     final row = pos?.$1;
+    if (pos != null) _last[_rows[pos.$1].title] = id!;
     if (row != _row) {
       _row = row;
       var offset = 0.0;
@@ -131,6 +190,10 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
         );
       }
     }
+    _pictureTimer?.cancel();
+    _pictureTimer = Timer(const Duration(milliseconds: 250), () {
+      if (mounted) setState(() => _picture = _selected);
+    });
     setState(() {});
   }
 
@@ -144,6 +207,7 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
   Widget _heroButton(String id, IconData icon, String label, VoidCallback onOk, {bool strong = false}) => TvFocusable(
     id: id,
     onOk: onOk,
+    onMove: (d) => d == TvDir.down && _rows.isNotEmpty ? _rowTarget(0) : null,
     builder: (context, on) => AnimatedScale(
       scale: on ? 1.05 : 1,
       duration: const Duration(milliseconds: 150),
@@ -271,9 +335,10 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
     }
   }
 
-  Widget _card(TvRow row, TvItem it, String id) => TvFocusable(
+  Widget _card(int ri, TvRow row, TvItem it, String id) => TvFocusable(
     id: id,
     onOk: () => tvOpen(context, it),
+    onMove: (d) => _moveFrom(ri, d),
     revealAxes: const {Axis.horizontal},
     builder: (context, on) => switch (row.style) {
       TvRowStyle.live => TvLiveCard(item: it, on: on),
@@ -299,7 +364,7 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
             padding: const EdgeInsets.fromLTRB(96, 22, 96, 30),
             itemCount: row.items.length,
             separatorBuilder: (_, _) => SizedBox(width: row.style == TvRowStyle.top ? 16 : 24),
-            itemBuilder: (context, i) => _card(row, row.items[i], 'r$ri-$i'),
+            itemBuilder: (context, i) => _card(ri, row, row.items[i], _ids[ri][i]),
           ),
         ),
       ],
@@ -310,7 +375,7 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
   Widget build(BuildContext context) {
     final featured = _featured;
     final rows = _rows;
-    widget.setEntry(() => featured != null ? 'hero-play' : (rows.isEmpty ? null : 'r0-0'));
+    widget.setEntry(() => featured != null ? 'hero-play' : _firstCard);
     if (featured == null && rows.isEmpty) {
       return Center(
         child: Column(
@@ -328,6 +393,8 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
     }
     final selected = _selected;
     final info = selected ?? featured ?? rows.first.items.first;
+    // Off a card (the buttons, the top bar), the featured one at once.
+    final picture = selected == null ? info : (_picture ?? info);
     return Stack(
       children: [
         Positioned(
@@ -338,8 +405,8 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 600),
             child: SizedBox.expand(
-              key: ValueKey(info.key),
-              child: TvPicture(url: info.backdrop ?? info.image, tintKey: info.key, decodeWidth: 1280),
+              key: ValueKey(picture.key),
+              child: TvPicture(url: picture.backdrop ?? picture.image, tintKey: picture.key, decodeWidth: 1280),
             ),
           ),
         ),
