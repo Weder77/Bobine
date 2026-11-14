@@ -344,7 +344,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else {
       _s.pip.show(session);
     }
-    if (mounted) Navigator.of(context).maybePop();
+    // Leaves whatever is open (a panel, the stats): the player goes on in
+    // the mini-player.
+    if (mounted) BackLayers.leave(context);
   }
 
   // ----------------------------------------------------------------- cast
@@ -431,7 +433,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (_casting) {
       _minimize();
     } else {
-      Navigator.of(context).maybePop();
+      BackLayers.leave(context);
     }
   }
 
@@ -903,11 +905,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     };
     final vis = _visible;
     // Back of the TV remote (Android's back) goes through _back too.
-    return PopScope(
-      canPop: _backStep == PlayerBack.leave,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _back();
-      },
+    return BackLayers(
+      atLastLayer: _backStep == PlayerBack.leave,
+      onBack: _back,
       child: Scaffold(
         backgroundColor: Colors.black,
         body: Focus(

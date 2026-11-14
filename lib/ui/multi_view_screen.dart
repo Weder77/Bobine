@@ -18,6 +18,7 @@ import '../player/player_screen.dart';
 import '../player/player_session.dart';
 import '../services.dart';
 import 'live_catalog.dart';
+import 'back_rules.dart';
 import 'widgets/common.dart';
 
 /// "Multi-écran": two to four channels at once (sport), one of them heard.
@@ -215,7 +216,7 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
       } else if (_fullscreen && k == LogicalKeyboardKey.escape) {
         _setFullscreen(false);
       } else {
-        Navigator.of(context).maybePop();
+        BackLayers.leave(context);
       }
     } else if (k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.arrowDown || k == LogicalKeyboardKey.tab) {
       _c.selectNext(1);
@@ -251,10 +252,9 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
   Widget build(BuildContext context) {
     final picking = _picking;
     // Back of the TV remote: the channel list, then the enlarged slot, first.
-    return PopScope(
-      canPop: picking == null && _c.solo == null,
-      onPopInvokedWithResult: (didPop, _) {
-        if (didPop) return;
+    return BackLayers(
+      atLastLayer: picking == null && _c.solo == null,
+      onBack: () {
         if (_picking != null) {
           _closePicker();
         } else if (_c.solo != null) {
@@ -389,7 +389,7 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
                 RoundGlassButton(
                   icon: Icons.arrow_back_rounded,
                   tooltip: 'Quitter le multi-écran (Échap)',
-                  onTap: () => Navigator.of(context).maybePop(),
+                  onTap: () => BackLayers.leave(context),
                 ),
                 const SizedBox(width: 18),
                 Expanded(
