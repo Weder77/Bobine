@@ -16,6 +16,7 @@ import '../core/window.dart';
 import '../data/models.dart';
 import '../features/tmdb.dart';
 import '../services.dart';
+import '../tv/tv_player_overlay.dart';
 import '../ui/back_rules.dart';
 import '../ui/multi_view_screen.dart';
 import '../ui/widgets/common.dart';
@@ -782,15 +783,24 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final step = _s.settings.seekStep * (shift ? 6 : 1);
     final repeat = e is KeyRepeatEvent;
 
-    // TV remote: arrows and OK go to the controls' buttons once OK showed them.
-    switch (playerKeyRoute(k, controlsVisible: _visible, buttonFocused: _buttonFocused)) {
-      case PlayerKeyRoute.toFocusedButton:
-        _showControls();
-        return KeyEventResult.ignored;
-      case PlayerKeyRoute.revealControls:
-        if (!repeat) _revealControls();
+    if (Device.isTv) {
+      // No buttons on the TV: OK pauses (or retries, or plays the next episode).
+      if (isOkKey(k)) {
+        if (!repeat) _tvOk();
         return KeyEventResult.handled;
-      case PlayerKeyRoute.handle:
+      }
+    } else {
+      // Remote on a computer: arrows and OK go to the controls' buttons once
+      // OK showed them.
+      switch (playerKeyRoute(k, controlsVisible: _visible, buttonFocused: _buttonFocused)) {
+        case PlayerKeyRoute.toFocusedButton:
+          _showControls();
+          return KeyEventResult.ignored;
+        case PlayerKeyRoute.revealControls:
+          if (!repeat) _revealControls();
+          return KeyEventResult.handled;
+        case PlayerKeyRoute.handle:
+      }
     }
 
     if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.mediaPlayPause) {
@@ -851,6 +861,17 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
+  }
+
+  void _tvOk() {
+    switch (tvPlayerOk(error: _failed, nextShown: _nextOffered != null)) {
+      case TvPlayerOk.retry:
+        _retry();
+      case TvPlayerOk.nextEpisode:
+        _playNextEpisode();
+      case TvPlayerOk.togglePause:
+        _togglePlay();
+    }
   }
 
   static String? _digitOf(LogicalKeyboardKey k) {
@@ -954,32 +975,31 @@ class _PlayerScreenState extends State<PlayerScreen> {
                           ),
                   ),
                   // Shade at the top and bottom behind the bars.
-                  IgnorePointer(
-                    child: AnimatedOpacity(
-                      opacity: vis ? 1 : 0,
-                      duration: const Duration(milliseconds: 300),
-                      child: const DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xBF000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
-                            stops: [0, 0.22, 0.5, 1],
+                  if (!Device.isTv)
+                    IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: vis ? 1 : 0,
+                        duration: const Duration(milliseconds: 300),
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0xBF000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
+                              stops: [0, 0.22, 0.5, 1],
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  if (!_playing && _panel == _Panel.none && _error == null && !_casting)
+                  if (!Device.isTv && !_playing && _panel == _Panel.none && _error == null && !_casting)
                     _isLive ? const LivePausedBadge() : _pauseInfo(),
                   if (!_casting && _error == null) _buildBuffering(),
                   if (_osd != null) _buildOsd(),
                   if (_digits.isNotEmpty) _buildDigits(),
                   if (!_casting) _buildError(),
                   if (_isLive && _panel == _Panel.guide) MiniGuide(programs: _miniGuide()),
-                  _topBar(vis),
-                  _bottomBar(vis),
-                  ..._floating(vis),
+                  if (Device.isTv) _tvOverlay(vis) else ...[_topBar(vis), _bottomBar(vis), ..._floating(vis)],
                   if (_showStats && !_casting)
                     StatsCard(stats: _stats, onClose: () => setState(() => _showStats = false)),
                   ..._panels(),
@@ -1058,6 +1078,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     ),
   );
 
+  /// "Lecture impossible" is shown (not "Reconnexion…", which retries by itself).
+  bool get _failed {
+    final status = _ps.status.value;
+    if ((status ?? _error) == null) return false;
+    return !(status != null && status.startsWith('Reconnexion'));
+  }
+
+  void _retry() {
+    setState(() => _error = null);
+    _ps.status.value = null;
+    // Nothing was read: back to where this film was to resume, not to its
+    // beginning.
+    final here = _ps.player.state.position;
+    final resume = _item.url == widget.session.item.url ? widget.session.start : null;
+    _ps.play(_item, force: true, start: _isLive ? null : (here > Duration.zero ? here : resume));
+  }
+
   Widget _buildError() {
     return ValueListenableBuilder<String?>(
       valueListenable: _ps.status,
@@ -1100,15 +1137,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
-                    onPressed: () {
-                      setState(() => _error = null);
-                      _ps.status.value = null;
-                      // Nothing was read: back to where this film was to
-                      // resume, not to its beginning.
-                      final here = _ps.player.state.position;
-                      final resume = _item.url == widget.session.item.url ? widget.session.start : null;
-                      _ps.play(_item, force: true, start: _isLive ? null : (here > Duration.zero ? here : resume));
-                    },
+                    onPressed: _retry,
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Réessayer'),
                   ),
@@ -1515,6 +1544,59 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   // ------------------------------------------------------------ floating
+
+  /// The next episode, offered in the last 20 seconds of this one.
+  Episode? get _nextOffered {
+    final next = _nextEpisode;
+    if (_item.kind != ContentKind.episode || _panel != _Panel.none || next == null) return null;
+    if (_nextDismissed == _item.extId || _dur.inSeconds <= 60 || (_dur - _pos).inSeconds > 20) return null;
+    return next;
+  }
+
+  /// The design's player on the TV: what plays and the remote's keys.
+  Widget _tvOverlay(bool vis) {
+    final TvPlayerInfo info;
+    if (_isLive) {
+      final ch = _currentChannel;
+      info = TvPlayerInfo.live(
+        channelName: ch == null ? _item.title : _s.channelName(ch),
+        channelNumber: ch?.number ?? _chIndex + 1,
+        logo: ch?.logo ?? _item.image,
+        program: ch == null ? null : _s.epg.now(ch),
+        next: ch == null ? null : _s.epg.next(ch),
+      );
+    } else if (_item.kind == ContentKind.episode) {
+      final ep = _episodes.where((e) => e.extId == _item.extId).firstOrNull;
+      info = TvPlayerInfo.vod(
+        kicker: ep?.code ?? 'Épisode',
+        title: displayTitle(widget.session.series?.name ?? _item.title),
+        meta: ep?.displayTitle ?? '',
+      );
+    } else {
+      final movie = _item.isReplay ? null : _s.repo.movieByExt(_item.sourceId, _item.extId);
+      info = TvPlayerInfo.vod(
+        kicker: _item.isReplay ? 'Replay' : 'Film',
+        title: displayTitle(movie?.name ?? _item.title),
+        // The subtitle of a film already is its year.
+        meta: _item.subtitle ?? (movie?.year != null ? '${movie!.year}' : ''),
+      );
+    }
+    return ValueListenableBuilder<Duration>(
+      valueListenable: _position,
+      builder: (context, pos, _) {
+        final next = _nextOffered;
+        return TvPlayerOverlay(
+          info: info,
+          visible: vis && !_failed,
+          paused: !_playing && !_failed,
+          position: pos,
+          duration: _dur,
+          seekStep: _s.settings.seekStep,
+          nextLabel: next == null ? null : '${next.code} · ${next.displayTitle}',
+        );
+      },
+    );
+  }
 
   List<Widget> _floating(bool vis) {
     if (_item.kind != ContentKind.episode || _panel != _Panel.none) return const [];

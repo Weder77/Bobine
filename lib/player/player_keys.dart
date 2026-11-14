@@ -37,3 +37,23 @@ PlayerKeyRoute playerKeyRoute(LogicalKeyboardKey key, {required bool controlsVis
   if (!buttonFocused && _ok.contains(key)) return PlayerKeyRoute.revealControls;
   return PlayerKeyRoute.handle;
 }
+
+/// OK of a remote (or of a gamepad).
+bool isOkKey(LogicalKeyboardKey key) => _ok.contains(key);
+
+/// What OK does in the TV player, which has no buttons to pick.
+enum TvPlayerOk {
+  togglePause,
+
+  /// "Lecture impossible" is shown: try again.
+  retry,
+
+  /// "Épisode suivant" is offered at the end of an episode: play it.
+  nextEpisode,
+}
+
+TvPlayerOk tvPlayerOk({required bool error, required bool nextShown}) {
+  if (error) return TvPlayerOk.retry;
+  if (nextShown) return TvPlayerOk.nextEpisode;
+  return TvPlayerOk.togglePause;
+}
