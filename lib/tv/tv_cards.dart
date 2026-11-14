@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../ui/widgets/net_image.dart';
+import 'tv_focus.dart';
 import 'tv_rows.dart';
 import 'tv_theme.dart';
 
@@ -281,17 +282,57 @@ class TvWideCard extends StatelessWidget {
 
 /// Poster 200 × 300.
 class TvPosterCard extends StatelessWidget {
-  const TvPosterCard({super.key, required this.item, required this.on});
+  const TvPosterCard({super.key, required this.item, required this.on, this.width = 200, this.height = 300});
   final TvItem item;
   final bool on;
+  final double width;
+  final double height;
 
   @override
   Widget build(BuildContext context) => _Lifted(
     on: on,
-    width: 200,
-    height: 300,
+    width: width,
+    height: height,
     radius: 12,
     child: TvPicture(url: item.image, tintKey: item.key, label: item.title, decodeWidth: 300),
+  );
+}
+
+/// The last card of a row cut short: every item of the row, in a grid.
+class TvMoreCard extends StatelessWidget {
+  const TvMoreCard({super.key, required this.on, this.width = 200, this.height = 300});
+  final bool on;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) => _Lifted(
+    on: on,
+    width: width,
+    height: height,
+    radius: 12,
+    child: ColoredBox(
+      color: on ? Colors.white : TvColors.surface,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(color: on ? TvColors.bg : TvColors.border, width: 3),
+            ),
+            child: Icon(Icons.arrow_forward_rounded, size: 40, color: on ? TvColors.bg : Colors.white),
+          ),
+          const SizedBox(height: 22),
+          Text(
+            'Voir tout',
+            style: tvText(28, weight: FontWeight.w600, height: 1, color: on ? TvColors.bg : Colors.white),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -328,6 +369,72 @@ class TvTopCard extends StatelessWidget {
           child: TvPosterCard(item: item, on: on),
         ),
       ],
+    ),
+  );
+}
+
+/// A pill of a row of groups (Direct) or categories (Films, Séries): white
+/// with the remote, filled when it is the one shown.
+class TvPillButton extends StatelessWidget {
+  const TvPillButton({
+    super.key,
+    required this.id,
+    required this.label,
+    required this.current,
+    required this.onOk,
+    this.onMove,
+    this.large = false,
+  });
+
+  final String id;
+  final String label;
+  final bool current;
+  final VoidCallback onOk;
+  final String? Function(TvDir dir)? onMove;
+
+  /// Films and Séries (the design's pills are a little bigger there).
+  final bool large;
+
+  @override
+  Widget build(BuildContext context) => TvFocusable(
+    id: id,
+    revealAxes: const {Axis.horizontal},
+    onOk: onOk,
+    onMove: onMove,
+    builder: (context, on) => GestureDetector(
+      onTap: onOk,
+      child: AnimatedScale(
+        scale: on ? 1.05 : 1,
+        duration: const Duration(milliseconds: 150),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: large ? 66 : 60,
+          padding: EdgeInsets.symmetric(horizontal: large ? 32 : 26),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: on
+                ? Colors.white
+                : current
+                ? const Color(0x2EFFFFFF)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(40),
+            border: Border.all(color: on || current ? Colors.transparent : TvColors.border, width: 2),
+          ),
+          child: Text(
+            label,
+            style: tvText(
+              large ? 27 : 24,
+              weight: FontWeight.w600,
+              height: 1,
+              color: on
+                  ? TvColors.bg
+                  : current
+                  ? Colors.white
+                  : (large ? TvColors.soft : TvColors.muted),
+            ),
+          ),
+        ),
+      ),
     ),
   );
 }

@@ -165,6 +165,9 @@ class _TvShellViewState extends State<TvShellView> {
         _c.move(TvDir.down);
       }
     });
+    // Now, not at the next frame some other change brings: the next key
+    // would come first.
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
   void _back() {

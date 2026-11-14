@@ -61,10 +61,46 @@ class TvItem {
 enum TvRowStyle { live, wide, top, poster }
 
 class TvRow {
-  const TvRow(this.title, this.style, this.items);
+  const TvRow(this.title, this.style, this.items, {this.all});
   final String title;
   final TvRowStyle style;
   final List<TvItem> items;
+
+  /// The row shows only the first items: all of them ("Voir tout").
+  final List<TvItem> Function()? all;
+}
+
+/// A pill above Films or Séries: À la une (the rows), Tout, a category.
+class TvPill {
+  const TvPill(this.id, this.label);
+  final String id;
+  final String label;
+}
+
+/// À la une, Tout, then the provider's categories (those the parental
+/// control hides are left out, as everywhere on the TV).
+List<TvPill> tvCatalogPills(Repository repo, int sourceId, TvTab tab) {
+  final kind = switch (tab) {
+    TvTab.films => ContentKind.movie,
+    TvTab.series => ContentKind.series,
+    _ => null,
+  };
+  if (kind == null) return const [];
+  return [
+    const TvPill('une', 'À la une'),
+    const TvPill('all', 'Tout'),
+    for (final c in repo.categories(sourceId, kind)) TvPill('c:${c.id}', c.name),
+  ];
+}
+
+/// Everything a pill holds: all the films or series, or a category's.
+List<TvItem> tvCatalogItems(Repository repo, int sourceId, TvTab tab, String pill) {
+  final category = pill.startsWith('c:') ? int.tryParse(pill.substring(2)) : null;
+  final label = category == null ? null : repo.categoryName(category);
+  if (tab == TvTab.series) {
+    return [for (final x in repo.series(sourceId, categoryId: category)) tvSeries(x, 'Série · ${label ?? 'Tout'}')];
+  }
+  return [for (final m in repo.movies(sourceId, categoryId: category)) tvMovie(m, 'Film · ${label ?? 'Tout'}')];
 }
 
 /// "1 h 10" or "25 min" (design's durations).
@@ -153,11 +189,23 @@ List<TvRow> tvRows({
   required TvTab tab,
   required String Function(Channel) name,
   DateTime? now,
+  int rowLimit = 20,
 }) {
   final t = now ?? DateTime.now();
   final rows = <TvRow>[];
   void add(String title, TvRowStyle style, List<TvItem> items) {
     if (items.isNotEmpty) rows.add(TvRow(title, style, items));
+  }
+
+  // A row of the first [rowLimit] only, and all of them behind "Voir tout"
+  // when there are more ([load] gets the limit, or null for all).
+  void addCut(String title, List<TvItem> Function(int? limit) load) {
+    final items = load(rowLimit + 1);
+    if (items.isEmpty) return;
+    final cut = items.length > rowLimit;
+    rows.add(
+      TvRow(title, TvRowStyle.poster, cut ? items.take(rowLimit).toList() : items, all: cut ? () => load(null) : null),
+    );
   }
 
   List<T> top10<T>(List<T> recent, double? Function(T) rating) {
@@ -179,13 +227,19 @@ List<TvRow> tvRows({
           else if (x is Series)
             tvSeries(x, 'N° ${i + 1} · Top 10 aujourd’hui', number: '${i + 1}'),
       ]);
-      add('Ajoutés récemment', TvRowStyle.poster, [
-        for (final m in repo.movies(sourceId, sort: CatalogSort.added, limit: 20)) tvMovie(m, 'Film · Nouveauté'),
-      ]);
+      addCut(
+        'Ajoutés récemment',
+        (n) => [
+          for (final m in repo.movies(sourceId, sort: CatalogSort.added, limit: n)) tvMovie(m, 'Film · Nouveauté'),
+        ],
+      );
     case TvTab.films:
-      add('Nouveautés', TvRowStyle.poster, [
-        for (final m in repo.movies(sourceId, sort: CatalogSort.added, limit: 20)) tvMovie(m, 'Film · Nouveauté'),
-      ]);
+      addCut(
+        'Nouveautés',
+        (n) => [
+          for (final m in repo.movies(sourceId, sort: CatalogSort.added, limit: n)) tvMovie(m, 'Film · Nouveauté'),
+        ],
+      );
       add('Ma liste', TvRowStyle.poster, [
         for (final m in repo.favoriteMovies(sourceId)) tvMovie(m, 'Film · Ma liste'),
       ]);
@@ -194,21 +248,28 @@ List<TvRow> tvRows({
         for (final (i, m) in top.indexed) tvMovie(m, 'N° ${i + 1} · Top 10 des films', number: '${i + 1}'),
       ]);
       for (final c in repo.categories(sourceId, ContentKind.movie).take(4)) {
-        add(c.name, TvRowStyle.poster, [
-          for (final m in repo.movies(sourceId, categoryId: c.id, limit: 20)) tvMovie(m, 'Film · ${c.name}'),
-        ]);
+        addCut(
+          c.name,
+          (n) => [for (final m in repo.movies(sourceId, categoryId: c.id, limit: n)) tvMovie(m, 'Film · ${c.name}')],
+        );
       }
-      add('Les mieux notés', TvRowStyle.poster, [
-        for (final m in repo.movies(sourceId, sort: CatalogSort.rating, limit: 20))
-          if ((m.rating ?? 0) > 0) tvMovie(m, 'Film · Les mieux notés'),
-      ]);
+      addCut(
+        'Les mieux notés',
+        (n) => [
+          for (final m in repo.movies(sourceId, sort: CatalogSort.rating, limit: n))
+            if ((m.rating ?? 0) > 0) tvMovie(m, 'Film · Les mieux notés'),
+        ],
+      );
     case TvTab.series:
       add('Reprendre tes séries', TvRowStyle.wide, [
         for (final p in repo.continueWatching(sourceId, limit: 12, kind: ContentKind.episode)) tvResume(p),
       ]);
-      add('Nouveautés', TvRowStyle.poster, [
-        for (final s in repo.series(sourceId, sort: CatalogSort.added, limit: 20)) tvSeries(s, 'Série · Nouveauté'),
-      ]);
+      addCut(
+        'Nouveautés',
+        (n) => [
+          for (final s in repo.series(sourceId, sort: CatalogSort.added, limit: n)) tvSeries(s, 'Série · Nouveauté'),
+        ],
+      );
       add('Ma liste', TvRowStyle.poster, [
         for (final s in repo.favoriteSeries(sourceId)) tvSeries(s, 'Série · Ma liste'),
       ]);
@@ -217,9 +278,10 @@ List<TvRow> tvRows({
         for (final (i, s) in top.indexed) tvSeries(s, 'N° ${i + 1} · Top 10 des séries', number: '${i + 1}'),
       ]);
       for (final c in repo.categories(sourceId, ContentKind.series).take(4)) {
-        add(c.name, TvRowStyle.poster, [
-          for (final s in repo.series(sourceId, categoryId: c.id, limit: 20)) tvSeries(s, 'Série · ${c.name}'),
-        ]);
+        addCut(
+          c.name,
+          (n) => [for (final s in repo.series(sourceId, categoryId: c.id, limit: n)) tvSeries(s, 'Série · ${c.name}')],
+        );
       }
     default:
       break;

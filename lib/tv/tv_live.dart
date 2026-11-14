@@ -86,53 +86,31 @@ class _TvLivePageState extends State<TvLivePage> {
   /// The group of a pill now, then its first channel.
   void _enter(String entry) {
     _show(entry);
+    // Already on screen (the group was shown while the remote stayed on it).
+    final shown = _cat?.tiles.firstOrNull;
+    final id = shown == null ? null : 'ch-${shown.channel.extId}';
+    if (id != null && (_c?.isRegistered(id) ?? false)) return _c?.focus(id, dir: TvDir.down);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final first = _cat?.tiles.firstOrNull;
       if (mounted && first != null) _c?.focus('ch-${first.channel.extId}', dir: TvDir.down);
     });
+    // Now, not at the next frame some other change brings: the next key
+    // would come first.
+    WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  Widget _pill(String id, String label, bool current) => TvFocusable(
+  Widget _pill(String id, String label, bool current) => TvPillButton(
     id: 'grp-$id',
-    revealAxes: const {Axis.horizontal},
+    label: label,
+    current: current,
     onOk: () => _enter(id),
     onMove: (d) {
       if (d != TvDir.down) return null;
       _enter(id);
-      return 'grp-$id';
+      // Where entering put the remote (the first channel, or the pill itself
+      // until the grid is built).
+      return _c?.id;
     },
-    builder: (context, on) => AnimatedScale(
-      scale: on ? 1.05 : 1,
-      duration: const Duration(milliseconds: 150),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        height: 60,
-        padding: const EdgeInsets.symmetric(horizontal: 26),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: on
-              ? Colors.white
-              : current
-              ? const Color(0x24FFFFFF)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
-          border: Border.all(color: on || current ? Colors.transparent : TvColors.border, width: 2),
-        ),
-        child: Text(
-          label,
-          style: tvText(
-            24,
-            weight: FontWeight.w600,
-            height: 1,
-            color: on
-                ? TvColors.bg
-                : current
-                ? Colors.white
-                : TvColors.muted,
-          ),
-        ),
-      ),
-    ),
   );
 
   @override

@@ -58,13 +58,14 @@ import 'package:flutter_test/flutter_test.dart';
   return (repo, id);
 }
 
-List<TvRow> _rows(Repository repo, int id, TvTab tab) => tvRows(
+List<TvRow> _rows(Repository repo, int id, TvTab tab, {int rowLimit = 20}) => tvRows(
   repo: repo,
   epg: EpgCache(repo),
   sourceId: id,
   tab: tab,
   name: (c) => c.name,
   now: DateTime(2026, 11, 14, 21),
+  rowLimit: rowLimit,
 );
 
 void main() {
@@ -126,5 +127,37 @@ void main() {
     final item = rows.first.items.single;
     expect(item.kind, TvItemKind.series);
     expect(item.meta, '★ 8,1   ·   2021');
+  });
+
+  test('Voir tout : seulement sur une rangée coupée, et il donne toute la liste', () {
+    final (repo, id) = _fixture();
+    final rows = _rows(repo, id, TvTab.films, rowLimit: 3);
+    TvRow row(String t) => rows.firstWhere((r) => r.title == t);
+    expect(row('Nouveautés').items, hasLength(3));
+    expect(row('Nouveautés').all!().map((i) => i.title), ['Film 5', 'Film 4', 'Film 3', 'Film 2', 'Film 1']);
+    expect(row('Action').all!(), hasLength(4));
+    expect(row('Top 10 des films').all, isNull);
+    final full = _rows(repo, id, TvTab.films);
+    expect(full.firstWhere((r) => r.title == 'Nouveautés').all, isNull);
+  });
+
+  test('Films : À la une, Tout, puis les catégories du fournisseur (sans les verrouillées)', () {
+    final (repo, id) = _fixture();
+    expect(tvCatalogPills(repo, id, TvTab.films).map((p) => p.label), ['À la une', 'Tout', 'Action', 'Adultes']);
+    expect(tvCatalogPills(repo, id, TvTab.series).map((p) => p.label), ['À la une', 'Tout', 'Made in France']);
+    expect(tvCatalogPills(repo, id, TvTab.home), isEmpty);
+    repo.setCategoryLocked(id, ContentKind.movie, 'adu', true);
+    repo.hideLocked = true;
+    expect(tvCatalogPills(repo, id, TvTab.films).map((p) => p.label), ['À la une', 'Tout', 'Action']);
+  });
+
+  test('la grille d’une pastille : tout, ou la catégorie, en entier', () {
+    final (repo, id) = _fixture();
+    expect(tvCatalogItems(repo, id, TvTab.films, 'all'), hasLength(5));
+    final action = tvCatalogItems(repo, id, TvTab.films, 'c:20');
+    expect(action.map((i) => i.title), ['Film 1', 'Film 2', 'Film 3', 'Film 4']);
+    expect(action.first.kicker, 'Film · Action');
+    final series = tvCatalogItems(repo, id, TvTab.series, 'all');
+    expect(series.single.kind, TvItemKind.series);
   });
 }
