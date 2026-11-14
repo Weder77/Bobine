@@ -249,41 +249,53 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
   @override
   Widget build(BuildContext context) {
     final picking = _picking;
-    return Theme(
-      // Video surfaces stay dark whatever the theme.
-      data: buildTheme(AppPalette.dark),
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Focus(
-          focusNode: _focus,
-          autofocus: true,
-          onKeyEvent: _onKey,
-          child: Listener(
-            onPointerSignal: (e) {
-              if (e is PointerScrollEvent && picking == null) _c.changeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
-            },
-            child: MouseRegion(
-              cursor: _chrome ? SystemMouseCursors.basic : SystemMouseCursors.none,
-              onHover: (_) => _showChrome(),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  LayoutBuilder(builder: (context, box) => _stage(MultiLayout.stage(box.biggest))),
-                  _topBar(),
-                  if (picking != null) ...[
-                    Positioned.fill(child: GestureDetector(onTap: _closePicker)),
-                    _ChannelPicker(
-                      key: ValueKey(picking),
-                      s: _s,
-                      source: _c.source,
-                      slot: picking,
-                      replacing: _c.slots[picking] != null,
-                      shown: {for (final c in _c.channels) c.extId},
-                      onPick: _picked,
-                      onClose: _closePicker,
-                    ),
+    // Back of the TV remote: the channel list, then the enlarged slot, first.
+    return PopScope(
+      canPop: picking == null && _c.solo == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        if (_picking != null) {
+          _closePicker();
+        } else if (_c.solo != null) {
+          _c.toggleSolo(_c.solo!);
+        }
+      },
+      child: Theme(
+        // Video surfaces stay dark whatever the theme.
+        data: buildTheme(AppPalette.dark),
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Focus(
+            focusNode: _focus,
+            autofocus: true,
+            onKeyEvent: _onKey,
+            child: Listener(
+              onPointerSignal: (e) {
+                if (e is PointerScrollEvent && picking == null) _c.changeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
+              },
+              child: MouseRegion(
+                cursor: _chrome ? SystemMouseCursors.basic : SystemMouseCursors.none,
+                onHover: (_) => _showChrome(),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    LayoutBuilder(builder: (context, box) => _stage(MultiLayout.stage(box.biggest))),
+                    _topBar(),
+                    if (picking != null) ...[
+                      Positioned.fill(child: GestureDetector(onTap: _closePicker)),
+                      _ChannelPicker(
+                        key: ValueKey(picking),
+                        s: _s,
+                        source: _c.source,
+                        slot: picking,
+                        replacing: _c.slots[picking] != null,
+                        shown: {for (final c in _c.channels) c.extId},
+                        onPick: _picked,
+                        onClose: _closePicker,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),

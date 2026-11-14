@@ -16,6 +16,7 @@ import '../core/window.dart';
 import '../data/models.dart';
 import '../features/tmdb.dart';
 import '../services.dart';
+import '../ui/back_rules.dart';
 import '../ui/multi_view_screen.dart';
 import '../ui/widgets/common.dart';
 import 'cast_view.dart';
@@ -398,6 +399,28 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  PlayerBack get _backStep => playerBack(
+    panelOpen: _panel != _Panel.none,
+    statsShown: _showStats,
+    fullscreen: _fullscreen,
+    casting: _casting,
+    tv: Device.isTv,
+  );
+
+  /// Échap / Back of the remote: closes one layer at a time, then leaves.
+  void _back() {
+    switch (_backStep) {
+      case PlayerBack.closePanel:
+        _setPanel(_panel);
+      case PlayerBack.hideStats:
+        setState(() => _showStats = false);
+      case PlayerBack.leaveFullscreen:
+        _setFullscreen(false);
+      case PlayerBack.minimize || PlayerBack.leave:
+        _leave();
+    }
+  }
+
   /// Back: leaving while casting keeps the TV playing (mini-player).
   void _leave() {
     if (_casting) {
@@ -756,15 +779,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else if (k == LogicalKeyboardKey.keyF || k == LogicalKeyboardKey.f11 || k == LogicalKeyboardKey.contextMenu) {
       if (!repeat) _setFullscreen(!_fullscreen);
     } else if (k == LogicalKeyboardKey.escape) {
-      if (_panel != _Panel.none) {
-        _setPanel(_panel);
-      } else if (_showStats) {
-        setState(() => _showStats = false);
-      } else if (_fullscreen) {
-        _setFullscreen(false);
-      } else {
-        _leave();
-      }
+      _back();
     } else if (k == LogicalKeyboardKey.backspace) {
       _leave();
     } else if (k == LogicalKeyboardKey.keyM) {
@@ -854,79 +869,86 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _Aspect.stretch => (BoxFit.fill, null),
     };
     final vis = _visible;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Focus(
-        focusNode: _focus,
-        autofocus: true,
-        onKeyEvent: _onKey,
-        child: Listener(
-          onPointerSignal: (e) {
-            if (e is PointerScrollEvent && _panel == _Panel.none) _onWheel(e.scrollDelta);
-          },
-          child: MouseRegion(
-            cursor: vis ? SystemMouseCursors.basic : SystemMouseCursors.none,
-            onHover: (_) => _showControls(),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    _focus.requestFocus();
-                    if (_panel != _Panel.none) return _setPanel(_panel);
-                    _togglePlay();
-                  },
-                  onDoubleTap: () => _setFullscreen(!_fullscreen),
-                  child: _casting
-                      ? CastRemoteView(
-                          cast: _cast,
-                          image: _castImage(),
-                          onRetry: ({bool? viaRelay}) => _cast.retry(viaRelay: viaRelay),
-                          onStop: _stopCasting,
-                        )
-                      : Video(
-                          key: ValueKey(_aspect),
-                          controller: _ps.video,
-                          controls: NoVideoControls,
-                          fit: fit,
-                          aspectRatio: ratio,
-                          fill: Colors.black,
-                          filterQuality: FilterQuality.medium,
-                          subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
-                        ),
-                ),
-                // Shade at the top and bottom behind the bars.
-                IgnorePointer(
-                  child: AnimatedOpacity(
-                    opacity: vis ? 1 : 0,
-                    duration: const Duration(milliseconds: 300),
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xBF000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
-                          stops: [0, 0.22, 0.5, 1],
+    // Back of the TV remote (Android's back) goes through _back too.
+    return PopScope(
+      canPop: _backStep == PlayerBack.leave,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _back();
+      },
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Focus(
+          focusNode: _focus,
+          autofocus: true,
+          onKeyEvent: _onKey,
+          child: Listener(
+            onPointerSignal: (e) {
+              if (e is PointerScrollEvent && _panel == _Panel.none) _onWheel(e.scrollDelta);
+            },
+            child: MouseRegion(
+              cursor: vis ? SystemMouseCursors.basic : SystemMouseCursors.none,
+              onHover: (_) => _showControls(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      _focus.requestFocus();
+                      if (_panel != _Panel.none) return _setPanel(_panel);
+                      _togglePlay();
+                    },
+                    onDoubleTap: () => _setFullscreen(!_fullscreen),
+                    child: _casting
+                        ? CastRemoteView(
+                            cast: _cast,
+                            image: _castImage(),
+                            onRetry: ({bool? viaRelay}) => _cast.retry(viaRelay: viaRelay),
+                            onStop: _stopCasting,
+                          )
+                        : Video(
+                            key: ValueKey(_aspect),
+                            controller: _ps.video,
+                            controls: NoVideoControls,
+                            fit: fit,
+                            aspectRatio: ratio,
+                            fill: Colors.black,
+                            filterQuality: FilterQuality.medium,
+                            subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+                          ),
+                  ),
+                  // Shade at the top and bottom behind the bars.
+                  IgnorePointer(
+                    child: AnimatedOpacity(
+                      opacity: vis ? 1 : 0,
+                      duration: const Duration(milliseconds: 300),
+                      child: const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                            colors: [Color(0xBF000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
+                            stops: [0, 0.22, 0.5, 1],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-                if (!_playing && _panel == _Panel.none && _error == null && !_casting)
-                  _isLive ? const LivePausedBadge() : _pauseInfo(),
-                if (!_casting && _error == null) _buildBuffering(),
-                if (_osd != null) _buildOsd(),
-                if (_digits.isNotEmpty) _buildDigits(),
-                if (!_casting) _buildError(),
-                if (_isLive && _panel == _Panel.guide) MiniGuide(programs: _miniGuide()),
-                _topBar(vis),
-                _bottomBar(vis),
-                ..._floating(vis),
-                if (_showStats && !_casting)
-                  StatsCard(stats: _stats, onClose: () => setState(() => _showStats = false)),
-                ..._panels(),
-              ],
+                  if (!_playing && _panel == _Panel.none && _error == null && !_casting)
+                    _isLive ? const LivePausedBadge() : _pauseInfo(),
+                  if (!_casting && _error == null) _buildBuffering(),
+                  if (_osd != null) _buildOsd(),
+                  if (_digits.isNotEmpty) _buildDigits(),
+                  if (!_casting) _buildError(),
+                  if (_isLive && _panel == _Panel.guide) MiniGuide(programs: _miniGuide()),
+                  _topBar(vis),
+                  _bottomBar(vis),
+                  ..._floating(vis),
+                  if (_showStats && !_casting)
+                    StatsCard(stats: _stats, onClose: () => setState(() => _showStats = false)),
+                  ..._panels(),
+                ],
+              ),
             ),
           ),
         ),
