@@ -7,16 +7,32 @@ import 'tv_theme.dart';
 /// A choice of a sheet: a track, a channel, an action.
 class TvSheetOption {
   const TvSheetOption(
-    this.label, {
+    String this._label, {
     this.detail,
     this.detailOf,
     this.icon,
     this.leading,
     this.selected = false,
     required this.onPick,
-  });
+  }) : labelOf = null,
+       leadingOf = null;
 
-  final String label;
+  /// A line worked out only when it is shown: its label, its detail and what
+  /// is on its left (each of hundreds of channels: name, programme, logo).
+  const TvSheetOption.lazy({
+    required String Function() this.labelOf,
+    this.detailOf,
+    this.leadingOf,
+    this.selected = false,
+    required this.onPick,
+  }) : _label = null,
+       detail = null,
+       icon = null,
+       leading = null;
+
+  final String? _label;
+  final String Function()? labelOf;
+  String get label => _label ?? labelOf!();
   final String? detail;
 
   /// [detail] worked out only when the line is shown (the programme on air
@@ -24,8 +40,11 @@ class TvSheetOption {
   final String? Function()? detailOf;
   final IconData? icon;
 
-  /// Drawn on the left instead of [icon] (a channel's logo).
+  /// Drawn on the left instead of [icon] (a channel's logo), or worked out
+  /// when shown ([leadingOf]).
   final Widget? leading;
+  final Widget Function()? leadingOf;
+  Widget? get leadingWidget => leading ?? leadingOf?.call();
 
   /// The one in use (a check, and the remote starts there).
   final bool selected;
@@ -112,7 +131,9 @@ class _TvSheetState extends State<TvSheet> {
   }
 
   Widget _option(int i, TvSheetOption o) {
+    final label = o.label;
     final detail = o.detail ?? o.detailOf?.call();
+    final leading = o.leadingWidget;
     return TvFocusable(
       id: 'opt-$i',
       onOk: () => _pick(o),
@@ -131,8 +152,8 @@ class _TvSheetState extends State<TvSheet> {
             ),
             child: Row(
               children: [
-                if (o.leading != null) ...[o.leading!, const SizedBox(width: 22)],
-                if (o.leading == null && o.icon != null) ...[
+                if (leading != null) ...[leading, const SizedBox(width: 22)],
+                if (leading == null && o.icon != null) ...[
                   Icon(o.icon, size: 34, color: on ? TvColors.bg : TvColors.accent),
                   const SizedBox(width: 22),
                 ],
@@ -142,7 +163,7 @@ class _TvSheetState extends State<TvSheet> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        o.label,
+                        label,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: tvText(28, weight: FontWeight.w600, height: 1.1, color: on ? TvColors.bg : Colors.white),

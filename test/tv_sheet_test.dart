@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bobine/tv/tv_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -61,6 +63,72 @@ void main() {
     await t.sendKeyEvent(LogicalKeyboardKey.enter);
     await t.pumpAndSettle();
     expect(picked, ['Deux']);
+  });
+
+  testWidgets('Retour ferme au relâchement : l’écran dessous (le lecteur) ne reçoit pas ce relâchement', (t) async {
+    t.view.physicalSize = const Size(1920, 1080);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    // The player: every key it is given, none kept (Android would make a
+    // release of Retour a Retour of its own, and the player would close).
+    final under = <String>[];
+    late BuildContext context;
+    await t.pumpWidget(
+      MaterialApp(
+        home: Focus(
+          autofocus: true,
+          onKeyEvent: (node, e) {
+            under.add('${e.runtimeType}');
+            return KeyEventResult.ignored;
+          },
+          child: Builder(
+            builder: (c) {
+              context = c;
+              return const SizedBox.expand();
+            },
+          ),
+        ),
+      ),
+    );
+    unawaited(
+      showTvSheet(
+        context,
+        title: 'Options',
+        sections: [
+          TvSheetSection(null, [TvSheetOption('Un', onPick: () {})]),
+        ],
+      ),
+    );
+    await t.pumpAndSettle();
+    expect(await t.sendKeyDownEvent(LogicalKeyboardKey.escape), isTrue);
+    await t.pumpAndSettle();
+    expect(find.text('OPTIONS'), findsOneWidget);
+    expect(await t.sendKeyUpEvent(LogicalKeyboardKey.escape), isTrue);
+    await t.pumpAndSettle();
+    expect(find.text('OPTIONS'), findsNothing);
+    expect(under, isEmpty);
+  });
+
+  testWidgets('lignes paresseuses : seules celles affichées sont calculées', (t) async {
+    var built = 0;
+    await open(t, [
+      TvSheetSection(null, [
+        for (var i = 1; i <= 300; i++)
+          TvSheetOption.lazy(
+            labelOf: () {
+              built++;
+              return 'Chaîne $i';
+            },
+            leadingOf: () => const SizedBox(width: 56, height: 56),
+            onPick: () => picked.add('$i'),
+          ),
+      ]),
+    ]);
+    expect(find.text('Chaîne 1'), findsOneWidget);
+    expect(built, lessThan(30));
+    await t.sendKeyEvent(LogicalKeyboardKey.enter);
+    await t.pumpAndSettle();
+    expect(picked, ['1']);
   });
 
   testWidgets('une longue liste s’ouvre sur l’option choisie, loin dans la liste', (t) async {

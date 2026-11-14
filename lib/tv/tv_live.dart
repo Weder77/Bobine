@@ -61,7 +61,25 @@ class _TvLivePageState extends State<TvLivePage> {
   }
 
   void _changed() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    WidgetsBinding.instance.addPostFrameCallback((_) => _keepFocus());
+  }
+
+  /// Where the remote is in the mosaic, to stay there when its channel goes
+  /// away (taken out of the favourites while Favoris is shown).
+  int? _tileAt;
+
+  /// The channel with the remote gone: the one now at its place, or the
+  /// pill of the group when none is left.
+  void _keepFocus() {
+    final c = _c, cat = _cat, id = _c?.id;
+    if (!mounted || c == null || cat == null || id == null || !id.startsWith('ch-')) return;
+    final tiles = cat.tiles;
+    final ext = id.substring(3);
+    if (tiles.any((t) => t.channel.extId == ext)) return;
+    if (tiles.isEmpty) return c.focus('grp-${cat.cat}');
+    c.focus('ch-${tiles[(_tileAt ?? 0).clamp(0, tiles.length - 1)].channel.extId}');
   }
 
   /// Arriving on a pill shows its group (as the tabs of the top bar), once
@@ -72,6 +90,11 @@ class _TvLivePageState extends State<TvLivePage> {
   void _onFocus() {
     final id = _c?.id;
     _select?.cancel();
+    if (id != null && id.startsWith('ch-')) {
+      final ext = id.substring(3);
+      final i = _cat?.tiles.indexWhere((t) => t.channel.extId == ext) ?? -1;
+      if (i >= 0) _tileAt = i;
+    }
     if (id == null || _cat == null || !id.startsWith('grp-')) return;
     _select = Timer(const Duration(milliseconds: 300), () => _show(id.substring(4)));
   }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bobine/tv/tv_focus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -90,9 +92,10 @@ void main() {
       expect(backs, 2);
     });
 
-    testWidgets('Retour lâché est gardé aussi (Android en ferait un second Retour)', (t) async {
+    testWidgets('Retour agit au relâchement, gardé aussi (Android en ferait un second Retour)', (t) async {
       await pump(t);
       expect(await t.sendKeyDownEvent(LogicalKeyboardKey.escape), isTrue);
+      expect(backs, 0);
       expect(await t.sendKeyUpEvent(LogicalKeyboardKey.escape), isTrue);
       expect(backs, 1);
     });
@@ -219,6 +222,35 @@ void main() {
       await t.sendKeyUpEvent(LogicalKeyboardKey.select);
       await t.pump(const Duration(milliseconds: 600));
       expect(events, ['ok']);
+    });
+
+    testWidgets('Retour pendant l’appui : ni action longue ni OK', (t) async {
+      await pump(t);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.select);
+      await t.pump(const Duration(milliseconds: 100));
+      await t.sendKeyEvent(LogicalKeyboardKey.escape);
+      await t.pump(const Duration(milliseconds: 600));
+      await t.sendKeyUpEvent(LogicalKeyboardKey.select);
+      await t.pump();
+      expect(events, isEmpty);
+    });
+
+    testWidgets('les touches parties ailleurs pendant l’appui : pas d’action longue', (t) async {
+      await pump(t);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.select);
+      await t.pump(const Duration(milliseconds: 100));
+      // Something opens over the screen and takes the keys.
+      unawaited(
+        t
+            .state<NavigatorState>(find.byType(Navigator))
+            .push(MaterialPageRoute<void>(builder: (_) => const Focus(autofocus: true, child: SizedBox()))),
+      );
+      await t.pump();
+      await t.pump(const Duration(milliseconds: 600));
+      expect(events, isEmpty);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.select);
+      await t.pump();
+      expect(events, isEmpty);
     });
 
     testWidgets('sans action longue : OK dès l’appui, comme avant', (t) async {

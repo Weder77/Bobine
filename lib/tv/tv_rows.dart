@@ -77,7 +77,8 @@ final _categoryPrefix = RegExp(r'^\s*(\|[^|]{1,6}\|\s*|\[[^\]]{1,6}\]\s*|[A-Za-z
 /// qualities kept ("Films 4K"). Nothing left: the name as it was.
 String tvCategoryLabel(String name) {
   var s = name.replaceFirst(_categoryPrefix, '');
-  s = s.replaceAll(RegExp(r"[^\p{L}\p{N}\s+&'!.\-·/()]", unicode: true), ' ');
+  // Combining accents kept (a "Comédie" written as e + ́ stays whole).
+  s = s.replaceAll(RegExp(r"[^\p{L}\p{M}\p{N}\s+&'!.\-·/()]", unicode: true), ' ');
   s = s.replaceAll(RegExp(r'\s+'), ' ').trim();
   s = s.replaceAll(RegExp(r'^[\-.|:]+|[\-.|:]+$'), '').trim();
   if (s.isEmpty) return name;

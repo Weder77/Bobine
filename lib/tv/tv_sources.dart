@@ -165,6 +165,7 @@ class _TvSourcesViewState extends State<TvSourcesView> {
     setState(() {
       _detail = id;
       _confirmDelete = false;
+      _counts = null;
     });
     _c.focus(_first);
   }
@@ -289,6 +290,27 @@ class _TvSourcesViewState extends State<TvSourcesView> {
     );
   }
 
+  /// What the source of the page holds ([_countsOf]), counted once rather
+  /// than at each step of a refresh (three counts of big tables), and again
+  /// when the refresh is over.
+  String? _counts;
+  int? _countsOf;
+  bool _countsBusy = false;
+
+  String _countsFor(AppServices s, int id) {
+    final busy = s.imports.isBusy(id);
+    if (_counts == null || _countsOf != id || (_countsBusy && !busy)) {
+      _countsOf = id;
+      _counts = tvSourceCounts(
+        live: s.repo.count(id, ContentKind.live),
+        movies: s.repo.count(id, ContentKind.movie),
+        series: s.repo.count(id, ContentKind.series),
+      );
+    }
+    _countsBusy = busy;
+    return _counts!;
+  }
+
   /// A source's page: what it holds, where it stands, and what to do with it.
   List<Widget> _detailView(AppServices s, Source src) {
     final active = src.id == s.activeSource?.id;
@@ -300,14 +322,7 @@ class _TvSourcesViewState extends State<TvSourcesView> {
       updated: src.contentUpdatedAt,
     );
     return [
-      Text(
-        tvSourceCounts(
-          live: s.repo.count(src.id, ContentKind.live),
-          movies: s.repo.count(src.id, ContentKind.movie),
-          series: s.repo.count(src.id, ContentKind.series),
-        ),
-        style: tvText(28, color: TvColors.soft, height: 1.3),
-      ),
+      Text(_countsFor(s, src.id), style: tvText(28, color: TvColors.soft, height: 1.3)),
       const SizedBox(height: 12),
       TvFormMessage(state, error: error),
       const SizedBox(height: 8),

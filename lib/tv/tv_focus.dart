@@ -239,6 +239,17 @@ class _TvFocusScopeState extends State<TvFocusScope> {
     _pressed = null;
   }
 
+  /// Retour pressed while this screen had the keys: it acts on release.
+  bool _backDown = false;
+
+  void _onFocusChange(bool focused) {
+    if (focused) return;
+    // The keys went elsewhere (a sheet, a text field): a press begun here
+    // is not finished here.
+    _cancelPress();
+    _backDown = false;
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is KeyUpEvent) {
       if (_ok.contains(e.logicalKey) && _pressed != null) {
@@ -249,9 +260,17 @@ class _TvFocusScopeState extends State<TvFocusScope> {
         if (!long) widget.controller._items[id]?.state.widget.onOk?.call();
         return KeyEventResult.handled;
       }
-      // Android (up to 15) tracks every key pressed: a release of Retour left
-      // to it becomes a second Retour (onBackPressed → the PopScopes).
-      return _back.contains(e.logicalKey) ? KeyEventResult.handled : KeyEventResult.ignored;
+      if (!_back.contains(e.logicalKey)) return KeyEventResult.ignored;
+      // Retour acts on release, where it was pressed: a sheet closed on the
+      // press left its release to the screen under it (the player, which
+      // gave it to Android: a second Retour, and the player closed). A
+      // release without its press here (a text field took the press) is
+      // kept too: Android tracks every key and would make it a Retour.
+      if (_backDown) {
+        _backDown = false;
+        widget.onBack();
+      }
+      return KeyEventResult.handled;
     }
     // A text field is typing: its keys (Effacer, the arrows in the text) are
     // its own; it gives the remote back itself ([TvTextField]).
@@ -264,6 +283,7 @@ class _TvFocusScopeState extends State<TvFocusScope> {
       return KeyEventResult.handled;
     }
     if (e is KeyRepeatEvent) {
+      if (_back.contains(k)) return KeyEventResult.handled;
       return _ok.contains(k) && _pressed != null ? KeyEventResult.handled : KeyEventResult.ignored;
     }
     if (_ok.contains(k)) {
@@ -278,7 +298,7 @@ class _TvFocusScopeState extends State<TvFocusScope> {
         _pressed = id;
         _longDone = false;
         _longTimer = Timer(const Duration(milliseconds: 500), () {
-          if (_pressed != id) return;
+          if (!mounted || _pressed != id || !_node.hasFocus) return;
           _longDone = true;
           long();
         });
@@ -286,7 +306,8 @@ class _TvFocusScopeState extends State<TvFocusScope> {
       return KeyEventResult.handled;
     }
     if (_back.contains(k)) {
-      widget.onBack();
+      _cancelPress();
+      _backDown = true;
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -298,6 +319,7 @@ class _TvFocusScopeState extends State<TvFocusScope> {
     child: Focus(
       focusNode: _node,
       autofocus: true,
+      onFocusChange: _onFocusChange,
       onKeyEvent: _onKey,
       child: KeyedSubtree(key: _origin, child: widget.child),
     ),

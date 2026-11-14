@@ -102,7 +102,13 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
     super.initState();
     // The programmes on air move on (Accueil's live row; Films and Séries
     // do not change with the time, and a whole category is not read again).
-    if (widget.tab == TvTab.home) _tick = Timer.periodic(const Duration(minutes: 1), (_) => _reload());
+    // Not while Bobine is behind (sometimes for days): read at the next tick.
+    if (widget.tab == TvTab.home) {
+      _tick = Timer.periodic(const Duration(minutes: 1), (_) {
+        final state = WidgetsBinding.instance.lifecycleState;
+        if (state != AppLifecycleState.hidden && state != AppLifecycleState.paused) _reload();
+      });
+    }
   }
 
   @override

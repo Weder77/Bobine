@@ -118,11 +118,20 @@ class SyncService extends ChangeNotifier {
 
   String? get email => _session?.email ?? pendingEmail;
 
-  /// Starts the automatic synchronisation (at app start).
+  /// Starts the automatic synchronisation (at app start, and when the TV
+  /// shows Bobine again).
   void start() {
     _poll?.cancel();
     _poll = Timer.periodic(const Duration(seconds: 20), (_) => _tick());
     if (signedIn) syncSoon(const Duration(seconds: 2));
+  }
+
+  /// Bobine is behind (TV): the changes waiting are sent now, then nothing
+  /// more until [start].
+  void pause() {
+    _poll?.cancel();
+    _poll = null;
+    if (signedIn && _repo.db.select('SELECT 1 FROM sync_log LIMIT 1').isNotEmpty) syncSoon(Duration.zero);
   }
 
   DateTime _lastFetch = DateTime.fromMillisecondsSinceEpoch(0);

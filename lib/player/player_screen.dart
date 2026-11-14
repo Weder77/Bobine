@@ -464,7 +464,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!mounted || _overControls || _panel != _Panel.none) return;
       if (!_ps.player.state.playing) return;
       // The buttons fade out: the arrows go back to seeking and zapping.
-      if (_buttonFocused) _focus.requestFocus();
+      // Not when a sheet is over the player (TV): it keeps the remote.
+      if (_buttonFocused && (ModalRoute.of(context)?.isCurrent ?? true)) _focus.requestFocus();
       setState(() => _controls = false);
     });
   }
@@ -897,7 +898,8 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   /// The TV's options: the channel (favourite), audio and subtitles.
   Future<void> _tvOptions() async {
-    _showControls();
+    // Shown while the sheet is open, without taking the remote back from it.
+    _showControls(sticky: true);
     final ch = _currentChannel;
     final audio = _ps.player.state.tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
     final subs = [SubtitleTrack.no(), ..._ps.player.state.tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no')];
@@ -942,29 +944,36 @@ class _PlayerScreenState extends State<PlayerScreen> {
         ),
       ],
     );
+    if (mounted) _showControls();
   }
 
   /// The TV's list of channels (Left in live): the one on air checked.
   Future<void> _tvChannels() async {
     if (_channels.isEmpty) return;
-    _showControls();
+    _showControls(sticky: true);
     await showTvSheet(
       context,
       title: 'Chaînes',
       sections: [
-        TvSheetSection(null, [
-          for (final (i, c) in _channels.indexed)
-            TvSheetOption(
-              '${c.number ?? i + 1}   ${_s.channelName(c)}',
-              detailOf: () => _s.epg.now(c)?.title,
-              leading: TvChannelBadge(name: _s.channelName(c), logo: c.logo, size: 56),
-              selected: i == _chIndex,
-              onPick: () {
-                if (i != _chIndex) _playChannel(i);
-              },
-            ),
-        ]),
+        TvSheetSection(null, [for (final (i, c) in _channels.indexed) _tvChannelOption(i, c)]),
       ],
+    );
+    if (mounted) _showControls();
+  }
+
+  /// A line of the list of channels, worked out only when it is shown (there
+  /// may be thousands), its name once.
+  TvSheetOption _tvChannelOption(int i, Channel c) {
+    String? name;
+    String nameOf() => name ??= _s.channelName(c);
+    return TvSheetOption.lazy(
+      labelOf: () => '${c.number ?? i + 1}   ${nameOf()}',
+      detailOf: () => _s.epg.now(c)?.title,
+      leadingOf: () => TvChannelBadge(name: nameOf(), logo: c.logo, size: 56),
+      selected: i == _chIndex,
+      onPick: () {
+        if (i != _chIndex) _playChannel(i);
+      },
     );
   }
 

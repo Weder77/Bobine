@@ -165,6 +165,8 @@ void main() {
     expect(tvCategoryLabel('FR - DRAME'), 'Drame');
     expect(tvCategoryLabel('|FR| Films 4K'), 'Films 4K');
     expect(tvCategoryLabel('[VOD] Comédie ★'), 'Comédie');
+    // Accents written as a letter then a combining mark (NFD) stay whole.
+    expect(tvCategoryLabel('FR - COME\u0301DIE'), 'Come\u0301die');
     expect(tvCategoryLabel('Policier · Thriller'), 'Policier · Thriller');
     expect(tvCategoryLabel('Sci-Fi'), 'Sci-Fi');
     expect(tvCategoryLabel('FR | '), 'FR | ');

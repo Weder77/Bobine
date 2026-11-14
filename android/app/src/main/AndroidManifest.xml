@@ -5,12 +5,17 @@
     <uses-feature android:name="android.software.leanback" android:required="true"/>
     <uses-feature android:name="android.hardware.touchscreen" android:required="false"/>
     <!-- Most IPTV providers (streams and Xtream API) are plain http, which
-         Android refuses by default (dart:io follows that policy). -->
+         Android refuses by default (dart:io follows that policy).
+         No predictive back: Retour is a key of the remote, which the TV
+         screens handle themselves; with it (the default from targetSdk 36
+         on Android 16), the same Retour also came as a system back, and
+         went back twice. -->
     <application
         android:label="Bobine"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:banner="@drawable/banner"
+        android:enableOnBackInvokedCallback="false"
         android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
@@ -19,7 +24,7 @@
             android:taskAffinity=""
             android:screenOrientation="landscape"
             android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode|navigation|touchscreen|colorMode|mcc|mnc|fontWeightAdjustment|grammaticalGender"
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as

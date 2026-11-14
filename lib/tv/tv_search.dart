@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/epg_cache.dart';
 import '../data/models.dart';
 import '../data/repository.dart';
+import '../data/search_worker.dart';
 import '../services.dart';
 import 'tv_actions.dart';
 import 'tv_browse.dart';
@@ -13,6 +14,9 @@ import 'tv_focus.dart';
 import 'tv_form.dart';
 import 'tv_rows.dart';
 import 'tv_theme.dart';
+
+/// Results of each kind shown by Recherche.
+const _limit = 40;
 
 /// What [query] finds: channels, films, series, each in a row (empty rows
 /// left out). Under two letters, nothing: not the whole catalogue.
@@ -24,7 +28,15 @@ List<TvRow> tvSearchRows({
   required String Function(Channel) name,
 }) {
   if (query.trim().length < 2) return const [];
-  final r = repo.search(sourceId, query, limit: 40);
+  return tvSearchRowsOf(
+    repo.search(sourceId, query, limit: _limit),
+    epg: epg,
+    name: name,
+  );
+}
+
+/// The rows of what a search found ([tvSearchRows]).
+List<TvRow> tvSearchRowsOf(SearchResults r, {required EpgCache epg, required String Function(Channel) name}) {
   final now = DateTime.now();
   return [
     if (r.channels.isNotEmpty)
@@ -84,17 +96,41 @@ class _TvSearchPageState extends State<TvSearchPage> {
   /// letter at a time).
   void _changed(String _) {
     _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 300), _search);
+    _debounce = Timer(const Duration(milliseconds: 300), () => unawaited(_search()));
   }
 
-  void _search() {
+  /// The latest search: an older one finishing after it is not shown.
+  int _run = 0;
+
+  /// Searched on another isolate: a big catalogue takes a moment, and the
+  /// TV must not freeze while the letters come.
+  Future<void> _search() async {
     if (!mounted) return;
     final s = AppScope.of(context);
     final source = s.activeSource;
+    final query = _query.text.trim();
+    final run = ++_run;
+    SearchResults? found;
+    if (source != null && query.length >= 2) {
+      try {
+        found = (await searchInBackground(
+          s.dbPath,
+          sourceId: source.id,
+          query: query,
+          profileId: s.repo.profileId,
+          hideLocked: s.repo.hideLocked,
+          limit: _limit,
+          programs: false,
+        )).results;
+      } catch (e) {
+        // No second connection (unusual): search here.
+        debugPrint('Recherche en arrière-plan impossible : $e');
+        found = s.repo.search(source.id, query, limit: _limit);
+      }
+    }
+    if (!mounted || run != _run) return;
     setState(() {
-      _rows = source == null
-          ? const []
-          : tvSearchRows(repo: s.repo, epg: s.epg, sourceId: source.id, query: _query.text, name: s.channelName);
+      _rows = found == null ? const [] : tvSearchRowsOf(found, epg: s.epg, name: s.channelName);
       _last.clear();
     });
     if (_scroll.hasClients) _scroll.jumpTo(0);
