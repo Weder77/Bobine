@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -220,13 +222,33 @@ class _TvFocusScopeState extends State<TvFocusScope> {
 
   @override
   void dispose() {
+    _longTimer?.cancel();
     if (widget.controller._takeKeys == _node.requestFocus) widget.controller._takeKeys = null;
     _node.dispose();
     super.dispose();
   }
 
+  /// OK held on an item with a long action: its id until OK is released or
+  /// the long action ran.
+  String? _pressed;
+  bool _longDone = false;
+  Timer? _longTimer;
+
+  void _cancelPress() {
+    _longTimer?.cancel();
+    _pressed = null;
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
     if (e is KeyUpEvent) {
+      if (_ok.contains(e.logicalKey) && _pressed != null) {
+        // A short press: OK of the item, on release (held, it was the long one).
+        final id = _pressed!;
+        final long = _longDone;
+        _cancelPress();
+        if (!long) widget.controller._items[id]?.state.widget.onOk?.call();
+        return KeyEventResult.handled;
+      }
       // Android (up to 15) tracks every key pressed: a release of Retour left
       // to it becomes a second Retour (onBackPressed → the PopScopes).
       return _back.contains(e.logicalKey) ? KeyEventResult.handled : KeyEventResult.ignored;
@@ -237,12 +259,30 @@ class _TvFocusScopeState extends State<TvFocusScope> {
     final k = e.logicalKey;
     final dir = _arrows[k];
     if (dir != null) {
+      _cancelPress();
       widget.controller.move(dir);
       return KeyEventResult.handled;
     }
-    if (e is KeyRepeatEvent) return KeyEventResult.ignored;
+    if (e is KeyRepeatEvent) {
+      return _ok.contains(k) && _pressed != null ? KeyEventResult.handled : KeyEventResult.ignored;
+    }
     if (_ok.contains(k)) {
-      widget.controller.activate();
+      final id = widget.controller.id;
+      final item = id == null ? null : widget.controller._items[id]?.state.widget;
+      final long = item?.onLongOk;
+      if (long == null) {
+        widget.controller.activate();
+      } else {
+        // Held half a second: the long action; released before: OK.
+        _cancelPress();
+        _pressed = id;
+        _longDone = false;
+        _longTimer = Timer(const Duration(milliseconds: 500), () {
+          if (_pressed != id) return;
+          _longDone = true;
+          long();
+        });
+      }
       return KeyEventResult.handled;
     }
     if (_back.contains(k)) {
@@ -275,6 +315,7 @@ class TvFocusable extends StatefulWidget {
     this.onOk,
     this.onSide,
     this.onMove,
+    this.onLongOk,
     this.revealAxes = const {Axis.horizontal, Axis.vertical},
     this.revealPadding = const EdgeInsets.symmetric(horizontal: 96, vertical: 48),
   });
@@ -290,6 +331,10 @@ class TvFocusable extends StatefulWidget {
   /// a row goes to the row above, not to what happens to be nearer); null,
   /// or an item not built, leaves it to the nearest.
   final String? Function(TvDir dir)? onMove;
+
+  /// OK held (half a second): more choices for this item (favourite, take
+  /// out of Reprendre…). With it, a short OK runs [onOk] on release.
+  final VoidCallback? onLongOk;
 
   final Set<Axis> revealAxes;
   final EdgeInsets revealPadding;

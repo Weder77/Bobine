@@ -165,4 +165,71 @@ void main() {
       expect(sides, [TvDir.left, TvDir.right]);
     });
   });
+
+  group('appui long sur OK', () {
+    late TvFocusController c;
+    late List<String> events;
+
+    Future<void> pump(WidgetTester t) async {
+      c = TvFocusController(initial: 'long');
+      events = [];
+      await t.pumpWidget(
+        MaterialApp(
+          home: TvFocusScope(
+            controller: c,
+            onBack: () {},
+            child: Row(
+              children: [
+                TvFocusable(
+                  id: 'long',
+                  onOk: () => events.add('ok'),
+                  onLongOk: () => events.add('long'),
+                  builder: (context, on) => const SizedBox(width: 100, height: 60),
+                ),
+                TvFocusable(
+                  id: 'short',
+                  onOk: () => events.add('ok-short'),
+                  builder: (context, on) => const SizedBox(width: 100, height: 60),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await t.pump();
+    }
+
+    testWidgets('maintenu : l’action longue, une fois, et pas OK', (t) async {
+      await pump(t);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.select);
+      await t.pump(const Duration(milliseconds: 300));
+      await t.sendKeyRepeatEvent(LogicalKeyboardKey.select);
+      await t.pump(const Duration(milliseconds: 300));
+      await t.sendKeyRepeatEvent(LogicalKeyboardKey.select);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.select);
+      await t.pump(const Duration(milliseconds: 600));
+      expect(events, ['long']);
+    });
+
+    testWidgets('appui bref : OK au relâchement', (t) async {
+      await pump(t);
+      await t.sendKeyDownEvent(LogicalKeyboardKey.select);
+      await t.pump(const Duration(milliseconds: 100));
+      expect(events, isEmpty);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.select);
+      await t.pump(const Duration(milliseconds: 600));
+      expect(events, ['ok']);
+    });
+
+    testWidgets('sans action longue : OK dès l’appui, comme avant', (t) async {
+      await pump(t);
+      c.focus('short');
+      await t.pump();
+      await t.sendKeyDownEvent(LogicalKeyboardKey.enter);
+      expect(events, ['ok-short']);
+      await t.sendKeyUpEvent(LogicalKeyboardKey.enter);
+      await t.pump(const Duration(milliseconds: 600));
+      expect(events, ['ok-short']);
+    });
+  });
 }
