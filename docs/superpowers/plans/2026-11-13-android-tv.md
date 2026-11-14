@@ -391,3 +391,20 @@ Ces tâches ne touchent pas, ou presque pas, au code. Elles se font dans la Play
 - [ ] **Step 4 :** **test fermé** avec 12 testeurs au moins pendant 14 jours d'affilée, obligatoire pour un nouveau compte personnel. Envoyer l'AAB signé du tag. Corriger ce que les testeurs remontent.
 - [ ] **Step 5 :** demander l'accès à la production. L'appli passe alors la revue générale et la **revue qualité TV**. En cas de refus TV, le motif cite une règle précise de la grille de qualité (navigation, bannière, marges…) : la corriger puis renvoyer.
 - [ ] **Step 6 :** en cas de refus au titre de la propriété intellectuelle, répondre par le formulaire d'appel. L'argument : uniquement un lecteur, aucune source livrée, captures sur mires de test. En parallèle, préparer la publication sur l'Amazon Appstore (Fire TV) avec le même APK.
+
+---
+
+## Ajouts pendant l'exécution
+
+### Tâche 14 : version 2.0.0
+
+`pubspec.yaml` en `2.0.0+19`, `kAppVersion` en `2.0.0` (vérifié par `test/version_test.dart`), README : nouveautés 2.0, compilation et signature Android TV, essai de la version télé sur ordinateur (`BOBINE_TV=1`, versions de développement seulement).
+
+### Tâche 15 : premier lancement avec ou sans compte
+
+Demande ajoutée en cours de route. `OnboardingScreen` propose deux chemins (`OnboardingChoice`) :
+
+- « Me connecter à mon compte Bobine » : `AccountSection` (connexion ou création). Une fois connecté, la synchro ramène les sources ; un compte encore vide propose le formulaire de source.
+- « Ajouter une playlist sans compte » : le formulaire de source, avec l'avertissement que rien n'est synchronisé.
+
+Testé dans `test/onboarding_choice_test.dart`.
