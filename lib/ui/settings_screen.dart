@@ -376,14 +376,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'Tes profils, favoris et réglages dans un fichier, et un diagnostic en cas de souci.',
         (context) => [BackupSection()],
       ),
-      _Page(
-        'raccourcis',
-        'Raccourcis',
-        'Clavier, télécommande et manette dans le lecteur.',
-        (context) => [
-          const SettingsSection(title: 'Raccourcis', children: [_Shortcuts()]),
-        ],
-      ),
+      // Keyboard and mouse: nothing to read on a TV.
+      if (!Device.isTv)
+        _Page(
+          'raccourcis',
+          'Raccourcis',
+          'Clavier, télécommande et manette dans le lecteur.',
+          (context) => [
+            const SettingsSection(title: 'Raccourcis', children: [_Shortcuts()]),
+          ],
+        ),
       _Page('apropos', 'À propos', 'Bobine, lecteur IPTV.', (context) => [AboutSection()]),
     ];
   }
@@ -403,13 +405,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final narrow = width < 900;
         final nav = SizedBox(
           width: narrow ? null : 220,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('PARAMÈTRES', style: posterStyle(44, height: 1)),
-              const SizedBox(height: 22),
-              for (final p in pages) _NavItem(label: p.title, selected: p.id == page.id, onTap: () => _open(p.id)),
-            ],
+          // Scrolls when the window (or the TV's 720-point stage) is too
+          // short for every page.
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('PARAMÈTRES', style: posterStyle(44, height: 1)),
+                const SizedBox(height: 22),
+                for (final p in pages) _NavItem(label: p.title, selected: p.id == page.id, onTap: () => _open(p.id)),
+              ],
+            ),
           ),
         );
         final content = ListView(

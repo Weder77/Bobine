@@ -536,41 +536,46 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverBuilder(
-      onActivate: onTap,
-      focusRingRadius: 6,
-      builder: (context, hover) => Semantics(
-        button: true,
-        selected: selected,
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            height: kTopBarHeight,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 10),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 150),
-                  style: TextStyle(
-                    fontFamily: AppFonts.body,
-                    fontSize: 15,
-                    height: 1,
-                    fontWeight: FontWeight.w500,
-                    color: selected || hover ? AppColors.text : AppColors.muted,
+    // The whole height of the bar is clickable; the remote's ring is a pill
+    // around the word only (around the full height, it was a tall box).
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: kTopBarHeight,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 3),
+              HoverBuilder(
+                onActivate: onTap,
+                focusRingRadius: 999,
+                builder: (context, hover) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 150),
+                    style: TextStyle(
+                      fontFamily: AppFonts.body,
+                      fontSize: 15,
+                      height: 1,
+                      fontWeight: FontWeight.w500,
+                      color: selected || hover ? AppColors.text : AppColors.muted,
+                    ),
+                    child: Text(label),
                   ),
-                  child: Text(label),
                 ),
-                const SizedBox(height: 8),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: selected ? 18 : 0,
-                  height: 2,
-                  decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(2)),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 1),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: selected ? 18 : 0,
+                height: 2,
+                decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(2)),
+              ),
+            ],
           ),
         ),
       ),
