@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../data/models.dart';
 import '../services.dart';
 import '../ui/launch.dart';
+import 'tv_actions.dart';
 import 'tv_cards.dart';
 import 'tv_focus.dart';
 import 'tv_grid.dart';
@@ -431,6 +432,7 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
   Widget _card(int ri, TvRow row, TvItem it, String id) => TvFocusable(
     id: id,
     onOk: () => tvOpen(context, it),
+    onLongOk: () => showTvItemActions(context, it),
     onMove: (d) => _moveFrom(ri, d),
     revealAxes: const {Axis.horizontal},
     builder: (context, on) => switch (row.style) {

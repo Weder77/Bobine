@@ -335,6 +335,8 @@ class _TvShellViewState extends State<TvShellView> {
               SizedBox(width: 26),
               TvKeyHint('OK', 'Choisir'),
               SizedBox(width: 26),
+              TvKeyHint('OK maintenu', 'Plus de choix'),
+              SizedBox(width: 26),
               TvKeyHint('Retour', 'Revenir'),
             ],
           ),

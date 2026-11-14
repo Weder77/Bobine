@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../services.dart';
 import '../ui/launch.dart';
 import '../ui/live_catalog.dart';
+import 'tv_actions.dart';
 import 'tv_cards.dart';
 import 'tv_focus.dart';
 import 'tv_rows.dart';
@@ -204,6 +205,8 @@ class _TvLivePageState extends State<TvLivePage> {
                       revealAxes: const {Axis.vertical},
                       revealPadding: const EdgeInsets.only(top: 40, bottom: 48),
                       onOk: () => Launch.channel(context, t.channel, list),
+                      // Held: add to (or take out of) the favourites.
+                      onLongOk: () => showTvItemActions(context, it),
                       builder: (context, on) => LayoutBuilder(
                         builder: (context, box) => TvLiveCard(
                           item: it,

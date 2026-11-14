@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'tv_actions.dart';
 import 'tv_browse.dart';
 import 'tv_cards.dart';
 import 'tv_focus.dart';
@@ -50,6 +51,7 @@ class TvPosterGrid extends StatelessWidget {
         revealAxes: const {Axis.vertical},
         revealPadding: const EdgeInsets.only(top: 40, bottom: 60),
         onOk: () => tvOpen(context, it),
+        onLongOk: () => showTvItemActions(context, it),
         onMove: i < columns && upFromTop != null ? (d) => d == TvDir.up ? upFromTop!() : null : null,
         builder: (context, on) => LayoutBuilder(
           builder: (context, box) => TvPosterCard(item: it, on: on, width: box.maxWidth, height: box.maxHeight),
