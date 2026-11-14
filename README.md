@@ -1,6 +1,6 @@
-# Bobine, lecteur IPTV desktop
+# Bobine, lecteur IPTV pour ordinateur et Android TV
 
-Lecteur IPTV pour **Windows, macOS et Linux**, construit avec Flutter et le moteur vidéo **libmpv** (via [media_kit](https://github.com/media-kit/media-kit)).
+Lecteur IPTV pour **Windows, macOS, Linux et Android TV**, construit avec Flutter et le moteur vidéo **libmpv** (via [media_kit](https://github.com/media-kit/media-kit)).
 L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux et sur lequel les avances / retours rapides sont instantanés.
 
 > **Bobine est uniquement un lecteur.** Il ne fournit aucune chaîne, aucun film, aucune série ni aucune playlist : tu y ajoutes ta propre source. Voir l'[avertissement](#avertissement).
@@ -54,6 +54,18 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 - Panneau **Audio et sous-titres** : pistes (langue préférée, `fr` par défaut), taille des sous-titres, vitesse, format d'image (16:9, 4:3, 21:9, remplir, étirer).
 - Statistiques en direct (touche I) : codec, résolution, décodage matériel ou logiciel, cache, débit réseau, images perdues.
 - Désentrelacement automatique pour les chaînes 1080i / 576i.
+
+**Nouveautés 2.0 : Android TV et premier lancement**
+- **Bobine sur Android TV** (Google TV, Chromecast avec Google TV, box Android TV), entièrement à la **télécommande** :
+  - les flèches parcourent chaque écran, avec un focus cerclé bien visible ;
+  - OK lance, **OK maintenu** ouvre les actions rapides (favori, fiche, multi-écran…) ;
+  - Retour revient d'un cran : la recherche, puis l'accueil, puis la sortie de Bobine ;
+  - dans le lecteur, les flèches reculent, avancent et zappent ; OK fait apparaître les boutons, que les flèches parcourent ensuite ;
+  - dans un formulaire, les flèches passent d'un champ à l'autre.
+- L'interface est dessinée sur 1280 × 720 points et agrandie à l'écran, avec des marges contre les bords que la télé peut rogner.
+- Sur la télé : multi-écran à **deux chaînes** (les box décodent rarement plus), pas de cast, d'enregistrements ni de sélecteur de fichiers. Les mises à jour passent par le Play Store.
+- **Premier lancement** : choisir entre **se connecter à son compte Bobine** (les sources, profils et réglages reviennent par la synchro) et **ajouter une playlist sans compte** (rien n'est synchronisé, tout reste sur l'appareil).
+- Les bandes-annonces s'ouvrent dans l'appli YouTube de la télé.
 
 **Nouveautés 1.6 : caster sur la télé**
 - **Caster** ce que tu regardes sur une télé du réseau : bouton *Caster* en haut du lecteur, ou touche **T**. Compatible **Chromecast, Google TV, Android TV** et télés **DLNA** (Samsung, LG, Sony, Philips, Panasonic, Kodi, box…), trouvées toutes seules sur le réseau.
@@ -189,11 +201,19 @@ L'application se trouve dans `build\windows\x64\runner\Release\`. Copie **tout l
 - **macOS** : Xcode requis, puis `flutter run -d macos`.
 - **Linux** : `sudo apt install libgtk-3-dev libmpv-dev mpv clang cmake ninja-build pkg-config`, puis `flutter run -d linux`.
 
+### Android TV
+
+- Android Studio (ou le SDK Android en ligne de commande) et un **émulateur Android TV** (image *Television 1080p*), ou une télé / box Android TV avec le débogage USB ou réseau activé.
+- `flutter run -d <appareil>` pour essayer, `flutter build apk --release --split-per-abi` pour un APK à installer, `flutter build appbundle --release` pour le Play Store.
+- Signature d'envoi Play Store : copier `android/key.properties.example` en `android/key.properties` (hors git) et y indiquer la clé. En CI, les secrets `ANDROID_KEYSTORE_B64`, `ANDROID_STORE_PASSWORD`, `ANDROID_KEY_ALIAS` et `ANDROID_KEY_PASSWORD` de l'environnement PRD signent l'App Bundle des publications.
+- Essayer la version télé sur ordinateur, sans télé : `BOBINE_TV=1 flutter run -d linux` (ou `-d windows`), en version de développement seulement. Les flèches, Entrée et Échap jouent le rôle de la télécommande.
+- Fiche Play Store, formulaires et captures : [`docs/store/fiche.md`](docs/store/fiche.md) ; politique de confidentialité : [`docs/confidentialite.md`](docs/confidentialite.md).
+
 ---
 
 ## Utilisation
 
-1. Au premier lancement, ajoute une source **Xtream Codes** ou **M3U** puis clique sur **« Ajouter et importer »**.
+1. Au premier lancement, choisis **« Me connecter à mon compte Bobine »** (tes sources reviennent par la synchro) ou **« Ajouter une playlist sans compte »** : ajoute alors une source **Xtream Codes** ou **M3U** puis clique sur **« Ajouter et importer »**.
 2. Les chaînes, films et séries sont importés en arrière-plan, suivis du guide TV. La progression s'affiche en bas de la fenêtre.
 3. Les sources sont actualisées automatiquement (contenu toutes les 24 h, guide toutes les 12 h, réglable).
 
@@ -321,7 +341,8 @@ flutter test
 - [x] Caster sur la télé : Chromecast, Google TV, télés DLNA (1.6).
 - [ ] AirPlay (Apple TV).
 - [ ] Portail Stalker (MAC).
-- [ ] Version Android TV / mobile (même code Flutter + media_kit).
+- [x] Version Android TV, à la télécommande (2.0).
+- [ ] Version Android mobile / tablette (interface tactile).
 - [ ] Signature de l'installateur Windows (évite l'avertissement SmartScreen).
 
 ---
