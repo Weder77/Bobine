@@ -52,4 +52,57 @@ void main() {
     await t.pumpAndSettle();
     expect(scroll.offset, before);
   });
+
+  testWidgets('une affiche d’une rangée horizontale fait défiler la page, pas la rangée', (t) async {
+    t.view.physicalSize = const Size(800, 600);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final page = ScrollController(), rail = ScrollController();
+    final poster = FocusNode(debugLabel: 'poster');
+    addTearDown(() {
+      page.dispose();
+      rail.dispose();
+      poster.dispose();
+    });
+    await t.pumpWidget(
+      MaterialApp(
+        home: RevealUnderHeader(
+          header: 100,
+          child: Stack(
+            children: [
+              ListView(
+                controller: page,
+                children: [
+                  const SizedBox(height: 400),
+                  SizedBox(
+                    height: 120,
+                    child: ListView(
+                      controller: rail,
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        for (var i = 0; i < 12; i++)
+                          SizedBox(
+                            width: 100,
+                            child: TextButton(focusNode: i == 5 ? poster : null, onPressed: () {}, child: Text('$i')),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 900),
+                ],
+              ),
+              const Positioned(left: 0, right: 0, top: 0, height: 100, child: ColoredBox(color: Colors.black)),
+            ],
+          ),
+        ),
+      ),
+    );
+    page.jumpTo(400); // the rail starts at y 0, under the header
+    rail.jumpTo(300);
+    await t.pump();
+    poster.requestFocus();
+    await t.pumpAndSettle();
+    expect(t.getTopLeft(find.text('5')).dy, greaterThanOrEqualTo(100));
+    expect(rail.offset, 300, reason: 'the row does not move sideways');
+  });
 }

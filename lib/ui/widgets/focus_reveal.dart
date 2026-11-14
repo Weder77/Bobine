@@ -55,7 +55,8 @@ class _RevealUnderHeaderState extends State<RevealUnderHeader> {
     final top = box.globalToLocal(target.localToGlobal(Offset.zero)).dy;
     final hidden = widget.header + _gap - top;
     if (hidden <= 0) return;
-    final position = Scrollable.maybeOf(item)?.position;
+    // The page, not the horizontal row the poster sits in.
+    final position = Scrollable.maybeOf(item, axis: Axis.vertical)?.position;
     if (position == null) return;
     final to = (position.pixels - hidden).clamp(position.minScrollExtent, position.maxScrollExtent);
     if (to == position.pixels) return;
