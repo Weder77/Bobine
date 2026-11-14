@@ -1,3 +1,4 @@
+import 'package:bobine/core/device.dart';
 import 'package:bobine/player/player_chrome.dart';
 import 'package:bobine/player/player_keys.dart';
 import 'package:flutter/material.dart';
@@ -48,7 +49,49 @@ void main() {
     }
   });
 
+  Widget panel({bool currentIsThird = false}) => MaterialApp(
+    home: Stack(
+      children: [
+        PlayerSidePanel(
+          right: true,
+          width: 400,
+          title: 'Chaînes',
+          onClose: () {},
+          child: ListView(
+            children: [
+              TextButton(onPressed: () {}, child: const Text('TF1')),
+              TextButton(onPressed: () {}, child: const Text('France 2')),
+              TextButton(autofocus: currentIsThird, onPressed: () {}, child: const Text('Sport Max')),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
+  String? focusedButton() =>
+      (FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextButton>()?.child as Text?)?.data;
+
+  testWidgets('sur ordinateur, un panneau ouvert ne prend pas le focus (les flèches restent au lecteur)', (t) async {
+    Device.debugTv = false;
+    addTearDown(() => Device.debugTv = null);
+    await t.pumpWidget(panel());
+    await t.pump();
+    await t.pump();
+    expect(focusedButton(), isNull);
+  });
+
+  testWidgets('sur la télé, la chaîne en cours (autofocus) est sélectionnée, pas la première', (t) async {
+    Device.debugTv = true;
+    addTearDown(() => Device.debugTv = null);
+    await t.pumpWidget(panel(currentIsThird: true));
+    await t.pump();
+    await t.pump();
+    expect(focusedButton(), 'Sport Max');
+  });
+
   testWidgets('un panneau ouvert donne le focus à son premier élément, pas au bouton Fermer', (t) async {
+    Device.debugTv = true;
+    addTearDown(() => Device.debugTv = null);
     await t.pumpWidget(
       MaterialApp(
         home: Stack(
@@ -69,6 +112,7 @@ void main() {
         ),
       ),
     );
+    await t.pump();
     await t.pump();
     final button = FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<TextButton>();
     expect((button?.child as Text?)?.data, 'TF1');

@@ -556,8 +556,10 @@ class PlayerSidePanel extends StatelessWidget {
   );
 }
 
-/// Gives the focus to the first item of [child] when it appears, so a TV
-/// remote can move in a panel just opened (not to the close button above).
+/// On a TV, gives the focus to an item of [child] when it appears, so the
+/// remote can move in a panel just opened (not to the close button above):
+/// the one that asks for it (autofocus: the channel playing), else the
+/// first. On a computer the arrows stay with the player (seek, zap).
 class _FocusFirst extends StatefulWidget {
   const _FocusFirst({required this.child});
   final Widget child;
@@ -572,9 +574,16 @@ class _FocusFirstState extends State<_FocusFirst> {
   @override
   void initState() {
     super.initState();
+    if (!Device.isTv) return;
+    // Two frames: the list first scrolls to the channel playing, which is
+    // then built and takes the focus itself (autofocus).
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _scope.focusedChild != null) return;
-      _scope.traversalDescendants.firstOrNull?.requestFocus();
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _scope.focusedChild != null) return;
+        _scope.traversalDescendants.firstOrNull?.requestFocus();
+      });
+      WidgetsBinding.instance.scheduleFrame();
     });
   }
 
@@ -585,7 +594,7 @@ class _FocusFirstState extends State<_FocusFirst> {
   }
 
   @override
-  Widget build(BuildContext context) => FocusScope(node: _scope, child: widget.child);
+  Widget build(BuildContext context) => Device.isTv ? FocusScope(node: _scope, child: widget.child) : widget.child;
 }
 
 /// "Chaînes": the programme of every channel, the current one in vermilion.
@@ -621,7 +630,10 @@ class ChannelListPanel extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0x14FFFFFF))),
       ),
-      child: Text('↑ ↓ pour zapper · ${Device.backKey} pour fermer', style: darkMono(12, height: 1)),
+      child: Text(
+        Device.isTv ? '↑ ↓ choisir · OK regarder · Retour pour fermer' : '↑ ↓ pour zapper · Échap pour fermer',
+        style: darkMono(12, height: 1),
+      ),
     ),
     child: ListView.builder(
       controller: scroll,
@@ -635,6 +647,8 @@ class ChannelListPanel extends StatelessWidget {
         final t = DateTime.now();
         return HoverBuilder(
           onActivate: () => onPick(i),
+          // On the TV the remote starts on the channel playing.
+          autofocus: on && Device.isTv,
           focusRingRadius: 8,
           builder: (context, hover) => GestureDetector(
             onTap: () => onPick(i),
