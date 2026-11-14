@@ -56,9 +56,9 @@ Textes et réponses à reprendre dans la Play Console. Limites de Google entre p
 |---|---|---|
 | Icône | `docs/store/icon-512.png` | 512 × 512 |
 | Bannière Android TV | `docs/store/banner-1280x720.png` | 1280 × 720 |
-| Captures Android TV | `docs/store/screenshots/` (6 faites, sur mires) | 1920 × 1080, 6 à 8 |
+| Captures Android TV | `docs/store/screenshots/` (8, interface télé, sur mires) | 1920 × 1080, 6 à 8 |
 
-Les captures se font avec le faux serveur (`tool/fake_xtream.py`, médias de `tool/generate_test_media.sh`) : uniquement des mires et des titres inventés, aucun logo ni contenu réel. Écrans conseillés : accueil, Direct, Guide TV, Films, fiche d'un film, lecteur avec contrôles, multi-écran, paramètres.
+Les captures se font avec le faux serveur (`tool/fake_xtream.py`, médias de `tool/generate_test_media.sh`) : uniquement des mires et des titres inventés, aucun logo ni contenu réel. Écrans : Accueil, Direct, Guide TV, Films (pastilles de catégories), page d'une série, lecteur du direct avec son habillage, Recherche, Réglages. Pour les refaire : la version Linux en mode télé (`BOBINE_TV=1`), une capture plein écran 1920 × 1080 par écran, l'application relancée avant chacune.
 
 ## Sécurité des données (formulaire)
 

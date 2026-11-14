@@ -45,7 +45,12 @@ class TvStage extends StatelessWidget {
                     ? EdgeInsets.zero
                     : outer.viewInsets / math.min(outer.size.width / size.width, outer.size.height / size.height),
               ),
-              child: ClipRect(child: child),
+              // No scroll bars on a TV (a computer running the TV screens
+              // would draw them).
+              child: ScrollConfiguration(
+                behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                child: ClipRect(child: child),
+              ),
             ),
           ),
         ),
