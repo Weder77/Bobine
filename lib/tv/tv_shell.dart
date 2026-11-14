@@ -1,8 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../core/app_exit.dart';
 import '../ui/widgets/brand.dart';
 import 'tv_focus.dart';
 import 'tv_stage.dart';
@@ -179,7 +179,7 @@ class _TvShellViewState extends State<TvShellView> {
       case TvBackRule.toHome:
         _c.focus(_nav(TvTab.home));
       case TvBackRule.exit:
-        (widget.onExit ?? SystemNavigator.pop)();
+        widget.onExit != null ? widget.onExit!() : unawaited(AppExit.leave());
     }
   }
 

@@ -438,3 +438,34 @@ class TvPillButton extends StatelessWidget {
     ),
   );
 }
+
+/// Fades from one picture to the next ([id] says which one is shown). Each
+/// change gets a key of its own: back to a picture still fading out
+/// (A → B → A, quickly) would otherwise give the fade two children with the
+/// same key, and Flutter breaks.
+class TvFade extends StatefulWidget {
+  const TvFade({super.key, required this.id, required this.child, this.duration = const Duration(milliseconds: 600)});
+
+  final Object id;
+  final Widget child;
+  final Duration duration;
+
+  @override
+  State<TvFade> createState() => _TvFadeState();
+}
+
+class _TvFadeState extends State<TvFade> {
+  int _serial = 0;
+
+  @override
+  void didUpdateWidget(TvFade old) {
+    super.didUpdateWidget(old);
+    if (old.id != widget.id) _serial++;
+  }
+
+  @override
+  Widget build(BuildContext context) => AnimatedSwitcher(
+    duration: widget.duration,
+    child: KeyedSubtree(key: ValueKey(_serial), child: widget.child),
+  );
+}

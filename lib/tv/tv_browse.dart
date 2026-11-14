@@ -511,10 +511,9 @@ class _TvBrowsePageState extends State<TvBrowsePage> {
           top: 0,
           width: 1920,
           height: 900,
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 600),
+          child: TvFade(
+            id: picture.key,
             child: SizedBox.expand(
-              key: ValueKey(picture.key),
               child: TvPicture(url: picture.backdrop ?? picture.image, tintKey: picture.key, decodeWidth: 1280),
             ),
           ),

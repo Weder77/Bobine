@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
+import '../core/app_exit.dart';
 import 'tv_account.dart';
 import 'tv_focus.dart';
 import 'tv_form.dart';
@@ -42,7 +42,7 @@ class _TvWelcomeScreenState extends State<TvWelcomeScreen> {
     _Way.source => TvSourcesView(onBack: () => _go(null), onDone: (_) {}, backLabel: 'Bienvenue'),
     null => TvFormFrame(
       controller: _c,
-      onBack: widget.onExit ?? SystemNavigator.pop,
+      onBack: widget.onExit ?? AppExit.leave,
       title: 'Bienvenue',
       subtitle: 'Les chaînes, films, séries et le guide TV de ton abonnement IPTV, à la télécommande.',
       backLabel: 'Quitter',
