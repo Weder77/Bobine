@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bobine/core/device.dart';
 import 'package:bobine/core/version.dart';
 import 'package:bobine/data/db.dart';
 import 'package:bobine/data/repository.dart';
@@ -156,5 +157,26 @@ void main() {
     expect(u.available?.version, '99.0.0');
     expect(u.stage, UpdateStage.available);
     expect(repo.kvGet('update_checked_at'), isNull);
+  });
+
+  test('sur la télé, Bobine ne demande jamais à GitHub (mises à jour par le Play Store)', () async {
+    Device.debugTv = true;
+    addTearDown(() => Device.debugTv = null);
+    var asked = 0;
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((r) async {
+      asked++;
+      r.response.statusCode = 503;
+      await r.response.close();
+    });
+    final repo = Repository(openMemoryDatabase());
+    final settings = AppSettings(repo);
+    repo.kvSet('update_found', jsonEncode(release('v99.0.0')));
+    final u = UpdateService(repo, settings, apiUrl: 'http://127.0.0.1:${server.port}/latest');
+    await u.checkInBackground();
+    expect(await u.check(), isNull);
+    expect(asked, 0);
+    expect(u.available, isNull);
   });
 }

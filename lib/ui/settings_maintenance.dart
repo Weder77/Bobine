@@ -1,6 +1,7 @@
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 
+import '../core/device.dart';
 import '../core/open_url.dart';
 import '../core/text.dart';
 import '../core/theme.dart';
@@ -202,22 +203,27 @@ class AboutSection extends StatelessWidget {
           UpdateStage.error => u.error ?? 'Erreur',
           UpdateStage.idle => null,
         };
+        // On the TV, updates come from the Play Store: nothing to check here.
+        final updates = Device.canSelfUpdate;
+        final here = Device.isTv ? 'cette télé' : 'cet ordinateur';
         return SettingsSection(
-          title: 'À propos et mises à jour',
+          title: updates ? 'À propos et mises à jour' : 'À propos',
           children: [
             SettingsOption(
               title: 'Bobine $kAppVersion',
               subtitle: s.sync.signedIn
                   ? 'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Les données (sources, favoris, '
-                        'progression) sont sur cet ordinateur et, chiffrées, sur ton compte Bobine.'
+                        'progression) sont sur $here et, chiffrées, sur ton compte Bobine.'
                   : 'Lecteur IPTV basé sur libmpv (FFmpeg) via media_kit. Toutes les données (sources, favoris, '
-                        'progression) restent sur cet ordinateur.',
-              child: OutlinedButton(
-                onPressed: busy ? null : () => u.check(),
-                child: const Text('Rechercher une mise à jour'),
-              ),
+                        'progression) restent sur $here.',
+              child: updates
+                  ? OutlinedButton(
+                      onPressed: busy ? null : () => u.check(),
+                      child: const Text('Rechercher une mise à jour'),
+                    )
+                  : const SizedBox.shrink(),
             ),
-            if (status != null)
+            if (updates && status != null)
               Container(
                 alignment: Alignment.centerLeft,
                 padding: const EdgeInsets.symmetric(vertical: 16),
@@ -283,12 +289,13 @@ class AboutSection extends StatelessWidget {
                   ],
                 ),
               ),
-            SettingsSwitch(
-              title: 'Vérifier les mises à jour au démarrage',
-              subtitle: 'Une fois par jour au plus, sur les versions publiées dans GitHub.',
-              value: s.settings.checkUpdates,
-              onChanged: (v) => s.settings.update((x) => x.checkUpdates = v),
-            ),
+            if (updates)
+              SettingsSwitch(
+                title: 'Vérifier les mises à jour au démarrage',
+                subtitle: 'Une fois par jour au plus, sur les versions publiées dans GitHub.',
+                value: s.settings.checkUpdates,
+                onChanged: (v) => s.settings.update((x) => x.checkUpdates = v),
+              ),
           ],
         );
       },

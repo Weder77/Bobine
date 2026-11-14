@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../core/device.dart';
 import '../core/version.dart';
 import '../data/repository.dart';
 import '../data/settings.dart';
@@ -77,7 +78,7 @@ class UpdateService extends ChangeNotifier {
   /// At startup: at most once a day, quietly. In between, the version found
   /// by the last check is offered again (the header shows it).
   Future<void> checkInBackground() async {
-    if (!_settings.checkUpdates) return;
+    if (!_settings.checkUpdates || !Device.canSelfUpdate) return;
     final last = int.tryParse(_repo.kvGet('update_checked_at') ?? '') ?? 0;
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     if (now - last < 20 * 3600) return restoreFound();
@@ -89,7 +90,7 @@ class UpdateService extends ChangeNotifier {
   @visibleForTesting
   void restoreFound() {
     final raw = _repo.kvGet('update_found');
-    if (raw == null || raw.isEmpty || available != null) return;
+    if (raw == null || raw.isEmpty || available != null || !Device.canSelfUpdate) return;
     try {
       final info = parseRelease((jsonDecode(raw) as Map).cast<String, Object?>());
       if (info == null || _repo.kvGet('update_skip') == info.version) return;
@@ -103,6 +104,8 @@ class UpdateService extends ChangeNotifier {
   /// Asks GitHub for the latest release. With [quiet], failures are not shown
   /// and a version the user chose to skip is not offered again.
   Future<UpdateInfo?> check({bool quiet = false}) async {
+    // On the TV, updates come from the Play Store only (its rules).
+    if (!Device.canSelfUpdate) return null;
     if (stage == UpdateStage.checking || stage == UpdateStage.downloading) return available;
     _set(UpdateStage.checking);
     error = null;

@@ -68,6 +68,20 @@ void main() {
     expect(calls, isEmpty);
   });
 
+  test("sur Android, l'adresse part vers une autre appli, sans processus", () async {
+    final launched = <Uri>[];
+    Future<bool> launch(Uri u) async {
+      launched.add(u);
+      return true;
+    }
+
+    expect(await openExternal('https://youtu.be/x', run: run, os: 'android', launch: launch), isTrue);
+    expect(launched.single.toString(), 'https://youtu.be/x');
+    expect(calls, isEmpty);
+    expect(await openExternal('file:///etc/passwd', run: run, os: 'android', launch: launch), isFalse);
+    expect(launched, hasLength(1));
+  });
+
   test('trailers: a YouTube id or a YouTube address, nothing else from the provider', () {
     expect(trailerUrl('dQw4w9WgXcQ'), 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     expect(

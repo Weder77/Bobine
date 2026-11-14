@@ -50,6 +50,8 @@ dependencies:
   # Keeps the computer awake while it sends a stream to the TV (already
   # used by media_kit_video for the local picture).
   wakelock_plus: ^1.8.2
+  # Android TV: web addresses (trailers) are handed to another app.
+  url_launcher: ^6.3.3
 dev_dependencies:
   flutter_test:
     sdk: flutter
