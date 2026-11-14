@@ -289,6 +289,30 @@ void main() {
     expect(repo.episodes(id, '77'), hasLength(2));
   });
 
+  test('the TV series page asks the provider again, even with episodes kept', () async {
+    final path = '${tmp.path}/fresh.db';
+    final repo = track(Repository(openAppDatabase(path)));
+    final id = repo.insertSource(name: 'X', type: SourceType.xtream, url: base, username: 'u', password: 'p');
+    await importXtream(path, id, null);
+    final dark = repo.seriesByExt(id, '77')!;
+    await loadEpisodes(repo, dark);
+    // A stale list kept here (one episode): the provider's replaces it.
+    repo.replaceEpisodes(id, '77', [repo.episodes(id, '77').first]);
+    expect(repo.episodes(id, '77'), hasLength(1));
+    expect((await fetchEpisodes(repo, dark)).map((e) => e.extId), ['7701', '7702']);
+    expect(repo.episodes(id, '77'), hasLength(2));
+    // Unreachable: it says so (the page offers Réessayer).
+    final gone = repo.insertSource(
+      name: 'Y',
+      type: SourceType.xtream,
+      url: 'http://127.0.0.1:9',
+      username: 'u',
+      password: 'p',
+    );
+    final lost = Series(id: 0, sourceId: gone, extId: '77', name: 'Dark');
+    await expectLater(fetchEpisodes(repo, lost), throwsA(anything));
+  });
+
   test('an empty list in a good answer does not empty the source', () async {
     final path = '${tmp.path}/emptied.db';
     final repo = track(Repository(openAppDatabase(path)));

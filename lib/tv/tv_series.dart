@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../data/models.dart';
@@ -148,11 +150,31 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
     }
   }
 
+  /// The provider is being asked for the episodes.
+  bool _loading = false;
+
+  /// It could not be reached, and none are kept here: Réessayer.
+  bool _failed = false;
+
+  /// Those kept here at once, then the provider's (a series still running
+  /// gets new episodes), as the computer does.
   Future<void> _load() async {
     final s = AppScope.of(context);
-    final eps = await loadEpisodes(s.repo, _sr);
-    if (!mounted) return;
-    _refresh(eps);
+    final kept = s.repo.episodes(_sr.sourceId, _sr.extId);
+    if (kept.isNotEmpty) _refresh(kept);
+    setState(() {
+      _loading = true;
+      _failed = false;
+    });
+    try {
+      final eps = await fetchEpisodes(s.repo, _sr);
+      if (mounted) _refresh(eps);
+    } catch (_) {
+      if (mounted && (_eps?.isEmpty ?? true)) _refresh(const []);
+      if (mounted) setState(() => _failed = _eps?.isEmpty ?? true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
   }
 
   void _refresh([List<Episode>? eps]) {
@@ -161,7 +183,10 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
     setState(() {
       _eps = list;
       _progress = s.repo.seriesProgress(_sr.sourceId, _sr.extId);
-      if (list.isNotEmpty) _season ??= tvSeriesPrimary(list, _progress).episode.season;
+      // The season shown is gone (the provider's list changed): the one to watch.
+      if (list.isNotEmpty && (_season == null || !list.any((e) => e.season == _season))) {
+        _season = tvSeriesPrimary(list, _progress).episode.season;
+      }
     });
   }
 
@@ -314,6 +339,8 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
     final primary = _primary;
     final inList = s.repo.isFavorite(_sr.sourceId, ContentKind.series, _sr.extId);
     final seasons = eps == null ? const <int>[] : tvSeasons(eps);
+    // Sorted once a build, not once an episode shown.
+    final inSeason = _inSeason;
     final meta = [
       if ((_sr.rating ?? 0) > 0) '★ ${_sr.rating!.toStringAsFixed(1).replaceAll('.', ',')}',
       ?_sr.year?.toString(),
@@ -401,13 +428,22 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
                         const SizedBox(height: 30),
                         Row(
                           children: [
-                            _button(
-                              'play',
-                              Icons.play_arrow_rounded,
-                              primary?.label ?? 'Chargement…',
-                              () => primary == null ? null : _play(primary.episode),
-                              strong: true,
-                            ),
+                            if (primary == null && _failed && !_loading)
+                              _button(
+                                'play',
+                                Icons.refresh_rounded,
+                                'Réessayer',
+                                () => unawaited(_load()),
+                                strong: true,
+                              )
+                            else
+                              _button(
+                                'play',
+                                Icons.play_arrow_rounded,
+                                primary?.label ?? (_loading || eps == null ? 'Chargement…' : 'Aucun épisode'),
+                                () => primary == null ? null : _play(primary.episode),
+                                strong: true,
+                              ),
                             const SizedBox(width: 18),
                             _button(
                               'list',
@@ -433,7 +469,14 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
                         : eps.isEmpty
                         ? Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 96),
-                            child: Text('Aucun épisode chez le fournisseur.', style: tvText(26, color: TvColors.muted)),
+                            child: Text(
+                              _loading
+                                  ? 'Chargement des épisodes…'
+                                  : _failed
+                                  ? 'Le fournisseur ne répond pas. OK sur Réessayer pour demander encore.'
+                                  : 'Aucun épisode chez le fournisseur.',
+                              style: tvText(26, color: TvColors.muted),
+                            ),
                           )
                         : ListView.separated(
                             scrollDirection: Axis.horizontal,
@@ -453,9 +496,9 @@ class _TvSeriesScreenState extends State<TvSeriesScreen> {
                       scrollDirection: Axis.horizontal,
                       clipBehavior: Clip.none,
                       padding: const EdgeInsets.fromLTRB(96, 22, 96, 30),
-                      itemCount: _inSeason.length,
+                      itemCount: inSeason.length,
                       separatorBuilder: (_, _) => const SizedBox(width: 24),
-                      itemBuilder: (context, i) => _episode(_inSeason[i]),
+                      itemBuilder: (context, i) => _episode(inSeason[i]),
                     ),
                   ),
                 ],

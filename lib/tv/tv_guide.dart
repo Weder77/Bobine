@@ -80,11 +80,27 @@ class _TvGuidePageState extends State<TvGuidePage> {
     _r0 = tvGuideStart(_now);
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final s = AppScope.of(context);
+  AppServices? _s;
+
+  /// What [_tiles] were read for: the content, the source, the profile and
+  /// the settings that group them.
+  Object? _tilesKey;
+
+  /// The channels, read again when what they come from changed (a refresh
+  /// that ended while the guide is shown, names or qualities set otherwise).
+  void _loadTiles() {
+    final s = _s!;
     final src = s.activeSource;
+    final key = (
+      s.library.content,
+      src?.id,
+      s.settings.activeProfileId,
+      s.settings.cleanNames,
+      s.settings.groupQualities,
+      s.settings.preferredQuality,
+    );
+    if (key == _tilesKey) return;
+    _tilesKey = key;
     _tiles = src == null
         ? const []
         : LiveCatalog.group(
@@ -93,6 +109,27 @@ class _TvGuidePageState extends State<TvGuidePage> {
             merge: s.settings.groupQualities,
             preferred: s.settings.preferredQuality,
           );
+  }
+
+  void _onSources() {
+    if (!mounted) return;
+    final before = _tilesKey;
+    _loadTiles();
+    if (_tilesKey != before) setState(() {});
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final s = AppScope.of(context);
+    if (s != _s) {
+      _s?.library.removeListener(_onSources);
+      _s?.settings.removeListener(_onSources);
+      _s = s
+        ..library.addListener(_onSources)
+        ..settings.addListener(_onSources);
+    }
+    _loadTiles();
     final c = TvFocusScope.maybeOf(context);
     if (c != _c) {
       _c?.removeListener(_onFocus);
@@ -103,6 +140,8 @@ class _TvGuidePageState extends State<TvGuidePage> {
   @override
   void dispose() {
     _tick?.cancel();
+    _s?.library.removeListener(_onSources);
+    _s?.settings.removeListener(_onSources);
     _c?.removeListener(_onFocus);
     _rows.dispose();
     super.dispose();

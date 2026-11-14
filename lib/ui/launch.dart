@@ -187,15 +187,24 @@ void loadPendingSeries(AppServices s, int sourceId, List<String> series, VoidCal
 Future<List<Episode>> loadEpisodes(Repository repo, Series sr) async {
   final cached = repo.episodes(sr.sourceId, sr.extId);
   if (cached.isNotEmpty) return cached;
+  try {
+    return await fetchEpisodes(repo, sr);
+  } catch (_) {
+    return const [];
+  }
+}
+
+/// The episodes of [sr] as the provider has them now (a series still
+/// running gets new ones), kept for next time. Throws when the provider
+/// cannot be reached; a playlist (M3U) gives those kept here.
+Future<List<Episode>> fetchEpisodes(Repository repo, Series sr) async {
   final src = repo.source(sr.sourceId);
-  if (src == null || !src.isXtream) return const [];
+  if (src == null || !src.isXtream) return repo.episodes(sr.sourceId, sr.extId);
   final api = XtreamApi.forSource(src);
   try {
     final d = await api.seriesInfo(sr.sourceId, sr.extId);
     repo.replaceEpisodes(sr.sourceId, sr.extId, d.episodes);
     return d.episodes;
-  } catch (_) {
-    return const [];
   } finally {
     api.close();
   }
