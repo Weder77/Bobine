@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../services.dart';
@@ -546,7 +547,7 @@ class _Intro extends StatelessWidget {
     children: [
       const _Badge(Icons.lock_outline_rounded, size: 48),
       const SizedBox(height: 20),
-      Text('TA BOBINE SUR TOUS\nTES ORDINATEURS', style: posterStyle(40, height: 0.95)),
+      Text('TA BOBINE SUR TOUS\nTES APPAREILS', style: posterStyle(40, height: 0.95)),
       const SizedBox(height: 16),
       Text(
         "Tout est chiffré sur l'appareil avec ton mot de passe. Le serveur ne voit ni tes identifiants IPTV, "
@@ -558,7 +559,7 @@ class _Intro extends StatelessWidget {
       const SizedBox(height: 12),
       Wrap(spacing: 6, runSpacing: 6, children: [for (final s in _synced) _Chip(s)]),
       const SizedBox(height: 24),
-      Text('RESTE SUR CET ORDINATEUR', style: labelStyle(color: AppColors.faint)),
+      Text('RESTE SUR CET APPAREIL', style: labelStyle(color: AppColors.faint)),
       const SizedBox(height: 12),
       Wrap(spacing: 6, runSpacing: 6, children: [for (final s in _local) _Chip(s, local: true)]),
     ],
@@ -773,7 +774,9 @@ class _SignedOutState extends State<_SignedOut> {
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
-      if (constraints.maxWidth < 720) {
+      // One column on the TV too: the remote goes down the form, the
+      // explanation follows.
+      if (constraints.maxWidth < 720 || Device.isTv) {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [_form(), const SizedBox(height: 36), const _Intro()],
@@ -1142,7 +1145,7 @@ class _SignedIn extends StatelessWidget {
       ],
     );
     final synced = column('SYNCHRONISÉ', _synced);
-    final local = column('RESTE SUR CET ORDINATEUR', _local, local: true);
+    final local = column('RESTE SUR CET APPAREIL', _local, local: true);
     return _Card(
       padding: const EdgeInsets.fromLTRB(24, 22, 24, 16),
       child: LayoutBuilder(

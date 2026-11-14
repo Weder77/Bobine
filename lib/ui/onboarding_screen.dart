@@ -6,6 +6,7 @@ import '../services.dart';
 import '../sync/sync_service.dart';
 import 'settings_account.dart';
 import 'source_form.dart';
+import 'widgets/tv_canvas.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
 
@@ -32,28 +33,31 @@ class OnboardingScreen extends StatelessWidget {
             padding: const EdgeInsets.all(32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const BobineLogo(height: 60),
-                  const SizedBox(height: 36),
-                  Text('BIENVENUE', style: posterStyle(76, height: 0.9)),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Les chaînes, films, séries et le guide TV de ton abonnement, importés automatiquement.',
-                    style: TextStyle(color: AppColors.textSoft, fontSize: 16, height: 1.5),
-                  ),
-                  const SizedBox(height: 28),
-                  OnboardingChoice(
-                    account: (context) => const _AccountStep(),
-                    playlist: (context) => _Panel(child: SourceForm(onSaved: (_) {})),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    'Bobine est un lecteur : il ne fournit aucun contenu. Tes identifiants restent sur $here.',
-                    style: TextStyle(color: AppColors.faint, fontSize: 12),
-                  ),
-                ],
+              // On the TV, Up / Down go through every field and link in order.
+              child: TvFormNav(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const BobineLogo(height: 60),
+                    const SizedBox(height: 36),
+                    Text('BIENVENUE', style: posterStyle(76, height: 0.9)),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Les chaînes, films, séries et le guide TV de ton abonnement, importés automatiquement.',
+                      style: TextStyle(color: AppColors.textSoft, fontSize: 16, height: 1.5),
+                    ),
+                    const SizedBox(height: 28),
+                    OnboardingChoice(
+                      account: (context) => const _AccountStep(),
+                      playlist: (context) => _Panel(child: SourceForm(onSaved: (_) {})),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Bobine est un lecteur : il ne fournit aucun contenu. Tes identifiants restent sur $here.',
+                      style: TextStyle(color: AppColors.faint, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

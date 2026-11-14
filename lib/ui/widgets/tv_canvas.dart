@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../../core/device.dart';
+
 /// Lays the whole app out on a fixed 1280 × 720 stage, scaled to fill the
 /// screen (letterboxed when the screen is not 16:9).
 ///
@@ -32,6 +34,11 @@ class TvCanvas extends StatelessWidget {
     };
     if (direction == null) return KeyEventResult.ignored;
     final focus = FocusManager.instance.primaryFocus;
+    // In a dialog (parental code, confirmation…), Up / Down go through every
+    // item in reading order, as in the forms (TvFormNav).
+    final vertical = direction == TraversalDirection.up || direction == TraversalDirection.down;
+    final route = focus?.context == null ? null : ModalRoute.of(focus!.context!);
+    if (vertical && route is RawDialogRoute) return TvFormNav._onKey(node, e);
     final field = focus?.context?.findAncestorWidgetOfExactType<EditableText>();
     if (focus == null || field == null || field.maxLines != 1) return KeyEventResult.ignored;
     final sel = field.controller.selection;
@@ -86,4 +93,34 @@ class TvCanvas extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Forms and settings on the TV: Up / Down go through every item one after
+/// the other, in reading order (like Tab on a computer), so a small link at
+/// the side ("Mot de passe oublié ?") is never skipped. Left / Right keep
+/// moving the caret and between neighbours. On a computer, nothing changes.
+///
+/// Not for grids (channels, posters, guide), where Up / Down go to the row
+/// above or below.
+class TvFormNav extends StatelessWidget {
+  const TvFormNav({super.key, required this.child});
+
+  final Widget child;
+
+  static KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    if (e is KeyUpEvent) return KeyEventResult.ignored;
+    final down = e.logicalKey == LogicalKeyboardKey.arrowDown;
+    if (!down && e.logicalKey != LogicalKeyboardKey.arrowUp) return KeyEventResult.ignored;
+    final focus = FocusManager.instance.primaryFocus;
+    if (focus == null) return KeyEventResult.ignored;
+    // A text of several lines keeps its arrows to move between its lines.
+    final field = focus.context?.findAncestorWidgetOfExactType<EditableText>();
+    if (field != null && field.maxLines != 1) return KeyEventResult.ignored;
+    down ? focus.nextFocus() : focus.previousFocus();
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Device.isTv ? Focus(canRequestFocus: false, skipTraversal: true, onKeyEvent: _onKey, child: child) : child;
 }

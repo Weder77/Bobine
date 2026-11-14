@@ -13,6 +13,7 @@ import 'settings_maintenance.dart';
 import 'settings_recordings.dart';
 import 'settings_tmdb.dart';
 import 'source_form.dart';
+import 'widgets/tv_canvas.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
 import 'widgets/pin_dialog.dart';
@@ -421,21 +422,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 constraints: const BoxConstraints(maxWidth: 780),
                 child: SettingsPageScope(
                   title: page.title,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(page.title.toUpperCase(), style: posterStyle(56, height: 0.9)),
-                      const SizedBox(height: 10),
-                      Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
-                      const SizedBox(height: 30),
-                      // A kids profile with no code at all (made before the
-                      // editor asked for one): the page stays closed, it
-                      // showed the locked categories and let them be opened.
-                      if (_protected.contains(page.id) && s.profile.kids && _unlockedFor != s.profile.id)
-                        _ProtectedPage(onUnlock: s.settings.parentalEnabled ? _unlock : null)
-                      else
-                        ...page.build(context),
-                    ],
+                  // On the TV, Up / Down go through every option in order.
+                  child: TvFormNav(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(page.title.toUpperCase(), style: posterStyle(56, height: 0.9)),
+                        const SizedBox(height: 10),
+                        Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
+                        const SizedBox(height: 30),
+                        // A kids profile with no code at all (made before the
+                        // editor asked for one): the page stays closed, it
+                        // showed the locked categories and let them be opened.
+                        if (_protected.contains(page.id) && s.profile.kids && _unlockedFor != s.profile.id)
+                          _ProtectedPage(onUnlock: s.settings.parentalEnabled ? _unlock : null)
+                        else
+                          ...page.build(context),
+                      ],
+                    ),
                   ),
                 ),
               ),
