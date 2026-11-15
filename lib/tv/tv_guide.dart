@@ -352,6 +352,13 @@ class _TvGuidePageState extends State<TvGuidePage> {
     );
   }
 
+  /// Whether a tick's time at [x] would be under the badge of now (about
+  /// 110 wide from 44 before now; a time is about 90 wide with its margin).
+  bool _underNow(double x) {
+    final badge = _x(_now) - 44;
+    return x < badge + 110 && x + 90 > badge;
+  }
+
   Widget _ticks() => SizedBox(
     height: 56,
     child: Row(
@@ -387,10 +394,13 @@ class _TvGuidePageState extends State<TvGuidePage> {
                             decoration: const BoxDecoration(
                               border: Border(left: BorderSide(color: TvColors.line, width: 2)),
                             ),
-                            child: Text(
-                              tvClock(_r0.add(Duration(minutes: m))),
-                              style: tvMono(24, color: TvColors.faint),
-                            ),
+                            // Its time hidden under the badge of now ("00:3" showed).
+                            child: _underNow(m * _px)
+                                ? null
+                                : Text(
+                                    tvClock(_r0.add(Duration(minutes: m))),
+                                    style: tvMono(24, color: TvColors.faint),
+                                  ),
                           ),
                         ),
                       Positioned(

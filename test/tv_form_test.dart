@@ -1,3 +1,6 @@
+import 'package:bobine/data/db.dart';
+import 'package:bobine/data/models.dart';
+import 'package:bobine/data/repository.dart';
 import 'package:bobine/tv/tv_account.dart';
 import 'package:bobine/tv/tv_focus.dart';
 import 'package:bobine/tv/tv_form.dart';
@@ -89,6 +92,29 @@ void main() {
     await t.testTextInput.receiveAction(TextInputAction.next);
     await t.pump();
     expect(c.id, 'b');
+    // Typing goes on in the next field: the TV's keyboard stays (no second OK).
+    await t.pump();
+    expect(t.testTextInput.hasAnyClients, isTrue);
+    t.testTextInput.enterText('secret');
+    await t.pump();
+    expect(b.text, 'secret');
+    // From the last field, Suivant goes to the button, which waits for OK.
+    await t.testTextInput.receiveAction(TextInputAction.next);
+    await t.pump();
+    await t.pump();
+    expect(c.id, 'save');
+    expect(saves, 0);
+  });
+
+  test('source supprimée : on passe à une source qui marche, pas à la première en erreur', () {
+    final repo = Repository(openMemoryDatabase());
+    final broken = repo.insertSource(name: 'A', type: SourceType.m3u, url: 'http://a/list.m3u');
+    final fine = repo.insertSource(name: 'B', type: SourceType.m3u, url: 'http://b/list.m3u');
+    repo.db.execute("UPDATE sources SET last_error = 'Ressource introuvable (404).' WHERE id = ?", [broken]);
+    expect(tvNextSource(repo.sources())?.id, fine);
+    repo.db.execute('UPDATE sources SET last_error = NULL WHERE id = ?', [broken]);
+    expect(tvNextSource(repo.sources())?.id, broken);
+    expect(tvNextSource(const []), isNull);
   });
 
   test('source : ce qui manque, dans l’ordre du formulaire', () {

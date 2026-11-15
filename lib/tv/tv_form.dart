@@ -78,9 +78,11 @@ class _TvTextFieldState extends State<TvTextField> {
     widget.onDone?.call(widget.controller.text);
   }
 
+  /// The keyboard's Suivant: the next field, typing already (it used to
+  /// close the keyboard, and OK had to open it again); a button waits.
   void _next() {
     _stop();
-    _c?.move(TvDir.down);
+    if (_c?.move(TvDir.down) ?? false) _c?.follow();
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent e) {
@@ -106,6 +108,7 @@ class _TvTextFieldState extends State<TvTextField> {
     id: widget.id,
     revealAxes: const {Axis.vertical},
     onOk: _edit,
+    onFollow: _edit,
     builder: (context, on) {
       final lit = on && !_editing;
       return Padding(

@@ -32,6 +32,10 @@ String tvSourceName({required bool xtream, required String location}) {
   return host;
 }
 
+/// The source to use once the one in use is deleted: the first of [left]
+/// that works (no error at its last update), else the first one.
+Source? tvNextSource(List<Source> left) => left.where((s) => s.lastError == null).firstOrNull ?? left.firstOrNull;
+
 /// What a source holds: "1 234 chaînes · 3 210 films · 512 séries".
 String tvSourceCounts({required int live, required int movies, required int series}) {
   String n(int count, String one, String many) => '${formatCount(count)} ${count > 1 ? many : one}';
@@ -182,14 +186,22 @@ class _TvSourcesViewState extends State<TvSourcesView> {
   Future<void> _delete(AppServices s, Source src) async {
     // Its locks and hidden categories go with it: not without the code.
     if (!await confirmParent(context, title: 'Supprimer la source') || !mounted) return;
+    final wasActive = src.id == s.activeSource?.id;
     await s.deleteSource(src.id);
     if (!mounted) return;
     setState(() {
       _detail = null;
       _confirmDelete = false;
     });
+    final left = s.repo.sources();
     // None left: the first launch's welcome is under this page.
-    if (s.repo.sources().isEmpty) return widget.onBack();
+    if (left.isEmpty) return widget.onBack();
+    if (wasActive) {
+      // The one in use went: one that works rather than the first of the
+      // list (it may be in error), its content refreshed if it is old.
+      final next = tvNextSource(left)!;
+      next.id == s.activeSource?.id ? s.refreshStaleSources() : s.selectSource(next.id);
+    }
     _c.focus(_first);
   }
 

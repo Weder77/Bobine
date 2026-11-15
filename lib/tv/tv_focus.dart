@@ -147,6 +147,13 @@ class TvFocusController extends ChangeNotifier {
     final id = _id;
     if (id != null) _items[id]?.state.widget.onOk?.call();
   }
+
+  /// The keyboard's Suivant brought the remote to the current item: a text
+  /// field goes on typing ([TvFocusable.onFollow]); anything else waits.
+  void follow() {
+    final id = _id;
+    if (id != null) _items[id]?.state.widget.onFollow?.call();
+  }
 }
 
 class _TvScope extends InheritedWidget {
@@ -338,6 +345,7 @@ class TvFocusable extends StatefulWidget {
     this.onSide,
     this.onMove,
     this.onLongOk,
+    this.onFollow,
     this.revealAxes = const {Axis.horizontal, Axis.vertical},
     this.revealPadding = const EdgeInsets.symmetric(horizontal: 96, vertical: 48),
   });
@@ -357,6 +365,10 @@ class TvFocusable extends StatefulWidget {
   /// OK held (half a second): more choices for this item (favourite, take
   /// out of Reprendre…). With it, a short OK runs [onOk] on release.
   final VoidCallback? onLongOk;
+
+  /// Reached by the keyboard's Suivant ([TvFocusController.follow]): a text
+  /// field opens its keyboard at once, without a second OK.
+  final VoidCallback? onFollow;
 
   final Set<Axis> revealAxes;
   final EdgeInsets revealPadding;
