@@ -111,11 +111,26 @@ class _TvGuidePageState extends State<TvGuidePage> {
           );
   }
 
+  /// The guide's programmes shown: a new import of the guide shows at once,
+  /// not at the next key.
+  int _epgShown = -1;
+
   void _onSources() {
     if (!mounted) return;
     final before = _tilesKey;
     _loadTiles();
-    if (_tilesKey != before) setState(() {});
+    if (_tilesKey != before || _s!.library.epg != _epgShown) setState(() {});
+  }
+
+  /// What [_reminded] was read for (user data, profile): read again only
+  /// when they changed, not at each move of the remote.
+  Object? _remindedKey;
+
+  void _loadReminded(AppServices s) {
+    final key = (s.library.user, s.settings.activeProfileId);
+    if (key == _remindedKey) return;
+    _remindedKey = key;
+    _reminded = {for (final r in s.repo.reminders()) _reminderKey(r.sourceId, r.channelExt, r.start)};
   }
 
   @override
@@ -201,6 +216,10 @@ class _TvGuidePageState extends State<TvGuidePage> {
         onOk: () => _ok(s, t, p),
         builder: (context, on) => AnimatedScale(
           scale: on ? 1.03 : 1,
+          // From its left edge: a programme of the whole evening is wider than
+          // the grid, and grown from its centre its start (the title) went
+          // past the channels' column, cut ("ogramme non disponible").
+          alignment: Alignment.centerLeft,
           duration: const Duration(milliseconds: 150),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 150),
@@ -502,7 +521,8 @@ class _TvGuidePageState extends State<TvGuidePage> {
   Widget build(BuildContext context) {
     final s = AppScope.of(context);
     final tiles = _tiles;
-    _reminded = {for (final r in s.repo.reminders()) _reminderKey(r.sourceId, r.channelExt, r.start)};
+    _loadReminded(s);
+    _epgShown = s.library.epg;
     widget.setEntry(() {
       if (tiles.isEmpty) return null;
       final t = tiles.first;
