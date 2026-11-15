@@ -127,7 +127,11 @@ class _TvSourcesViewState extends State<TvSourcesView> {
   }
 
   String get _first {
-    if (_detail != null) return _confirmDelete ? 'd-delete-no' : 'd-refresh';
+    if (_detail != null) {
+      if (_confirmDelete) return 'd-delete-no';
+      // Another source: its first choice, Utiliser (OK on it used to refresh it).
+      return _detail == _s?.activeSource?.id ? 'd-refresh' : 'd-use';
+    }
     return switch (_form) {
       null => _activeId ?? 'add-xtream',
       SourceType.xtream => 'f-server',

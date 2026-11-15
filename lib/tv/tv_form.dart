@@ -379,15 +379,17 @@ class TvFormFrame extends StatelessWidget {
                     ],
                   ),
                 ),
+                // Cut above the keys at the bottom (a long list of sources ran
+                // under them), with room at the sides for the item grown by
+                // the remote.
                 Positioned(
-                  left: 96,
+                  left: 96 - 48,
                   top: subtitle == null ? 250 : 300,
-                  width: 1040,
+                  width: 1040 + 96,
                   bottom: 130,
                   child: SingleChildScrollView(
                     physics: const NeverScrollableScrollPhysics(),
-                    clipBehavior: Clip.none,
-                    padding: const EdgeInsets.only(top: 8, bottom: 48),
+                    padding: const EdgeInsets.fromLTRB(48, 8, 48, 48),
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
                   ),
                 ),

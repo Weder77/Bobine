@@ -209,7 +209,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
         });
       }),
     );
-    _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
+    // Not on the TV: the tracks come as the file opens, while mpv sets up
+    // the decoder, and a property read then (a synchronous call on
+    // Android's main thread, which mpv needs too) froze the app until
+    // Android killed it. The TV reads them when its sheet opens.
+    if (!Device.isTv) _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
     _subs.add(
       _ps.player.stream.playing.listen((p) {
         if (!mounted) return;
@@ -301,7 +305,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       setState(() => _error = null);
     }
     if (_controls || _showStats || _casting || _item.kind == ContentKind.episode) _position.value = _pos;
-    if (_tickCount % 4 == 0 && !_casting) {
+    // Cache and decoder feed the computer's bar and stats; on the TV they
+    // were five synchronous reads of mpv a second on Android's main thread
+    // (see the tracks above), for nothing on screen.
+    if (_tickCount % 4 == 0 && !_casting && !Device.isTv) {
       if (_controls || _showStats) _cache.value = await _ps.cacheState();
       if (_controls && (_decoder.value == null || _tickCount % 40 == 0)) {
         final d = await _ps.decoderSummary();
@@ -900,6 +907,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Future<void> _tvOptions() async {
     // Shown while the sheet is open, without taking the remote back from it.
     _showControls(sticky: true);
+    // The tracks in use, read now that it plays (not as the file opens).
+    await _refreshSelectedTracks();
+    if (!mounted) return;
     final ch = _currentChannel;
     final audio = _ps.player.state.tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
     final subs = [SubtitleTrack.no(), ..._ps.player.state.tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no')];
