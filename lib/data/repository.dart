@@ -606,7 +606,7 @@ class Repository {
     );
   }
 
-  /// Items to show in "Continuer à regarder": unfinished movies, plus for each
+  /// Items to show in "Reprendre": unfinished movies, plus for each
   /// series the episode in progress or the one after the last seen to the
   /// end ([ProgressEntry.upNext]). Films and series of a locked category
   /// stay out while the parental code is required. [kind] keeps films

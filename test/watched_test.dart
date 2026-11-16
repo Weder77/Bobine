@@ -135,6 +135,9 @@ void main() {
 
       // Marked as seen: the series moves on.
       repo.setWatched(src, ContentKind.episode, 'g4', seen: true, title: 'x');
+      // The next write must come in a later millisecond, as in real use: with
+      // the same date, which of the two is the newest is not decided.
+      await Future<void>.delayed(const Duration(milliseconds: 3));
       expect(repo.continueWatching(src).single.extId, 'g5');
 
       // The last episode seen: nothing left to offer.
