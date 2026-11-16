@@ -167,6 +167,9 @@ jobs:
           STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # An environment variable, not interpolated into the script: a value
+          # is then never read as shell code.
+          VERSION: ${{ needs.windows.outputs.version }}
         run: |
           if [ -z "$KEYSTORE_B64" ]; then
             echo "Pas de clé d'envoi Android : App Bundle non signé pour le Play Store."
@@ -174,7 +177,7 @@ jobs:
           fi
           umask 077
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/upload.jks"
-          out="Bobine-${{ needs.windows.outputs.version }}.aab"
+          out="Bobine-$VERSION.aab"
           cp app-release.aab "$out"
           # The debug signature of the build is replaced by the upload key's.
           zip -q -d "$out" 'META-INF/*' || true
