@@ -143,6 +143,14 @@ class PlayerService {
       "Cette adresse n'est pas celle d'un flux réseau (http, rtsp…) : elle n'est pas ouverte. "
       'La liste du fournisseur désigne un fichier ou un protocole non pris en charge.';
 
+  /// Font libass draws the subtitles with on Android, where it cannot reach
+  /// the system fonts: without one, no text subtitle shows. media_kit copies
+  /// it out of the assets (only on Android).
+  static const subtitleFont = 'assets/fonts/Geist-Medium.ttf';
+
+  /// Its family name as the font declares it (name ID 1), which libass matches.
+  static const subtitleFontName = 'Geist Medium';
+
   /// Protocols FFmpeg may open for the segments, keys and sub-streams of a
   /// stream (IPTV streams use most of them). No `file`: a playlist served
   /// by the provider could otherwise name files of this computer. The
@@ -179,6 +187,8 @@ class PlayerService {
         // libass renders every subtitle type (ASS styling, PGS/DVB bitmaps)
         // directly into the video, which is the most compatible option.
         libass: true,
+        libassAndroidFont: subtitleFont,
+        libassAndroidFontName: subtitleFontName,
         logLevel: MPVLogLevel.warn,
         bufferSize: settings.cacheMb * 1024 * 1024,
         protocolWhitelist: protocols,
