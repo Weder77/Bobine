@@ -58,6 +58,12 @@ TvPlayerOk tvPlayerOk({required bool error, required bool nextShown}) {
   return TvPlayerOk.togglePause;
 }
 
+/// Whether [key] opens the multi-view: V on a live channel, not cast, and
+/// only on a computer. The TV has none (its screen is made for a mouse, not
+/// the remote), but a keyboard plugged into the box still sends V.
+bool opensMultiView(LogicalKeyboardKey key, {required bool live, required bool casting, required bool tv}) =>
+    key == LogicalKeyboardKey.keyV && live && !casting && !tv;
+
 /// What an arrow does in the TV player.
 enum TvPlayerArrow { seekBack, seekForward, zapPrevious, zapNext, channels, options }
 

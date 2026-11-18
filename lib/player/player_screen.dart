@@ -862,7 +862,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!repeat) _minimize();
     } else if (k == LogicalKeyboardKey.keyO && AppWindow.canFloat && !_casting) {
       if (!repeat) _minimize(floating: true);
-    } else if (k == LogicalKeyboardKey.keyV && _isLive && !_casting) {
+    } else if (opensMultiView(k, live: _isLive, casting: _casting, tv: Device.isTv)) {
       if (!repeat) _openMultiView();
     } else if (k == LogicalKeyboardKey.keyT && Device.canCast) {
       if (!repeat) _setPanel(_Panel.cast);

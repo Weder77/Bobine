@@ -9,6 +9,17 @@ void main() {
   PlayerKeyRoute route(LogicalKeyboardKey k, {bool visible = false, bool button = false}) =>
       playerKeyRoute(k, controlsVisible: visible, buttonFocused: button);
 
+  test("V ouvre le multi-écran d'une chaîne, sur l'ordinateur seulement", () {
+    bool v({bool live = true, bool casting = false, bool tv = false}) =>
+        opensMultiView(LogicalKeyboardKey.keyV, live: live, casting: casting, tv: tv);
+    expect(v(), isTrue);
+    expect(v(live: false), isFalse);
+    expect(v(casting: true), isFalse);
+    // The TV has no multi-view: its screen is made for a mouse, not the remote.
+    expect(v(tv: true), isFalse);
+    expect(opensMultiView(LogicalKeyboardKey.keyM, live: true, casting: false, tv: false), isFalse);
+  });
+
   test('contrôles cachés : OK les fait apparaître, les flèches reculent, avancent et zappent', () {
     expect(route(LogicalKeyboardKey.select), PlayerKeyRoute.revealControls);
     expect(route(LogicalKeyboardKey.enter), PlayerKeyRoute.revealControls);

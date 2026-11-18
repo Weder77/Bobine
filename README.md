@@ -66,12 +66,12 @@ L'objectif : un lecteur **très optimisé**, qui lit à peu près tous les flux 
 **Nouveautés 2.0 : Android TV et premier lancement**
 - **Bobine sur Android TV** (Google TV, Chromecast avec Google TV, box Android TV), entièrement à la **télécommande** :
   - les flèches parcourent chaque écran, avec un focus cerclé bien visible ;
-  - OK lance, **OK maintenu** ouvre les actions rapides (favori, fiche, multi-écran…) ;
+  - OK lance, **OK maintenu** ouvre les actions rapides (favoris, Ma liste, reprendre depuis le début, marquer comme vu…) ;
   - Retour revient d'un cran : la recherche, puis l'accueil, puis la sortie de Bobine ;
   - dans le lecteur, les flèches reculent, avancent et zappent ; OK fait apparaître les boutons, que les flèches parcourent ensuite ;
   - dans un formulaire, les flèches passent d'un champ à l'autre.
 - L'interface est dessinée sur 1280 × 720 points et agrandie à l'écran, avec des marges contre les bords que la télé peut rogner.
-- Sur la télé : multi-écran à **deux chaînes** (les box décodent rarement plus), pas de cast, d'enregistrements ni de sélecteur de fichiers. Les mises à jour passent par le Play Store.
+- Sur la télé : pas de multi-écran, de cast, d'enregistrements ni de sélecteur de fichiers. Les mises à jour passent par le Play Store.
 - **Premier lancement** : choisir entre **se connecter à son compte Bobine** (les sources, profils et réglages reviennent par la synchro) et **ajouter une playlist sans compte** (rien n'est synchronisé, tout reste sur l'appareil).
 - Les bandes-annonces s'ouvrent dans l'appli YouTube de la télé.
 

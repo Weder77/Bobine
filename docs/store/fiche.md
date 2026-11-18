@@ -19,18 +19,17 @@ Textes et réponses à reprendre dans la Play Console. Limites de Google entre p
 > **Direct**
 > - Mosaïque des chaînes avec le programme en cours et la suite
 > - Guide TV en grille, fluide même avec des milliers de chaînes
-> - Zapping à la télécommande, numéro de chaîne, chaînes récentes et favorites
-> - Pause et retour en arrière sur le direct
-> - Multi-écran : deux chaînes côte à côte
+> - Zapping à la télécommande, numéro de chaîne et chaînes favorites
+> - Pause du direct
 >
 > **Films et séries**
-> - Reprise de lecture et « Continuer à regarder »
+> - Reprise de lecture et rangée « Reprendre »
 > - Saisons, épisodes vus, épisode suivant automatique
 > - Fiches détaillées (résumé, distribution) avec votre propre clé TMDB
 >
 > **Lecteur**
 > - Moteur vidéo libmpv : lit presque tous les flux, décodage matériel
-> - Pistes audio et sous-titres, format d'image, statistiques
+> - Pistes audio et sous-titres
 >
 > **Compte Bobine (facultatif)**
 > - Retrouvez vos sources, profils, favoris et reprises sur tous vos appareils
