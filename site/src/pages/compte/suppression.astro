@@ -1,0 +1,123 @@
+---
+import Icon from '../../components/Icon.astro';
+import Account from '../../layouts/Account.astro';
+---
+
+<Account title="Supprimer le compte" heading="Mon compte" current="suppression">
+  <h2 class="display display--section">Supprimer le compte</h2>
+
+  <div class="lists" data-before>
+    <div class="panel lists--gone">
+      <h3>Ce qui est supprimé</h3>
+      <ul>
+        <li><Icon name="x" stroke={2.2} />Ton compte et ton adresse e-mail.</li>
+        <li><Icon name="x" stroke={2.2} />Toutes les données synchronisées : sources, profils, favoris, reprises et réglages.</li>
+        <li><Icon name="x" stroke={2.2} />Tout de suite et pour de bon : rien n'est gardé sur le serveur.</li>
+      </ul>
+    </div>
+    <div class="panel lists--kept">
+      <h3>Ce qui reste</h3>
+      <ul>
+        <li><Icon name="check" stroke={2.2} />Les données de chacun de tes appareils, jusqu'à la désinstallation de Bobine.</li>
+        <li><Icon name="check" stroke={2.2} />Bobine lui-même, qui s'utilise très bien sans compte.</li>
+      </ul>
+    </div>
+  </div>
+
+  <form class="panel panel--danger" id="supprimer" novalidate data-when="signed-in" hidden>
+    <div class="field">
+      <label for="confirmer">Pour confirmer, tape l'adresse e-mail du compte</label>
+      <input class="input" id="confirmer" type="email" autocomplete="off" required />
+    </div>
+    <p class="message" data-message role="alert"></p>
+    <div class="form-actions">
+      <a class="btn btn--ghost" href="/compte/tableau/">Annuler</a>
+      <button class="btn btn--danger" type="submit"><Icon name="trash" stroke={2.2} />Supprimer définitivement</button>
+    </div>
+  </form>
+
+  <section class="divider-section" aria-labelledby="titre-code" data-before>
+    <h2 id="titre-code"><span data-when="signed-in" hidden>Mot de passe oublié ?</span><span data-when="signed-out">Sans mot de passe</span></h2>
+    <p class="fineprint">
+      Pas besoin du mot de passe pour supprimer ton compte : reçois un code par e-mail, puis saisis-le ici. Le message parle de
+      mot de passe oublié : c'est le même code.
+    </p>
+    <form class="panel" id="code-envoi" novalidate>
+      <div class="inline-form">
+        <div class="field">
+          <label for="code-email">Adresse e-mail du compte</label>
+          <input class="input" id="code-email" type="email" autocomplete="email" placeholder="toi@exemple.fr" required />
+        </div>
+        <button class="btn btn--ghost btn--lg" type="submit">Recevoir un code</button>
+      </div>
+      <p class="message" data-message role="alert"></p>
+    </form>
+    <form class="panel panel--danger" id="code-suppression" novalidate hidden>
+      <p class="message message--ok" data-sent role="status"></p>
+      <div class="field">
+        <label for="code">Code reçu par e-mail</label>
+        <input class="input input--code" id="code" type="text" inputmode="numeric" autocomplete="one-time-code" required />
+      </div>
+      <label class="check" for="definitif">
+        <input id="definitif" type="checkbox" required />
+        J'ai compris : le compte et ses données synchronisées seront supprimés pour de bon.
+      </label>
+      <p class="message" data-message role="alert"></p>
+      <div class="form-actions">
+        <button class="btn btn--danger" type="submit"><Icon name="trash" stroke={2.2} />Supprimer définitivement</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="note note--ok" data-done hidden tabindex="-1">
+    <Icon name="check" size={20} class="ok-icon" />
+    <div class="note__body">
+      <p><strong>Compte supprimé.</strong></p>
+      <p>Les données de tes appareils restent jusqu'à la désinstallation de Bobine, qui s'utilise très bien sans compte.</p>
+      <p><a href="/">Retour au site</a></p>
+    </div>
+  </div>
+</Account>
+
+<script>
+  import { clearSession } from '../../scripts/session.js';
+  import { $, account, onSubmit, say, show, signedInPage, value } from '../../scripts/ui.js';
+
+  function done() {
+    clearSession();
+    for (const el of document.querySelectorAll('[data-before], #supprimer, .side-nav, .site-header__actions')) show(el, false);
+    show($('[data-done]'));
+    $('[data-done]').focus();
+  }
+
+  const session = await signedInPage({ required: false });
+  if (session) {
+    $('#code-email').value = session.email;
+    onSubmit(
+      $('#supprimer'),
+      async (_, form) => {
+        await account.deleteSignedIn(session, value(form, 'confirmer'));
+        done();
+      },
+      { busy: 'Suppression…' },
+    );
+  }
+
+  let email = '';
+  onSubmit($('#code-envoi'), async (_, form) => {
+    email = value(form, 'code-email');
+    await account.sendCode(email);
+    show($('#code-suppression'));
+    say($('[data-sent]'), `Si un compte existe pour ${email}, un code vient d'y être envoyé.`, 'ok');
+    $('#code').focus();
+  });
+
+  onSubmit(
+    $('#code-suppression'),
+    async (_, form) => {
+      await account.deleteWithCode(email, value(form, 'code'));
+      done();
+    },
+    { busy: 'Suppression…' },
+  );
+</script>

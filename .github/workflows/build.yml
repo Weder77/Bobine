@@ -4,10 +4,11 @@ on:
   push:
     branches: ['**']
     tags: ['v*']
-    # Documentation alone does not need a Windows build (minutes count double).
-    paths-ignore: ['**.md', 'docs/**', 'tool/fake_xtream.py']
+    # Documentation alone does not need a Windows build (minutes count double),
+    # nor does the site (site.yml).
+    paths-ignore: ['**.md', 'docs/**', 'tool/fake_xtream.py', 'site/**', '.github/workflows/site.yml']
   pull_request:
-    paths-ignore: ['**.md', 'docs/**', 'tool/fake_xtream.py']
+    paths-ignore: ['**.md', 'docs/**', 'tool/fake_xtream.py', 'site/**', '.github/workflows/site.yml']
   workflow_dispatch:
 
 # Read-only by default: only the publishing job, which runs no third-party

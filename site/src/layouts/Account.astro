@@ -1,0 +1,74 @@
+---
+// The account pages: a quiet header (the address and "Se déconnecter" once
+// signed in), the page title with its stretch of thread, and for the pages
+// of a signed-in account the side menu.
+import Icon from '../components/Icon.astro';
+import Logo from '../components/Logo.astro';
+import Base from './Base.astro';
+
+interface Props {
+  title: string;
+  heading: string;
+  /** The side menu's entry for this page; none on the sign-in page. */
+  current?: 'tableau' | 'mot-de-passe' | 'suppression';
+  narrow?: boolean;
+}
+
+const { title, heading, current, narrow = false } = Astro.props;
+const menu = [
+  { id: 'tableau', href: '/compte/tableau/', label: "Vue d'ensemble" },
+  { id: 'mot-de-passe', href: '/compte/mot-de-passe/', label: 'Mot de passe' },
+  { id: 'suppression', href: '/compte/suppression/', label: 'Supprimer le compte' },
+];
+---
+
+<Base title={`${title} · Bobine`} description="L'espace compte de Bobine : état du compte, mot de passe et suppression." noindex>
+  <div class="account-page">
+    <header class="site-header site-header--plain">
+      <div class="wrap site-header__inner">
+        <Logo label="Bobine, retour au site" />
+        <div class="site-header__actions" data-when="signed-in" hidden>
+          <span class="site-header__email" data-account-email></span>
+          <button class="btn btn--ghost btn--sm" type="button" data-sign-out><Icon name="logout" size={16} />Se déconnecter</button>
+        </div>
+        <a class="link-quiet" href="/" data-when="signed-out"><Icon name="arrow-left" size={16} />Retour au site</a>
+      </div>
+    </header>
+
+    <main class:list={['account-main', { 'account-main--narrow': narrow }]}>
+      <div class="page-title">
+        <h1 class="display display--page">{heading}</h1>
+        <svg aria-hidden="true" width="240" height="26" viewBox="0 0 240 26">
+          <path d="M2 14 C 36 2, 66 24, 102 13 S 168 3, 204 13 C 218 17, 228 12, 236 8" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"></path>
+        </svg>
+      </div>
+      {
+        current ? (
+          <div class="account-layout">
+            <nav class="side-nav" aria-label="Compte" data-when="signed-in" hidden>
+              {menu.map((item) => (
+                <a href={item.href} aria-current={item.id === current ? 'page' : undefined}>
+                  {item.label}
+                </a>
+              ))}
+            </nav>
+            <div class="account-content">
+              <slot />
+            </div>
+          </div>
+        ) : (
+          <slot />
+        )
+      }
+    </main>
+
+    <footer class="site-footer site-footer--small">
+      <div class="wrap site-footer__inner">
+        <span>Bobine est uniquement un lecteur : il ne fournit aucun contenu.</span>
+        <a href="/confidentialite/">Confidentialité</a>
+        <a href="/mentions-legales/">Mentions légales</a>
+        <a href="https://github.com/Weder77/Bobine">Code source</a>
+      </div>
+    </footer>
+  </div>
+</Base>

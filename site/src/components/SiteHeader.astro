@@ -1,0 +1,28 @@
+---
+import Icon from './Icon.astro';
+import Logo from './Logo.astro';
+
+interface Props {
+  /** The landing page: anchors to its sections and the live spool. */
+  home?: boolean;
+}
+
+const { home = false } = Astro.props;
+const at = (id: string) => (home ? `#${id}` : `/#${id}`);
+---
+
+<header class="site-header">
+  <div class="wrap site-header__inner">
+    <Logo href={home ? '#haut' : '/'} label={home ? 'Bobine, retour en haut de la page' : 'Bobine, accueil du site'} live={home} />
+    <nav class="site-nav" aria-label="Sections du site">
+      <a href={at('fonctionnalites')}>Fonctionnalités</a>
+      <a href={at('android-tv')}>Android TV</a>
+      <a href={at('confidentialite')}>Confidentialité</a>
+      <a href="https://github.com/Weder77/Bobine">Code source</a>
+    </nav>
+    <div class="site-header__actions">
+      <a class="btn btn--ghost btn--sm" href="/compte/"><Icon name="user" />Mon compte</a>
+      <a class="btn btn--primary btn--sm" href={at('telecharger')}>Télécharger</a>
+    </div>
+  </div>
+</header>

@@ -1,0 +1,18 @@
+---
+// One section's stretch of the thread, in % of the section: one path for wide
+// screens, one for phones (where the margins are too narrow to weave). Each
+// stretch starts where the previous one ends; scripts/thread.js draws them
+// as the page scrolls. Without the script, the thread is simply all there.
+import { threads } from '../data/thread.js';
+
+interface Props {
+  name: keyof typeof threads;
+}
+
+const { name } = Astro.props;
+const { wide, phone } = threads[name];
+---
+
+<svg class="thread" data-thread={name} aria-hidden="true" viewBox="0 0 100 100" preserveAspectRatio="none">
+  <path d={wide} data-wide={wide} data-phone={phone}></path>
+</svg>

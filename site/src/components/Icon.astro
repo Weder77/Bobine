@@ -1,0 +1,51 @@
+---
+// Stroke icons (24 × 24), drawn for the site. Decorative: hidden from
+// assistive technology; a button made of an icon alone gets its own label.
+interface Props {
+  name: keyof typeof paths;
+  size?: number;
+  stroke?: number;
+  class?: string;
+}
+
+const paths = {
+  download: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/>',
+  code: '<path d="m8 6-6 6 6 6"/><path d="m16 6 6 6-6 6"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1-4 4-6 8-6s7 2 8 6"/>',
+  'arrow-right': '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+  'arrow-left': '<path d="M19 12H5"/><path d="m11 18-6-6 6-6"/>',
+  monitor: '<rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/>',
+  tv: '<rect x="2" y="6" width="20" height="13" rx="2"/><path d="m8 2 4 4 4-4"/>',
+  film: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18"/><path d="M17 3v18"/><path d="M3 8h4"/><path d="M3 16h4"/><path d="M17 8h4"/><path d="M17 16h4"/>',
+  zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  grid: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.5 3.4-5.5 6.5-5.5s5.7 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7"/><path d="M18 14.8c1.9.7 3.1 2.5 3.5 5.2"/>',
+  lock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
+  server: '<rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01"/><path d="M7 16.5h.01"/>',
+  router: '<rect x="2" y="13" width="20" height="8" rx="2"/><path d="M7 13V8"/><path d="M17 13V8"/><path d="M6 17h.01"/><path d="M10 17h.01"/>',
+  antenna: '<path d="M12 12v10"/><path d="M8 22h8"/><path d="M5 3l7 9 7-9"/><path d="M8 7h8"/>',
+  alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4"/><path d="M12 17h.01"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
+  x: '<path d="M6 6l12 12"/><path d="M18 6 6 18"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  logout: '<path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H4"/>',
+  trash: '<path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/>',
+};
+
+const { name, size = 18, stroke = 2, class: className } = Astro.props;
+---
+
+<svg
+  class={className}
+  aria-hidden="true"
+  width={size}
+  height={size}
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width={stroke}
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  set:html={paths[name]}
+/>

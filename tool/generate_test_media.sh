@@ -31,7 +31,7 @@ for i in $(seq 0 11); do
     -annotate +0-40 "${titles[$i]}" -depth 8 "PNG32:poster$i.png"
   convert -size 1280x720 gradient:"${colors[$i]}"-"#05060a" -quality 85 "backdrop$i.jpg" && mv "backdrop$i.jpg" "backdrop$i.png"
 done
-names=("TF" "F2" "SP" "CN" "AR" "M6" "NW" "KD")
+names=("AU" "LU" "SP" "CN" "AT" "PX" "NW" "KD")
 for i in $(seq 0 7); do
   convert -size 128x128 xc:none -fill "${colors[$i]}" -draw "roundrectangle 0,0 127,127 24,24" \
     -gravity center -fill white -pointsize 52 -annotate +0+0 "${names[$i]}" -depth 8 "PNG32:logo$i.png"

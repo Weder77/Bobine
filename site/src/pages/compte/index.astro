@@ -1,0 +1,130 @@
+---
+import Icon from '../../components/Icon.astro';
+import PasswordField from '../../components/PasswordField.astro';
+import Account from '../../layouts/Account.astro';
+---
+
+<Account title="Connexion" heading="Mon compte" narrow>
+  <p class="lede">
+    Connecte-toi avec l'adresse et le mot de passe de ton compte Bobine pour voir son état, changer le mot de passe ou supprimer le
+    compte.
+  </p>
+  <p class="message" data-flash role="status"></p>
+
+  <form class="panel" id="connexion" novalidate>
+    <div class="field">
+      <label for="email">Adresse e-mail</label>
+      <input class="input" id="email" type="email" autocomplete="email" placeholder="toi@exemple.fr" required />
+    </div>
+    <PasswordField id="motdepasse" label="Mot de passe" autocomplete="current-password" placeholder="Ton mot de passe">
+      <a slot="aside" class="text-link" href="#oubli" data-open-forgot>Mot de passe oublié ?</a>
+    </PasswordField>
+    <p class="message" data-message role="alert"></p>
+    <button class="btn btn--primary btn--block btn--lg" type="submit">Se connecter</button>
+  </form>
+
+  <div class="note">
+    <Icon name="lock" size={20} class="ok-icon" />
+    <p>
+      Ton mot de passe ne quitte pas ce navigateur. Il sert à calculer ici même deux clés, une pour te connecter et une pour
+      chiffrer : seule la première part au serveur. Le calcul prend une ou deux secondes.
+    </p>
+  </div>
+
+  <section class="divider-section" id="oubli" aria-labelledby="titre-oubli" hidden>
+    <h2 id="titre-oubli">Mot de passe oublié</h2>
+    <div class="note note--warn">
+      <Icon name="alert" size={22} />
+      <div class="note__body">
+        <p>
+          Tes données sont chiffrées avec l'ancien mot de passe : un nouveau mot de passe vide le compte. Le premier appareil qui se
+          reconnecte avec le nouveau y renvoie ses sources, profils et reprises. Tous tes appareils sont déconnectés.
+        </p>
+      </div>
+    </div>
+    <form class="panel" id="oubli-envoi" novalidate>
+      <div class="inline-form">
+        <div class="field">
+          <label for="oubli-email">Adresse e-mail du compte</label>
+          <input class="input" id="oubli-email" type="email" autocomplete="email" placeholder="toi@exemple.fr" required />
+        </div>
+        <button class="btn btn--ghost btn--lg" type="submit">Recevoir un code</button>
+      </div>
+      <p class="message" data-message role="alert"></p>
+    </form>
+    <form class="panel" id="oubli-nouveau" novalidate hidden>
+      <p class="message message--ok" data-sent role="status"></p>
+      <div class="field">
+        <label for="oubli-code">Code reçu par e-mail</label>
+        <input class="input input--code" id="oubli-code" type="text" inputmode="numeric" autocomplete="one-time-code" required />
+      </div>
+      <div class="fields-row">
+        <PasswordField id="oubli-mdp" label="Nouveau mot de passe" autocomplete="new-password" placeholder="Au moins 8 caractères" minlength={8} />
+        <PasswordField id="oubli-confirmation" label="Confirme-le" autocomplete="new-password" minlength={8} />
+      </div>
+      <label class="check" for="oubli-compris">
+        <input id="oubli-compris" type="checkbox" required />
+        J'ai compris : le compte sera vidé, puis rempli de nouveau par mon prochain appareil connecté.
+      </label>
+      <p class="message" data-message role="alert"></p>
+      <div class="form-actions">
+        <button class="btn btn--primary" type="submit"><Icon name="check" stroke={2.2} />Changer le mot de passe</button>
+      </div>
+    </form>
+  </section>
+
+  <div class="divider-section">
+    <p class="fineprint">Pas encore de compte ? Il se crée dans l'appli Bobine, dans <strong>Paramètres → Compte</strong>.</p>
+    <p class="fineprint">
+      Tu veux supprimer ton compte mais tu as oublié le mot de passe ?
+      <a href="/compte/suppression/">Supprime-le avec un code reçu par e-mail</a>.
+    </p>
+  </div>
+</Account>
+
+<script>
+  import { clearSession, saveSession, setFlash } from '../../scripts/session.js';
+  import { $, account, onSubmit, passwordToggles, say, show, showFlash, signedInPage, value } from '../../scripts/ui.js';
+
+  passwordToggles();
+  showFlash($('[data-flash]'));
+  if (await signedInPage({ required: false })) location.replace('/compte/tableau/');
+
+  onSubmit(
+    $('#connexion'),
+    async (_, form) => {
+      const session = await account.signIn(value(form, 'email'), value(form, 'motdepasse'));
+      saveSession(session);
+      location.assign('/compte/tableau/');
+    },
+    { busy: 'Connexion…' },
+  );
+
+  // Forgotten password: a code, then the new password.
+  const forgot = $('#oubli');
+  const openForgot = () => {
+    show(forgot);
+    const typed = value($('#connexion'), 'email');
+    if (typed) $('#oubli-email').value = typed;
+  };
+  $('[data-open-forgot]').addEventListener('click', openForgot);
+  if (location.hash === '#oubli') openForgot();
+
+  let email = '';
+  onSubmit($('#oubli-envoi'), async (_, form) => {
+    email = value(form, 'oubli-email');
+    await account.sendCode(email);
+    show($('#oubli-nouveau'));
+    say($('[data-sent]'), `Si un compte existe pour ${email}, un code vient d'y être envoyé.`, 'ok');
+    $('#oubli-code').focus();
+  });
+
+  onSubmit($('#oubli-nouveau'), async (_, form) => {
+    const next = value(form, 'oubli-mdp');
+    if (next !== value(form, 'oubli-confirmation')) throw new Error('Les deux mots de passe ne sont pas les mêmes.');
+    await account.resetPassword(email, value(form, 'oubli-code'), next);
+    clearSession();
+    setFlash('Mot de passe changé. Reconnecte tes appareils avec le nouveau : le premier renverra ses données sur le compte.');
+    location.assign('/compte/');
+  });
+</script>

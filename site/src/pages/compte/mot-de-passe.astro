@@ -1,0 +1,62 @@
+---
+import Icon from '../../components/Icon.astro';
+import PasswordField from '../../components/PasswordField.astro';
+import Account from '../../layouts/Account.astro';
+---
+
+<Account title="Changer le mot de passe" heading="Mon compte" current="mot-de-passe">
+  <h2 class="display display--section">Changer le mot de passe</h2>
+
+  <div class="note note--warn">
+    <Icon name="alert" size={22} />
+    <div class="note__body">
+      <p><strong>À lire avant de changer</strong></p>
+      <p>
+        Tes données sont chiffrées avec ton mot de passe actuel. En le changeant, le compte est vidé, puis le premier appareil qui se
+        reconnecte avec le nouveau mot de passe y renvoie ses sources, profils et reprises. Tous tes appareils sont déconnectés.
+      </p>
+      <p>Vérifie qu'au moins un de tes appareils a des données à jour.</p>
+    </div>
+  </div>
+
+  <form class="panel" id="changer" novalidate>
+    <PasswordField id="actuel" label="Mot de passe actuel" autocomplete="current-password" />
+    <div class="fields-row">
+      <PasswordField id="nouveau" label="Nouveau mot de passe" autocomplete="new-password" placeholder="Au moins 8 caractères" minlength={8} />
+      <PasswordField id="confirmation" label="Confirme-le" autocomplete="new-password" minlength={8} />
+    </div>
+    <label class="check" for="compris">
+      <input id="compris" type="checkbox" required />
+      J'ai compris : le compte sera vidé, puis rempli de nouveau par mon prochain appareil connecté.
+    </label>
+    <p class="message" data-message role="alert"></p>
+    <div class="form-actions">
+      <a class="btn btn--ghost" href="/compte/tableau/">Annuler</a>
+      <button class="btn btn--primary" type="submit"><Icon name="check" stroke={2.2} />Changer le mot de passe</button>
+    </div>
+  </form>
+
+  <p class="meta">Les clés sont recalculées dans ce navigateur (une ou deux secondes). Le nouveau mot de passe n'est jamais envoyé tel quel.</p>
+</Account>
+
+<script>
+  import { clearSession, setFlash } from '../../scripts/session.js';
+  import { $, account, onSubmit, passwordToggles, signedInPage, value } from '../../scripts/ui.js';
+
+  passwordToggles();
+  const session = await signedInPage();
+  if (session) {
+    onSubmit(
+      $('#changer'),
+      async (_, form) => {
+        const next = value(form, 'nouveau');
+        if (next !== value(form, 'confirmation')) throw new Error('Les deux nouveaux mots de passe ne sont pas les mêmes.');
+        await account.changePassword(session.email, value(form, 'actuel'), next);
+        clearSession();
+        setFlash('Mot de passe changé. Tous tes appareils sont déconnectés : reconnecte-les avec le nouveau, le premier renverra ses données sur le compte.');
+        location.assign('/compte/');
+      },
+      { busy: 'Changement…' },
+    );
+  }
+</script>

@@ -1,0 +1,26 @@
+[
+  {
+    "email": "camille@exemple.fr",
+    "password": "correct horse battery staple",
+    "iterations": 1000,
+    "authSecret": "6nI2lIp_DaaN98ECSknhbAWd2TISnS5GcGcQCVLWLlU",
+    "encKey": "Hr2H+M2S74FuctfGSQdDsyOT0bbDkNSBvjBoX4vf9eo=",
+    "idKey": "U0old1TenfCbhLXSNIIaBWzjKKR/I16t6bvTN2a75aE="
+  },
+  {
+    "email": "  Elodie.Martin@Exemple.FR ",
+    "password": "mot de passe accentué é ü 🎬",
+    "iterations": 1000,
+    "authSecret": "ZPXc2q1iSiwzXg_dHBwKUJj5wvHkZPfrAiq_p0kBOmc",
+    "encKey": "qeOTBARPuJW+ptMG3wGOdCg1IEDoJSFDZ5rwu+6qtPE=",
+    "idKey": "UQtsvahj1IwDxD2QNqeBzZb2XKmTXlZR0nc2SNswhhc="
+  },
+  {
+    "email": "test@bobine.app",
+    "password": "12345678",
+    "iterations": 600000,
+    "authSecret": "SYqep_8zTwqUPqgFrkQv3pkLh12darcmLvk1Qbfi04M",
+    "encKey": "enyWCGhYQlUJo7tvmvbtfDT2C/4/V1sovK39rIJkPmU=",
+    "idKey": "CgLky+h1zUgeVA8UTPhJ2gxCotm/IqTHQ1eMVnAylmU="
+  }
+]

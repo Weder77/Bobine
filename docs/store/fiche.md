@@ -47,7 +47,7 @@ Textes et réponses à reprendre dans la Play Console. Limites de Google entre p
 
 **Coordonnées** : une adresse e-mail de contact (obligatoire) et le site du projet.
 
-**Règles de confidentialité** (URL) : https://github.com/Weder77/Bobine/blob/main/docs/confidentialite.md
+**Règles de confidentialité** (URL) : https://getbobine.app/confidentialite/ (le texte de `docs/confidentialite.md`, servi par le site).
 
 ## Éléments graphiques
 
@@ -65,13 +65,13 @@ Les captures se font avec le faux serveur (`tool/fake_xtream.py`, médias de `to
 |---|---|
 | L'appli collecte-t-elle ou partage-t-elle des données ? | Oui (compte facultatif) |
 | Les données sont-elles chiffrées en transit ? | Oui (HTTPS) |
-| L'utilisateur peut-il demander la suppression ? | Oui : dans l'appli (*Paramètres → Compte → Supprimer le compte*) |
+| L'utilisateur peut-il demander la suppression ? | Oui : dans l'appli (*Paramètres → Compte → Supprimer le compte*) et sur le site, sans l'appli (*Supprimer mon compte*) |
 | **Infos personnelles → Adresse e-mail** | Collectée, non partagée. Facultative. Finalité : gestion du compte |
 | **Fichiers et documents / Autres contenus** (données synchronisées) | Collectées, non partagées, chiffrées de bout en bout. Facultatives. Finalité : fonctionnalité de l'appli |
 | Données de localisation, contacts, identifiants publicitaires, historique Web… | Non |
 | Données envoyées à TMDB | Titre et année du contenu consulté, seulement avec la clé TMDB de l'utilisateur. Ce ne sont pas des données personnelles : à ne pas déclarer, mais à mentionner dans la politique (fait) |
 
-Google demande aussi une **adresse Web de suppression du compte**. Les instructions sont dans la politique de confidentialité, section « Supprimer ses données ».
+Google demande aussi une **adresse Web de suppression du compte**, utilisable sans l'appli : https://getbobine.app/compte/suppression/. On y supprime le compte avec son mot de passe ou, s'il est oublié, avec un code reçu par e-mail.
 
 ## Autres déclarations
 

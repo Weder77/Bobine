@@ -17,8 +17,8 @@ IMG = os.path.join(ROOT, "img")
 RATE = int(os.environ.get("RATE", "3000000"))
 
 CHANNELS = [
-    ("TF1 HD", "tf1.fr", "1"), ("France 2 HD", "france2.fr", "1"), ("Sport Max", "sportmax", "2"),
-    ("Ciné Nuit", "cinenuit", "3"), ("Arte", "arte.fr", "1"), ("M6 HD", "m6.fr", "1"),
+    ("Aurore HD", "aurore", "1"), ("Lumière HD", "lumiere", "1"), ("Sport Max", "sportmax", "2"),
+    ("Ciné Nuit", "cinenuit", "3"), ("Atelier", "atelier", "1"), ("Pixel HD", "pixel", "1"),
     ("News 24", "news24", "4"), ("Kids TV", "kids", "5"),
 ]
 MOVIE_TITLES = ["Horizon", "Le Phare", "Nuit Blanche", "Odyssée", "Brume", "Atlas",

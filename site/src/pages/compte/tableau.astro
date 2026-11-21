@@ -1,0 +1,131 @@
+---
+import Icon from '../../components/Icon.astro';
+import Account from '../../layouts/Account.astro';
+---
+
+<Account title="Mon compte" heading="Mon compte" current="tableau">
+  <p class="message" data-flash role="status"></p>
+
+  <section class="status" aria-label="État du compte" aria-busy="true" data-status>
+    <div class="status__top">
+      <div class="status__who">
+        <div class="avatar" aria-hidden="true" data-initial>·</div>
+        <div>
+          <p class="status__email" data-email>Chargement…</p>
+          <p class="meta" data-created hidden></p>
+        </div>
+      </div>
+      <p class="badge">Compte actif</p>
+    </div>
+    <dl class="stats">
+      <div><dt>Dernier changement</dt><dd data-last>—</dd></div>
+      <div><dt>Éléments</dt><dd data-items>—</dd></div>
+      <div><dt>Espace utilisé</dt><dd data-bytes>—</dd></div>
+      <div><dt>Hébergement</dt><dd>Europe</dd></div>
+    </dl>
+    <div class="usage" data-usage hidden>
+      <div class="usage__bar" role="img" data-usage-bar><div class="usage__fill" data-usage-fill></div></div>
+      <p class="meta" data-usage-text></p>
+    </div>
+    <div class="note">
+      <Icon name="lock" size={18} class="ok-icon" />
+      <p>
+        Le serveur ne connaît que ces chiffres. Le contenu du compte (sources, profils, favoris, reprises) est chiffré et illisible
+        ici : pour le voir, ouvre Bobine.
+      </p>
+    </div>
+    <p class="message" data-message role="alert"></p>
+  </section>
+
+  <section class="settings" aria-label="Réglages du compte">
+    <div class="setting">
+      <div class="setting__text">
+        <h2>Mot de passe</h2>
+        <p>Le changer vide le compte : ton prochain appareil connecté y renvoie ses données, chiffrées avec le nouveau.</p>
+      </div>
+      <a class="btn btn--ghost btn--sm" href="/compte/mot-de-passe/">Changer</a>
+    </div>
+    <div class="setting">
+      <div class="setting__text">
+        <h2>Appareils connectés</h2>
+        <p>Déconnecte Bobine sur tous tes appareils. Chacun redemandera le mot de passe à sa prochaine synchro.</p>
+      </div>
+      <button class="btn btn--ghost btn--sm" type="button" data-sign-out-all>Tout déconnecter</button>
+    </div>
+    <div class="setting">
+      <div class="setting__text">
+        <h2>Supprimer le compte</h2>
+        <p>Supprime le compte et toutes les données synchronisées, définitivement. Tes appareils gardent leurs données.</p>
+      </div>
+      <a class="btn btn--danger-ghost btn--sm" href="/compte/suppression/">Supprimer…</a>
+    </div>
+  </section>
+</Account>
+
+<script>
+  import { clearSession, setFlash } from '../../scripts/session.js';
+  import { $, account, say, show, showFlash, signedInPage } from '../../scripts/ui.js';
+
+  const QUOTA_BYTES = 20 * 1024 * 1024;
+  const QUOTA_ITEMS = 20000;
+  const number = new Intl.NumberFormat('fr-FR');
+  const mo = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 });
+  const day = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long' });
+  const relative = new Intl.RelativeTimeFormat('fr-FR', { numeric: 'auto' });
+
+  function ago(date) {
+    const minutes = Math.round((date.getTime() - Date.now()) / 60000);
+    if (Math.abs(minutes) < 60) return relative.format(minutes, 'minute');
+    const hours = Math.round(minutes / 60);
+    if (Math.abs(hours) < 48) return relative.format(hours, 'hour');
+    return `le ${day.format(date)}`;
+  }
+
+  showFlash($('[data-flash]'));
+  const session = await signedInPage();
+  if (session) {
+    try {
+      const o = await account.overview(session);
+      $('[data-email]').textContent = o.email;
+      $('[data-initial]').textContent = o.email.charAt(0) || '·';
+      if (o.createdAt) {
+        $('[data-created]').textContent = `Compte Bobine · créé le ${day.format(o.createdAt)}`;
+        show($('[data-created]'));
+      }
+      if (o.items != null) {
+        $('[data-last]').textContent = o.lastChange ? ago(o.lastChange) : 'aucun';
+        $('[data-items]').textContent = number.format(o.items);
+        $('[data-bytes]').textContent = `${mo.format(o.bytes / 1024 / 1024)} Mo`;
+        const used = Math.min(1, Math.max(o.bytes / QUOTA_BYTES, o.items / QUOTA_ITEMS));
+        $('[data-usage-fill]').style.width = `${(used * 100).toFixed(1)}%`;
+        const text = `${mo.format(o.bytes / 1024 / 1024)} Mo sur 20 Mo · ${number.format(o.items)} éléments sur ${number.format(QUOTA_ITEMS)}`;
+        $('[data-usage-text]').textContent = text;
+        $('[data-usage-bar]').setAttribute('aria-label', text);
+        show($('[data-usage]'));
+      }
+    } catch (e) {
+      if (e.status === 401) {
+        clearSession();
+        setFlash(e.message, 'error');
+        location.replace('/compte/');
+      }
+      say($('[data-status] [data-message]'), e.message);
+    } finally {
+      $('[data-status]').removeAttribute('aria-busy');
+    }
+
+    const all = $('[data-sign-out-all]');
+    all.addEventListener('click', async () => {
+      all.disabled = true;
+      try {
+        await account.signOut(session, 'global');
+        clearSession();
+        setFlash('Tous tes appareils sont déconnectés : chacun redemandera le mot de passe.');
+        location.assign('/compte/');
+      } catch (e) {
+        say($('[data-status] [data-message]'), e.message);
+        all.disabled = false;
+      }
+    });
+  }
+</script>
