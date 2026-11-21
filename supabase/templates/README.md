@@ -19,7 +19,10 @@ site : ils sont restés ceux de Supabase.
   est aussi dans l'objet, lisible depuis la notification du téléphone quand on se connecte sur la télé.
 - **« Reset password » sert à deux choses** : choisir un nouveau mot de passe (dans l'appli ou sur le site) et
   supprimer son compte sans mot de passe (getbobine.app/compte/suppression/). Le texte parle des deux.
-- **Variables** : `{{ .Token }}` et `{{ .Email }}` partout ; `{{ .OldEmail }}` seulement dans « Email address changed ».
+- **Variables** : `{{ .Token }}` et `{{ .Email }}` partout ; `{{ .OldEmail }}` (l'ancienne adresse) n'existe que dans
+  « Email address changed » (`email_changed_notification`). Liste complète :
+  [Customizing email templates](https://supabase.com/docs/guides/local-development/customizing-email-templates), section
+  des variables.
 - **Rien d'extérieur** : ni image, ni police, ni lien de suivi. Fond clair, beaucoup de messageries inversant les
   fonds sombres.
 - **Envoi** : SMTP de Resend, depuis `no-reply@getbobine.app` (domaine vérifié : DKIM `resend._domainkey`, sous-domaine
