@@ -1,0 +1,24 @@
+---
+// The big spool at the top of the landing page. Its thread leaves from the
+// bottom centre of the drawing, where the first stretch of the thread starts.
+// scripts/thread.js turns it (the stripes move) and empties it as the page
+// goes by.
+const stripes = [-56, -28, 0, 28, 56, 84, 112, 140, 168, 196, 224, 252];
+---
+
+<svg role="img" aria-label="Une bobine de fil orange, dont le fil descend le long de la page" width="200" height="300" viewBox="0 0 200 300">
+  <defs>
+    <clipPath id="spool-clip">
+      <rect data-spool="clip" x="38" y="28" width="124" height="200" rx="4"></rect>
+    </clipPath>
+  </defs>
+  <rect data-spool="body" x="38" y="28" width="124" height="200" rx="4" fill="#ff5a36"></rect>
+  <g clip-path="url(#spool-clip)">
+    <g data-spool="stripes" stroke="#b83a1d" stroke-width="6" stroke-linecap="round" opacity="0.85">
+      {stripes.map((y) => <path d={`M20 ${y + 36} L180 ${y}`} />)}
+    </g>
+  </g>
+  <rect x="8" y="0" width="184" height="30" rx="9" fill="#f3eee8"></rect>
+  <rect x="8" y="226" width="184" height="30" rx="9" fill="#f3eee8"></rect>
+  <path data-spool="tail" d="M161 150 C 199 160, 204 232, 168 262 C 140 284, 106 290, 100 300" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"></path>
+</svg>

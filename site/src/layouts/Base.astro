@@ -1,0 +1,33 @@
+---
+import '../styles/global.css';
+
+import icon from '../../../docs/icon.png';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Account pages: nothing to find there with a search engine. */
+  noindex?: boolean;
+  bodyClass?: string;
+}
+
+const { title, description, noindex = false, bodyClass } = Astro.props;
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="referrer" content="same-origin" />
+    <meta name="theme-color" content="#0d0c0b" />
+    {noindex && <meta name="robots" content="noindex" />}
+    <link rel="icon" type="image/png" href={icon.src} />
+    <link rel="apple-touch-icon" href={icon.src} />
+  </head>
+  <body class={bodyClass}>
+    <slot />
+  </body>
+</html>

@@ -1,0 +1,19 @@
+---
+// The privacy policy is docs/confidentialite.md, also linked from the Play
+// Store: one text, shown here as it is.
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import Base from '../layouts/Base.astro';
+
+import { Content } from '../../../docs/confidentialite.md';
+---
+
+<Base title="Politique de confidentialité · Bobine" description="Les données que Bobine traite, dans l'appli, avec le compte facultatif et sur le site.">
+  <SiteHeader />
+  <main class="wrap account-main">
+    <article class="prose">
+      <Content />
+    </article>
+  </main>
+  <SiteFooter />
+</Base>

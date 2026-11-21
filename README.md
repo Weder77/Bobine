@@ -341,10 +341,11 @@ lib/
 │   ├── relay.dart           Relais HTTP local : User-Agent, HLS réécrit, plages d'octets, fichiers locaux
 │   └── cast_service.dart    Session en cours, position, commandes, reprise sur l'ordinateur
 └── ui/              Accueil, Direct + guide, Films/Séries, fiches, recherche, profils, paramètres
-test/                Tests (analyseurs, import complet avec faux serveur, « Reprendre », lecteur, images, synchro)
-tool/                Faux serveur Xtream, générateur de vidéos de test, dessin de l'icône et des avatars
+test/                Tests (analyseurs, import complet avec faux serveur, « Reprendre », lecteur, images, synchro, clés du compte)
+tool/                Faux serveur Xtream, générateur de vidéos de test, dessin de l'icône et des avatars, vecteurs de clés
 supabase/migrations/ Table de synchro, règles d'accès et fonctions du serveur
-docs/                Captures d'écran, signature des mises à jour
+docs/                Captures d'écran, signature des mises à jour, politique de confidentialité
+site/                Site vitrine et espace compte (état, mot de passe, suppression) : voir site/README.md
 ```
 
 ### Synchronisation : comment ça marche

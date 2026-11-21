@@ -1,0 +1,263 @@
+---
+import Eyebrow from '../components/Eyebrow.astro';
+import Icon from '../components/Icon.astro';
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import Spool from '../components/Spool.astro';
+import Thread from '../components/Thread.astro';
+import Base from '../layouts/Base.astro';
+
+import accueil from '../../../docs/screenshots/androidtv-accueil.jpg';
+import direct from '../../../docs/screenshots/androidtv-direct.jpg';
+
+const releases = 'https://github.com/Weder77/Bobine/releases';
+---
+
+<Base
+  title="Bobine, lecteur IPTV pour Windows et Android TV"
+  description="Bobine range le direct, le guide TV, les films et les séries au même endroit, sur ordinateur comme sur la télé. Il ne fournit aucun contenu : il lit ce que tu as le droit de regarder."
+>
+  <div data-bobine-page id="haut">
+    <SiteHeader home />
+
+    <main>
+      <div class="spool-stage">
+        <Spool />
+      </div>
+
+      <section class="hero" aria-labelledby="titre">
+        <Thread name="hero" />
+        <div class="hero__inner">
+          <p class="pill">Nouveau : Bobine 2.0 sur Android TV</p>
+          <h1 class="display display--hero" id="titre">Le lecteur<br />qui va vite.</h1>
+          <p class="lede lede--hero">
+            Le direct, le guide TV, les films et les séries au même endroit, sur ordinateur comme sur la télé. Le moteur
+            libmpv lit à peu près tous les flux, et les avances rapides sont instantanées.
+          </p>
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" href="#telecharger"><Icon name="download" stroke={2.2} />Télécharger Bobine</a>
+            <a class="btn btn--glass btn--lg" href="https://github.com/Weder77/Bobine"><Icon name="code" stroke={2.2} />Voir le code source</a>
+          </div>
+          <p class="meta">Windows · Android TV — code public, sans publicité ni pistage</p>
+          <p class="fineprint">Bobine est uniquement un lecteur : il ne fournit aucun contenu.</p>
+        </div>
+      </section>
+
+      <section class="section" aria-label="Aperçu">
+        <Thread name="shot" />
+        <div class="wrap section__inner">
+          <img
+            class="shot"
+            src={accueil.src}
+            width={accueil.width}
+            height={accueil.height}
+            alt="L'accueil de Bobine sur une télé : un film à la une et les chaînes en direct"
+          />
+        </div>
+      </section>
+
+      <section class="section" id="usages" aria-labelledby="titre-usages">
+        <Thread name="use" />
+        <div class="wrap section__inner section__inner--tight">
+          <div class="section__head">
+            <Eyebrow>Avec quoi l'utiliser</Eyebrow>
+            <h2 class="display" id="titre-usages">Tes chaînes, pas les nôtres.</h2>
+            <p class="lede">
+              Bobine ne fournit aucune chaîne. Il lit celles que tu as déjà le droit de regarder, d'où qu'elles viennent.
+            </p>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <div class="card__icon"><Icon name="router" size={22} /></div>
+              <h3>La télé de ta box</h3>
+              <p>Certaines box opérateur, comme la Freebox, publient la liste de leurs chaînes sur le réseau de la maison.</p>
+            </div>
+            <div class="card">
+              <div class="card__icon"><Icon name="antenna" size={22} /></div>
+              <h3>La TNT de ton antenne</h3>
+              <p>Avec un tuner réseau comme HDHomeRun ou un serveur TVHeadend, les chaînes de ton antenne arrivent dans Bobine.</p>
+            </div>
+            <div class="card">
+              <div class="card__icon"><Icon name="server" size={22} /></div>
+              <h3>Ton propre serveur</h3>
+              <p>Les flux de ton serveur multimédia, chez toi ou à distance.</p>
+            </div>
+          </div>
+          <p class="fineprint">Utilise Bobine uniquement avec des contenus que tu as le droit de regarder.</p>
+        </div>
+      </section>
+
+      <section class="section" id="telecharger" aria-labelledby="titre-telecharger">
+        <Thread name="dl" />
+        <div class="wrap section__inner section__inner--tight">
+          <div class="section__head">
+            <Eyebrow>Télécharger</Eyebrow>
+            <h2 class="display" id="titre-telecharger">Sur ton ordi, sur ta télé.</h2>
+          </div>
+          <div class="cards">
+            <div class="card card--platform">
+              <Icon name="monitor" size={28} stroke={1.8} class="card__glyph" />
+              <h3>Windows</h3>
+              <p>Installeur .exe ou archive .zip, 64 bits.</p>
+              <a class="btn btn--primary btn--sm" href={`${releases}/latest`}>Télécharger</a>
+            </div>
+            <div class="card card--platform">
+              <Icon name="tv" size={28} stroke={1.8} class="card__glyph" />
+              <h3>Android TV</h3>
+              <p>Google TV, Chromecast avec Google TV et box Android TV.</p>
+              <!-- The Play Store page, once Bobine is published there. -->
+              <a class="btn btn--ghost btn--sm" href="#android-tv">Sur Google Play</a>
+            </div>
+          </div>
+          <div class="downloads-foot">
+            <p class="fineprint">macOS et Linux : pas encore de version prête à installer.</p>
+            <a class="link-quiet" href={releases}>Toutes les versions et leurs nouveautés sur GitHub <Icon name="arrow-right" size={16} /></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--tall section--lead" id="fonctionnalites" aria-labelledby="titre-fonctionnalites">
+        <Thread name="feat" />
+        <div class="wrap section__inner">
+          <div class="section__head">
+            <Eyebrow>Fonctionnalités</Eyebrow>
+            <h2 class="display" id="titre-fonctionnalites">Tout ce que ta source propose, bien rangé.</h2>
+            <p class="lede">Tes chaînes, tes films, tes séries et le guide TV, bien rangés et faciles à reprendre.</p>
+          </div>
+          <div class="cards">
+            <div class="card card--feature">
+              <div class="card__icon"><Icon name="tv" size={22} /></div>
+              <h3>Direct et guide TV</h3>
+              <p>
+                Une tuile par chaîne avec le programme en cours. Un guide en grille, fluide même avec des milliers de chaînes. Les
+                noms sont nettoyés et les qualités regroupées.
+              </p>
+            </div>
+            <div class="card card--feature">
+              <div class="card__icon"><Icon name="film" size={22} /></div>
+              <h3>Films et séries</h3>
+              <p>Reprends là où tu t'étais arrêté, avec l'épisode suivant qui se lance tout seul. Fiches détaillées, catégories et tri.</p>
+            </div>
+            <div class="card card--feature">
+              <div class="card__icon"><Icon name="zap" size={22} /></div>
+              <h3>Un lecteur qui ne rame pas</h3>
+              <p>libmpv et le décodage matériel. Pause et retour en arrière sur le direct, reconnexion automatique quand le flux coupe.</p>
+            </div>
+            <div class="card card--feature">
+              <div class="card__icon"><Icon name="grid" size={22} /></div>
+              <h3>Multi-écran</h3>
+              <p>Deux à quatre chaînes côte à côte, sur ordinateur.</p>
+            </div>
+            <div class="card card--feature">
+              <div class="card__icon"><Icon name="users" size={22} /></div>
+              <h3>Profils et contrôle parental</h3>
+              <p>Jusqu'à 10 profils, chacun avec ses favoris et ses reprises. Un profil enfant et un code parental pour le reste.</p>
+            </div>
+            <div class="card card--feature">
+              <div class="card__icon"><Icon name="lock" size={22} /></div>
+              <h3>Synchro chiffrée</h3>
+              <p>Un compte facultatif pour retrouver sources, profils et reprises sur tous tes appareils, chiffrés de bout en bout.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section--tall" id="android-tv" aria-labelledby="titre-tv">
+        <Thread name="tv" />
+        <div class="wrap section__inner">
+          <div class="split">
+            <div class="split__text">
+              <Eyebrow>Nouveau · Android TV</Eyebrow>
+              <h2 class="display" id="titre-tv">Sur la télé, à la télécommande.</h2>
+              <p class="lede">
+                Connecte-toi à ton compte Bobine : tes sources, profils et réglages reviennent tout seuls. Sans compte, tout reste sur
+                la télé.
+              </p>
+              <ul class="keys">
+                <li><span class="kbd">Flèches</span><span class="keys__what">parcourent chaque écran, avec un focus bien visible.</span></li>
+                <li><span class="kbd">OK</span><span class="keys__what">lance la chaîne, le film ou l'épisode.</span></li>
+                <li><span class="kbd">OK maintenu</span><span class="keys__what">ouvre les actions rapides : favoris, Ma liste, reprendre depuis le début.</span></li>
+                <li><span class="kbd">Retour</span><span class="keys__what">revient d'un cran : la recherche, l'accueil, puis la sortie.</span></li>
+              </ul>
+              <p class="fineprint">Sur la télé, pas de multi-écran, de cast ni d'enregistrements.</p>
+              <a class="btn btn--ghost" href="#telecharger">Disponible sur Google Play</a>
+            </div>
+            <div class="split__media">
+              <div class="tv">
+                <img
+                  src={direct.src}
+                  width={direct.width}
+                  height={direct.height}
+                  loading="lazy"
+                  alt="L'écran Direct de Bobine sur Android TV : une mosaïque de chaînes, la première sélectionnée à la télécommande"
+                />
+              </div>
+              <div class="tv__stand" aria-hidden="true"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="confidentialite" aria-labelledby="titre-confidentialite">
+        <Thread name="acc" />
+        <div class="wrap section__inner">
+          <div class="section__head">
+            <Eyebrow>Compte et confidentialité</Eyebrow>
+            <h2 class="display" id="titre-confidentialite">Le serveur ne peut pas te lire.</h2>
+            <p class="lede">
+              Le compte est facultatif et ne sert qu'à une chose : retrouver tes sources, profils, favoris et reprises sur tous tes
+              appareils. Tout est chiffré avant de partir.
+            </p>
+          </div>
+          <div class="cards">
+            <div class="card">
+              <Icon name="key" size={26} class="card__glyph" />
+              <h3>Ton mot de passe reste chez toi</h3>
+              <p>
+                Bobine en tire deux clés sur l'appareil (PBKDF2, 600 000 itérations) : une pour se connecter, une pour chiffrer. Le
+                mot de passe lui-même n'est jamais envoyé.
+              </p>
+            </div>
+            <div class="card">
+              <Icon name="lock" size={26} class="card__glyph" />
+              <h3>Chiffré de bout en bout</h3>
+              <p>Chaque élément est chiffré en AES-256-GCM et rangé sous un identifiant opaque. Sans ton mot de passe, personne ne peut le lire.</p>
+            </div>
+            <div class="card">
+              <Icon name="server" size={26} class="card__glyph" />
+              <h3>Le strict minimum côté serveur</h3>
+              <p>Ton adresse e-mail, le nombre d'éléments et leurs dates de modification. Hébergé chez Supabase, en Europe.</p>
+            </div>
+          </div>
+          <div class="actions-row">
+            <a class="btn btn--primary btn--lg" href="/compte/">Gérer mon compte <Icon name="arrow-right" stroke={2.2} /></a>
+            <a class="link-quiet" href="/confidentialite/">Lire la politique de confidentialité</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="finale" aria-labelledby="titre-fin">
+        <div class="finale__thread">
+          <Thread name="end" />
+          <div class="knot" aria-hidden="true"></div>
+        </div>
+        <div class="finale__inner">
+          <h2 class="display display--finale" id="titre-fin">À toi de dérouler.</h2>
+          <p class="lede lede--hero">Ajoute ta source, Bobine s'occupe du reste.</p>
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" href="#telecharger"><Icon name="download" stroke={2.2} />Télécharger Bobine</a>
+            <a class="btn btn--glass btn--lg" href="/compte/">Mon compte</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <SiteFooter />
+  </div>
+</Base>
+
+<script>
+  import { startThread } from '../scripts/thread.js';
+
+  startThread();
+</script>

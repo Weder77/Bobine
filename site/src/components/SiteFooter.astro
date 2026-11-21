@@ -1,0 +1,36 @@
+---
+import Logo from './Logo.astro';
+---
+
+<footer class="site-footer">
+  <div class="wrap site-footer__inner">
+    <div class="site-footer__cols">
+      <div class="site-footer__brand">
+        <Logo />
+        <p>Lecteur IPTV pour Windows et Android TV.</p>
+      </div>
+      <nav aria-labelledby="pied-bobine">
+        <p class="site-footer__label" id="pied-bobine">Bobine</p>
+        <a href="/#telecharger">Télécharger</a>
+        <a href="/#fonctionnalites">Fonctionnalités</a>
+        <a href="/#android-tv">Android TV</a>
+        <a href="https://github.com/Weder77/Bobine">Code source</a>
+      </nav>
+      <nav aria-labelledby="pied-compte">
+        <p class="site-footer__label" id="pied-compte">Compte</p>
+        <a href="/compte/">Mon compte</a>
+        <a href="/compte/#oubli">Mot de passe oublié</a>
+        <a href="/compte/suppression/">Supprimer mon compte</a>
+      </nav>
+      <nav aria-labelledby="pied-aide">
+        <p class="site-footer__label" id="pied-aide">Aide</p>
+        <a href="/confidentialite/">Confidentialité</a>
+        <a href="https://github.com/Weder77/Bobine/issues">Signaler un problème</a>
+        <a href="/mentions-legales/">Mentions légales</a>
+      </nav>
+    </div>
+    <p class="site-footer__legal">
+      Bobine est uniquement un lecteur multimédia. Il ne fournit, n'héberge, ne vend et ne recommande aucun contenu.
+    </p>
+  </div>
+</footer>

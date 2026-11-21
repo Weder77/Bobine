@@ -1,0 +1,50 @@
+---
+// Legal notice (French law, LCEN art. 6): who publishes the site and who hosts
+// it. The bracketed parts are to be filled before going online. A private
+// person may keep their identity off the page, but must give it to the host.
+import SiteFooter from '../components/SiteFooter.astro';
+import SiteHeader from '../components/SiteHeader.astro';
+import Base from '../layouts/Base.astro';
+---
+
+<Base title="Mentions légales · Bobine" description="Éditeur et hébergeur du site de Bobine.">
+  <SiteHeader />
+  <main class="wrap account-main">
+    <article class="prose">
+      <h1>Mentions légales</h1>
+
+      <h2>Éditeur</h2>
+      <p>
+        Le site de Bobine est édité par <span class="placeholder">[NOM OU PSEUDONYME DE L'ÉDITEUR]</span>, à titre non
+        professionnel. Directeur de la publication : <span class="placeholder">[NOM]</span>.
+      </p>
+      <p>Contact : une demande sur le dépôt du projet, <a href="https://github.com/Weder77/Bobine/issues">github.com/Weder77/Bobine/issues</a>.</p>
+
+      <h2>Hébergement</h2>
+      <p>
+        Le site est hébergé par <span class="placeholder">[HÉBERGEUR : NOM, ADRESSE, TÉLÉPHONE]</span>.
+      </p>
+      <p>
+        Le compte Bobine et ses données chiffrées sont hébergés par Supabase, Inc. (supabase.com), dans un centre de données en
+        Europe.
+      </p>
+
+      <h2>Contenus</h2>
+      <p>
+        Bobine est uniquement un lecteur multimédia. Il ne fournit, n'héberge, ne vend et ne recommande aucun contenu : aucune chaîne,
+        aucun film, aucune série ni aucun abonnement. Chacun l'utilise sous sa propre responsabilité, avec des contenus qu'il a le droit
+        de regarder.
+      </p>
+
+      <h2>Données personnelles</h2>
+      <p>Voir la <a href="/confidentialite/">politique de confidentialité</a>. Le site ne dépose aucun cookie.</p>
+
+      <h2>Propriété</h2>
+      <p>
+        Le code de Bobine et de ce site est public sur <a href="https://github.com/Weder77/Bobine">GitHub</a>. Les polices Geist, Big
+        Shoulders Display et Sacramento sont sous licence SIL Open Font License.
+      </p>
+    </article>
+  </main>
+  <SiteFooter />
+</Base>
