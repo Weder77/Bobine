@@ -12,6 +12,7 @@ interface Props {
 }
 
 const { title, description, noindex = false, bodyClass } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
 ---
 
 <!doctype html>
@@ -24,6 +25,7 @@ const { title, description, noindex = false, bodyClass } = Astro.props;
     <meta name="referrer" content="same-origin" />
     <meta name="theme-color" content="#0d0c0b" />
     {noindex && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/png" href={icon.src} />
     <link rel="apple-touch-icon" href={icon.src} />
   </head>

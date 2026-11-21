@@ -31,6 +31,8 @@ Bobine s'utilise sans compte. Le compte sert uniquement à synchroniser ses donn
 
 ## Le site de Bobine
 
+Le site de Bobine est [getbobine.app](https://getbobine.app).
+
 - **Ni cookie, ni suivi** : le site ne dépose aucun cookie et n'utilise ni mesure d'audience, ni outil de suivi, ni ressource d'un autre site (ses polices et ses images viennent du site lui-même).
 - **Espace compte** : pour voir l'état de son compte, changer son mot de passe ou supprimer son compte, on s'y connecte avec l'adresse et le mot de passe du compte Bobine. Comme dans l'appli, les clés sont calculées dans le navigateur : le mot de passe n'est pas envoyé. La session reste dans l'onglet et s'efface quand il se ferme.
 - **Ce qui s'affiche** : seulement ce que le serveur connaît (l'adresse e-mail, la date de création du compte, le nombre d'éléments synchronisés, la place qu'ils prennent et la date du dernier changement). Le contenu, chiffré, n'est pas lisible sur le site.
@@ -39,7 +41,7 @@ Bobine s'utilise sans compte. Le compte sert uniquement à synchroniser ses donn
 
 - **Sans compte** : désinstaller Bobine, ou effacer ses données depuis les paramètres de l'appareil, supprime tout.
 - **Avec un compte, dans l'appli** : *Paramètres → Compte → Supprimer le compte* supprime le compte et toutes les données synchronisées, immédiatement et définitivement. Les données de l'appareil restent jusqu'à la désinstallation.
-- **Avec un compte, sans l'appli** : la page *Supprimer mon compte* du site de Bobine fait de même, avec le mot de passe du compte ou, s'il est oublié, avec un code reçu par e-mail.
+- **Avec un compte, sans l'appli** : la page [Supprimer mon compte](https://getbobine.app/compte/suppression/) du site fait de même, avec le mot de passe du compte ou, s'il est oublié, avec un code reçu par e-mail.
 
 ## Enfants
 

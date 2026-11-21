@@ -47,7 +47,7 @@ Textes et réponses à reprendre dans la Play Console. Limites de Google entre p
 
 **Coordonnées** : une adresse e-mail de contact (obligatoire) et le site du projet.
 
-**Règles de confidentialité** (URL) : la page `/confidentialite/` du site (`site/`), une fois en ligne ; d'ici là https://github.com/Weder77/Bobine/blob/main/docs/confidentialite.md (le même texte).
+**Règles de confidentialité** (URL) : https://getbobine.app/confidentialite/ (le texte de `docs/confidentialite.md`, servi par le site).
 
 ## Éléments graphiques
 
@@ -71,7 +71,7 @@ Les captures se font avec le faux serveur (`tool/fake_xtream.py`, médias de `to
 | Données de localisation, contacts, identifiants publicitaires, historique Web… | Non |
 | Données envoyées à TMDB | Titre et année du contenu consulté, seulement avec la clé TMDB de l'utilisateur. Ce ne sont pas des données personnelles : à ne pas déclarer, mais à mentionner dans la politique (fait) |
 
-Google demande aussi une **adresse Web de suppression du compte**, utilisable sans l'appli : la page `/compte/suppression/` du site. On y supprime le compte avec son mot de passe ou, s'il est oublié, avec un code reçu par e-mail.
+Google demande aussi une **adresse Web de suppression du compte**, utilisable sans l'appli : https://getbobine.app/compte/suppression/. On y supprime le compte avec son mot de passe ou, s'il est oublié, avec un code reçu par e-mail.
 
 ## Autres déclarations
 

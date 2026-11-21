@@ -3,8 +3,7 @@ import { defineConfig } from 'astro/config';
 import { SUPABASE_URL } from './src/lib/supabase.js';
 
 export default defineConfig({
-  // Le domaine du site, une fois choisi (liens canoniques) :
-  // site: 'https://…',
+  site: 'https://getbobine.app',
   trailingSlash: 'ignore',
   build: { format: 'directory' },
   // A static site: the CSP goes in a <meta> of every page, with the hashes of

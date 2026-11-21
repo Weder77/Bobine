@@ -29,10 +29,17 @@ npm run build     # le site dans dist/, à publier tel quel
 - **Le fil** de la page d'accueil se déroule au défilement (`src/scripts/thread.js`, tracé dans `src/data/thread.js`). Il
   est entier sans JavaScript ou quand l'appareil demande moins de mouvement.
 
-## Avant la mise en ligne
+## En ligne : getbobine.app, sur Vercel
 
-- Remplir les mentions légales (`src/pages/mentions-legales.astro`, parties entre crochets).
-- Renseigner `site` dans `astro.config.mjs` avec le domaine.
-- Mettre le lien Google Play des boutons Android TV une fois l'appli publiée.
-- Dans la Play Console : l'adresse de `/confidentialite/` comme politique de confidentialité, et celle de
-  `/compte/suppression/` comme adresse Web de suppression du compte.
+- Projet Vercel relié au dépôt, **Root Directory : `site`**, en laissant cochée l'option qui inclut les fichiers hors de ce
+  dossier (le site lit `assets/fonts` et `docs/`). Astro est reconnu tout seul : `npm run build`, sortie `dist`.
+- `vercel.json` ajoute les en-têtes que la CSP en `<meta>` ne peut pas donner : interdiction d'afficher le site dans un
+  cadre (`frame-ancestors`), HSTS, `nosniff`, cache long des fichiers `/_astro/`.
+- Le domaine getbobine.app (OVH) pointe vers Vercel : les enregistrements DNS que Vercel indique, dans la zone OVH.
+
+## Encore à faire
+
+- Les mentions légales : l'éditeur (`src/pages/mentions-legales.astro`, parties entre crochets).
+- Le lien Google Play des boutons Android TV, une fois l'appli publiée.
+- Dans la Play Console : https://getbobine.app/confidentialite/ comme politique de confidentialité, et
+  https://getbobine.app/compte/suppression/ comme adresse Web de suppression du compte.
