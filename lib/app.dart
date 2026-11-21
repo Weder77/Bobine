@@ -3,12 +3,16 @@ import 'dart:ui' show AppExitResponse;
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'core/device.dart';
 import 'core/theme.dart';
 import 'player/mini_player.dart';
 import 'services.dart';
 import 'ui/onboarding_screen.dart';
 import 'ui/profiles.dart';
 import 'ui/shell.dart';
+import 'ui/widgets/tv_canvas.dart';
+import 'tv/tv_app.dart';
+import 'tv/tv_welcome.dart';
 
 class BobineApp extends StatefulWidget {
   const BobineApp({super.key, required this.services});
@@ -114,7 +118,10 @@ class _BobineAppState extends State<BobineApp> with WidgetsBindingObserver {
         supportedLocales: const [Locale('fr', 'FR'), Locale('en')],
         localizationsDelegates: GlobalMaterialLocalizations.delegates,
         navigatorKey: appNavigatorKey,
-        builder: (context, child) => PipLayer(child: child ?? const SizedBox.shrink()),
+        builder: (context, child) {
+          final app = PipLayer(child: child ?? const SizedBox.shrink());
+          return Device.isTv ? TvCanvas(child: app) : app;
+        },
         home: const _RootGate(),
       ),
     );
@@ -131,7 +138,7 @@ class _RootGate extends StatelessWidget {
     return ListenableBuilder(
       listenable: Listenable.merge([s.settings, s.library]),
       builder: (context, _) {
-        if (s.activeSource == null) return const OnboardingScreen();
+        if (s.activeSource == null) return Device.isTv ? const TvWelcomeScreen() : const OnboardingScreen();
         if (!s.profileChosen) {
           return ProfilePickerScreen(
             onChosen: () {
@@ -141,7 +148,8 @@ class _RootGate extends StatelessWidget {
             },
           );
         }
-        return const AppShell();
+        // The TV has its own simple version (big items, the remote only).
+        return Device.isTv ? const TvShell() : const AppShell();
       },
     );
   }

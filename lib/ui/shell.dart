@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../features/updater.dart';
 import '../services.dart';
+import 'back_rules.dart';
 import 'catalog_controller.dart';
 import 'catalog_screen.dart';
 import 'guide_screen.dart';
@@ -18,6 +20,8 @@ import 'search_screen.dart';
 import 'settings_screen.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
+import 'widgets/focus_reveal.dart';
+import 'widgets/tv_canvas.dart';
 
 /// Pages of the main shell.
 
@@ -148,13 +152,8 @@ class _AppShellState extends State<AppShell> {
     final typing = focusIsInTextField();
     if (e.logicalKey == LogicalKeyboardKey.escape) {
       // Échap / gamepad B: closes the search, then goes back to Accueil.
-      if (_searchOpen) {
-        _closeSearch();
-        return true;
-      }
-      if (typing || _index == ShellTab.home) return false;
-      _go(ShellTab.home);
-      return true;
+      if (typing && !_searchOpen) return false;
+      return _back(exit: false);
     }
     final keys = HardwareKeyboard.instance;
     final ctrlK = e.logicalKey == LogicalKeyboardKey.keyK && (keys.isControlPressed || keys.isMetaPressed);
@@ -162,6 +161,21 @@ class _AppShellState extends State<AppShell> {
     final slash = (e.character == '/' || e.logicalKey == LogicalKeyboardKey.slash) && !typing;
     if (!ctrlK && !slash) return false;
     _openSearch();
+    return true;
+  }
+
+  /// Back (remote, Échap): the search, then Accueil, then (TV) leaving the
+  /// app. Returns false when there is nothing to do here.
+  bool _back({required bool exit}) {
+    switch (shellBack(searchOpen: _searchOpen, tab: _index)) {
+      case ShellBack.closeSearch:
+        _closeSearch();
+      case ShellBack.goHome:
+        _go(ShellTab.home);
+      case ShellBack.exit:
+        if (!exit) return false;
+        SystemNavigator.pop();
+    }
     return true;
   }
 
@@ -227,68 +241,83 @@ class _AppShellState extends State<AppShell> {
     final opaque = _searchOpen || !_heroPage(_index) || _scrolled.contains(_index);
     return ShellNavigation(
       goTo: _go,
-      child: Scaffold(
-        body: Column(
-          children: [
-            Expanded(
-              child: Stack(
-                children: [
-                  for (var i = 0; i < ShellTab.count; i++)
-                    if (_built.contains(i) && i != ShellTab.search)
-                      Offstage(
-                        key: ValueKey(i), // keeps each tab's state when others get built
-                        offstage: i != _index,
-                        // Hidden tabs stay out of the arrow / Tab navigation.
-                        child: ExcludeFocus(
-                          excluding: i != _index || _searchOpen,
-                          child: TickerMode(
-                            enabled: i == _index && !_searchOpen,
-                            child: NotificationListener<ScrollNotification>(
-                              onNotification: (n) => _onScroll(i, n),
-                              // Hero pages run under the header, the others start below it.
-                              child: Padding(
-                                padding: EdgeInsets.only(top: _heroPage(i) ? 0 : kTopBarHeight),
-                                child: _page(i),
+      // Back of the TV remote (Android's back): same steps as Échap.
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, _) {
+          if (!didPop) _back(exit: true);
+        },
+        child: Scaffold(
+          body: Padding(
+            // On a TV, everything stays clear of the edges the set may crop.
+            padding: Device.isTv ? TvCanvas.safe : EdgeInsets.zero,
+            child: Column(
+              children: [
+                Expanded(
+                  child: Stack(
+                    children: [
+                      for (var i = 0; i < ShellTab.count; i++)
+                        if (_built.contains(i) && i != ShellTab.search)
+                          Offstage(
+                            key: ValueKey(i), // keeps each tab's state when others get built
+                            offstage: i != _index,
+                            // Hidden tabs stay out of the arrow / Tab navigation.
+                            child: ExcludeFocus(
+                              excluding: i != _index || _searchOpen,
+                              child: TickerMode(
+                                enabled: i == _index && !_searchOpen,
+                                child: NotificationListener<ScrollNotification>(
+                                  onNotification: (n) => _onScroll(i, n),
+                                  // Hero pages run under the header, the others start below it.
+                                  child: Padding(
+                                    padding: EdgeInsets.only(top: _heroPage(i) ? 0 : kTopBarHeight),
+                                    // Hero pages run under the top bar: what the remote selects
+                                    // is kept out from under it.
+                                    child: _heroPage(i)
+                                        ? RevealUnderHeader(header: kTopBarHeight, child: _page(i))
+                                        : _page(i),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
+                      if (_searchOpen)
+                        Positioned.fill(
+                          top: kTopBarHeight,
+                          child: ColoredBox(
+                            color: AppColors.bg,
+                            child: SearchScreen(controller: _searchCtl, onClose: _closeSearch),
+                          ),
+                        ),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        child: ListenableBuilder(
+                          listenable: Listenable.merge([_movies, _series]),
+                          builder: (context, _) {
+                            final catalog = _searchOpen ? null : _catalog;
+                            return _TopBar(
+                              index: _index,
+                              onSelect: _go,
+                              opaque: opaque || catalog?.mode == CatalogMode.grid,
+                              searchOpen: _searchOpen,
+                              searchController: _searchCtl,
+                              searchFocus: _searchFocus,
+                              onOpenSearch: _openSearch,
+                              onCloseSearch: _closeSearch,
+                              subBar: catalog == null ? null : CatalogSubBar(controller: catalog),
+                            );
+                          },
                         ),
                       ),
-                  if (_searchOpen)
-                    Positioned.fill(
-                      top: kTopBarHeight,
-                      child: ColoredBox(
-                        color: AppColors.bg,
-                        child: SearchScreen(controller: _searchCtl, onClose: _closeSearch),
-                      ),
-                    ),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    top: 0,
-                    child: ListenableBuilder(
-                      listenable: Listenable.merge([_movies, _series]),
-                      builder: (context, _) {
-                        final catalog = _searchOpen ? null : _catalog;
-                        return _TopBar(
-                          index: _index,
-                          onSelect: _go,
-                          opaque: opaque || catalog?.mode == CatalogMode.grid,
-                          searchOpen: _searchOpen,
-                          searchController: _searchCtl,
-                          searchFocus: _searchFocus,
-                          onOpenSearch: _openSearch,
-                          onCloseSearch: _closeSearch,
-                          subBar: catalog == null ? null : CatalogSubBar(controller: catalog),
-                        );
-                      },
-                    ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+                const _ImportBanner(),
+              ],
             ),
-            const _ImportBanner(),
-          ],
+          ),
         ),
       ),
     );
@@ -489,7 +518,7 @@ class _SearchField extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: AppColors.borderInput, borderRadius: BorderRadius.circular(4)),
-                child: Text('Échap', style: monoStyle(12, color: AppColors.textSoft)),
+                child: Text(Device.backKey, style: monoStyle(12, color: AppColors.textSoft)),
               ),
             ),
           ),
@@ -507,41 +536,46 @@ class _TabButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HoverBuilder(
-      onActivate: onTap,
-      focusRingRadius: 6,
-      builder: (context, hover) => Semantics(
-        button: true,
-        selected: selected,
-        child: GestureDetector(
-          onTap: onTap,
-          behavior: HitTestBehavior.opaque,
-          child: SizedBox(
-            height: kTopBarHeight,
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 10),
-                AnimatedDefaultTextStyle(
-                  duration: const Duration(milliseconds: 150),
-                  style: TextStyle(
-                    fontFamily: AppFonts.body,
-                    fontSize: 15,
-                    height: 1,
-                    fontWeight: FontWeight.w500,
-                    color: selected || hover ? AppColors.text : AppColors.muted,
+    // The whole height of the bar is clickable; the remote's ring is a pill
+    // around the word only (around the full height, it was a tall box).
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox(
+          height: kTopBarHeight,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 3),
+              HoverBuilder(
+                onActivate: onTap,
+                focusRingRadius: 999,
+                builder: (context, hover) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  child: AnimatedDefaultTextStyle(
+                    duration: const Duration(milliseconds: 150),
+                    style: TextStyle(
+                      fontFamily: AppFonts.body,
+                      fontSize: 15,
+                      height: 1,
+                      fontWeight: FontWeight.w500,
+                      color: selected || hover ? AppColors.text : AppColors.muted,
+                    ),
+                    child: Text(label),
                   ),
-                  child: Text(label),
                 ),
-                const SizedBox(height: 8),
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: selected ? 18 : 0,
-                  height: 2,
-                  decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(2)),
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 1),
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: selected ? 18 : 0,
+                height: 2,
+                decoration: BoxDecoration(color: AppColors.accent, borderRadius: BorderRadius.circular(2)),
+              ),
+            ],
           ),
         ),
       ),

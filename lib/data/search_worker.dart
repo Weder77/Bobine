@@ -16,12 +16,13 @@ class SearchOutcome {
 }
 
 /// Searches [query] with [repo]: channels, films and series from two
-/// letters, the TV guide from three.
-SearchOutcome runSearch(Repository repo, int sourceId, String query) {
+/// letters ([limit] of each), the TV guide from three (unless [programs] is
+/// false: the TV shows no programmes).
+SearchOutcome runSearch(Repository repo, int sourceId, String query, {int limit = 60, bool programs = true}) {
   final t = query.trim();
   return SearchOutcome(
-    t.length < 2 ? null : repo.search(sourceId, t),
-    t.length < 3 ? const [] : repo.searchPrograms(sourceId, t),
+    t.length < 2 ? null : repo.search(sourceId, t, limit: limit),
+    !programs || t.length < 3 ? const [] : repo.searchPrograms(sourceId, t),
   );
 }
 
@@ -37,13 +38,15 @@ Future<SearchOutcome> searchInBackground(
   required String query,
   required int profileId,
   required bool hideLocked,
+  int limit = 60,
+  bool programs = true,
 }) => Isolate.run(() {
   final db = openWorkerDatabase(dbPath);
   try {
     final repo = Repository(db)
       ..profileId = profileId
       ..hideLocked = hideLocked;
-    return runSearch(repo, sourceId, query);
+    return runSearch(repo, sourceId, query, limit: limit, programs: programs);
   } finally {
     db.close();
   }

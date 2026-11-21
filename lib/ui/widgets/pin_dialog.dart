@@ -95,8 +95,9 @@ class _PinDialogState extends State<_PinDialog> {
           children: [
             if (step != null) Text(step, style: TextStyle(color: AppColors.textSoft)),
             const SizedBox(height: 16),
+            // The same field for both steps (cleared): a new one lost the TV's
+            // keyboard, and the code could not be confirmed with the remote.
             TextField(
-              key: ValueKey(_first),
               controller: _controller,
               autofocus: true,
               obscureText: true,

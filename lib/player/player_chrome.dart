@@ -4,6 +4,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/epg_cache.dart';
@@ -25,6 +26,14 @@ String playerTime(Duration d) {
 // ------------------------------------------------------------------ buttons
 
 /// 44 px square button of the player bars (transparent, light on hover).
+/// Vermilion ring around a player button while it has the remote / keyboard
+/// focus (the hover tint alone is too faint on a TV across the room, and
+/// white is lost on the white play button).
+const focusRingSide = WidgetStateProperty<BorderSide?>.fromMap({
+  WidgetState.focused: BorderSide(color: DarkColors.accent, width: 3),
+  WidgetState.any: null,
+});
+
 class PlayerIconButton extends StatelessWidget {
   const PlayerIconButton({super.key, required this.icon, required this.tooltip, required this.onTap, this.size = 22});
   final IconData icon;
@@ -43,7 +52,7 @@ class PlayerIconButton extends StatelessWidget {
         fixedSize: const Size(44, 44),
         minimumSize: const Size(44, 44),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ).copyWith(overlayColor: const WidgetStatePropertyAll(Color(0x24FFFFFF))),
+      ).copyWith(overlayColor: const WidgetStatePropertyAll(Color(0x24FFFFFF)), side: focusRingSide),
       icon: Icon(icon),
     ),
   );
@@ -87,9 +96,12 @@ class PlayerTextButton extends StatelessWidget {
 
 /// Round white play / pause button (52 px).
 class PlayPauseButton extends StatelessWidget {
-  const PlayPauseButton({super.key, required this.player, required this.onTap, this.playing});
+  const PlayPauseButton({super.key, required this.player, required this.onTap, this.playing, this.focusNode});
   final Player player;
   final VoidCallback onTap;
+
+  /// Given the focus when OK of the remote shows the controls.
+  final FocusNode? focusNode;
 
   /// State to show instead of the local player's (casting).
   final bool? playing;
@@ -104,6 +116,7 @@ class PlayPauseButton extends StatelessWidget {
         message: playing ? 'Pause (Espace)' : 'Lecture (Espace)',
         child: IconButton(
           onPressed: onTap,
+          focusNode: focusNode,
           iconSize: 28,
           style:
               IconButton.styleFrom(
@@ -116,6 +129,7 @@ class PlayPauseButton extends StatelessWidget {
                 backgroundColor: WidgetStateProperty.resolveWith(
                   (s) => s.contains(WidgetState.hovered) ? const Color(0xFFE9E4DE) : DarkColors.action,
                 ),
+                side: focusRingSide,
               ),
           icon: Icon(playing ? Icons.pause_rounded : Icons.play_arrow_rounded),
         ),
@@ -532,7 +546,7 @@ class PlayerSidePanel extends StatelessWidget {
                   ],
                 ),
               ),
-              Expanded(child: child),
+              Expanded(child: _FocusFirst(child: child)),
               ?footer,
             ],
           ),
@@ -540,6 +554,47 @@ class PlayerSidePanel extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// On a TV, gives the focus to an item of [child] when it appears, so the
+/// remote can move in a panel just opened (not to the close button above):
+/// the one that asks for it (autofocus: the channel playing), else the
+/// first. On a computer the arrows stay with the player (seek, zap).
+class _FocusFirst extends StatefulWidget {
+  const _FocusFirst({required this.child});
+  final Widget child;
+
+  @override
+  State<_FocusFirst> createState() => _FocusFirstState();
+}
+
+class _FocusFirstState extends State<_FocusFirst> {
+  final _scope = FocusScopeNode(debugLabel: 'panel');
+
+  @override
+  void initState() {
+    super.initState();
+    if (!Device.isTv) return;
+    // Two frames: the list first scrolls to the channel playing, which is
+    // then built and takes the focus itself (autofocus).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _scope.focusedChild != null) return;
+        _scope.traversalDescendants.firstOrNull?.requestFocus();
+      });
+      WidgetsBinding.instance.scheduleFrame();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scope.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Device.isTv ? FocusScope(node: _scope, child: widget.child) : widget.child;
 }
 
 /// "Chaînes": the programme of every channel, the current one in vermilion.
@@ -575,7 +630,10 @@ class ChannelListPanel extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0x14FFFFFF))),
       ),
-      child: Text('↑ ↓ pour zapper · Échap pour fermer', style: darkMono(12, height: 1)),
+      child: Text(
+        Device.isTv ? '↑ ↓ choisir · OK regarder · Retour pour fermer' : '↑ ↓ pour zapper · Échap pour fermer',
+        style: darkMono(12, height: 1),
+      ),
     ),
     child: ListView.builder(
       controller: scroll,
@@ -589,6 +647,8 @@ class ChannelListPanel extends StatelessWidget {
         final t = DateTime.now();
         return HoverBuilder(
           onActivate: () => onPick(i),
+          // On the TV the remote starts on the channel playing.
+          autofocus: on && Device.isTv,
           focusRingRadius: 8,
           builder: (context, hover) => GestureDetector(
             onTap: () => onPick(i),
@@ -1611,7 +1671,12 @@ class _VolumeControlState extends State<VolumeControl> {
                       thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                       overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
                     ),
-                    child: Slider(value: v.clamp(0, max), max: max, onChanged: widget.onChanged),
+                    // Hidden until hovered: out of the remote's way meanwhile
+                    // (an invisible stop between the buttons).
+                    child: ExcludeFocus(
+                      excluding: !_hover,
+                      child: Slider(value: v.clamp(0, max), max: max, onChanged: widget.onChanged),
+                    ),
                   ),
                 ),
               ),

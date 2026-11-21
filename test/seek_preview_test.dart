@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:bobine/core/device.dart';
 import 'package:bobine/player/seek_preview.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -9,6 +10,13 @@ void main() {
   group('when the picture may be fetched', () {
     bool allowed(String mode, {bool local = false, int? max, int inUse = 1}) =>
         seekPreviewAllowed(mode: mode, local: local, maxConnections: max, inUse: inUse);
+
+    test('jamais sur la télé, même réglé sur « toujours »', () {
+      Device.debugTv = true;
+      addTearDown(() => Device.debugTv = null);
+      expect(allowed('always', max: 5), isFalse);
+      expect(allowed('auto', local: true), isFalse);
+    });
 
     test('never with a single connection, unless the user insists', () {
       // The second connection could make the provider close the film.

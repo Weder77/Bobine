@@ -9,7 +9,9 @@ import '../data/repository.dart';
 import '../player/play_items.dart';
 import '../player/player_screen.dart';
 import '../player/player_session.dart';
+import '../core/device.dart';
 import '../services.dart';
+import '../tv/tv_series.dart';
 import 'movie_detail_screen.dart';
 import 'series_detail_screen.dart';
 
@@ -137,11 +139,15 @@ class Launch {
   }
 
   static Future<void> openMovie(BuildContext context, Movie m) async {
+    // The TV has no film page: OK on a film plays it.
+    if (Device.isTv) return movie(context, m);
     if (_locked(context, m.sourceId, ContentKind.movie, m.extId)) return;
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => MovieDetailScreen(movie: m)));
   }
 
   static Future<void> openSeries(BuildContext context, Series sr) async {
+    // The TV's own series page (it checks the lock itself).
+    if (Device.isTv) return TvSeriesScreen.open(context, sr);
     if (_locked(context, sr.sourceId, ContentKind.series, sr.extId)) return;
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => SeriesDetailScreen(series: sr)));
   }
@@ -181,15 +187,24 @@ void loadPendingSeries(AppServices s, int sourceId, List<String> series, VoidCal
 Future<List<Episode>> loadEpisodes(Repository repo, Series sr) async {
   final cached = repo.episodes(sr.sourceId, sr.extId);
   if (cached.isNotEmpty) return cached;
+  try {
+    return await fetchEpisodes(repo, sr);
+  } catch (_) {
+    return const [];
+  }
+}
+
+/// The episodes of [sr] as the provider has them now (a series still
+/// running gets new ones), kept for next time. Throws when the provider
+/// cannot be reached; a playlist (M3U) gives those kept here.
+Future<List<Episode>> fetchEpisodes(Repository repo, Series sr) async {
   final src = repo.source(sr.sourceId);
-  if (src == null || !src.isXtream) return const [];
+  if (src == null || !src.isXtream) return repo.episodes(sr.sourceId, sr.extId);
   final api = XtreamApi.forSource(src);
   try {
     final d = await api.seriesInfo(sr.sourceId, sr.extId);
     repo.replaceEpisodes(sr.sourceId, sr.extId, d.episodes);
     return d.episodes;
-  } catch (_) {
-    return const [];
   } finally {
     api.close();
   }

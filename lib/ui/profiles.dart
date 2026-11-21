@@ -4,6 +4,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/device.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
 import '../features/profile_photo.dart';
@@ -438,11 +439,12 @@ class _ProfileEditorState extends State<_ProfileEditor> {
             Row(
               children: [
                 Expanded(child: Text('AVATAR', style: labelStyle())),
-                TextButton.icon(
-                  onPressed: _importing ? null : _importPhoto,
-                  icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
-                  label: Text(_photo == null ? 'Importer une photo…' : 'Changer de photo…'),
-                ),
+                if (Device.canPickFiles)
+                  TextButton.icon(
+                    onPressed: _importing ? null : _importPhoto,
+                    icon: const Icon(Icons.add_photo_alternate_outlined, size: 18),
+                    label: Text(_photo == null ? 'Importer une photo…' : 'Changer de photo…'),
+                  ),
               ],
             ),
             const SizedBox(height: 6),
@@ -463,30 +465,32 @@ class _ProfileEditorState extends State<_ProfileEditor> {
                     onTap: () => _choose(presetAvatar(e.key)),
                     child: _avatarOf(presetAvatar(e.key), tile, kids: false),
                   ),
-                _AvatarChoice(
-                  tooltip: _photo == null ? 'Importer une photo' : 'Ta photo',
-                  selected: _photo != null && _avatar == _photo,
-                  onTap: _importing ? null : (_photo == null ? _importPhoto : () => _choose(_photo)),
-                  child: _importing
-                      ? const SizedBox(
-                          width: tile,
-                          height: tile,
-                          child: Center(
-                            child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
-                          ),
-                        )
-                      : _photo == null
-                      ? Container(
-                          width: tile,
-                          height: tile,
-                          decoration: BoxDecoration(
-                            color: AppColors.surface3,
-                            borderRadius: BorderRadius.circular(tile * 0.23),
-                          ),
-                          child: Icon(Icons.add_photo_alternate_outlined, size: 22, color: AppColors.muted),
-                        )
-                      : _avatarOf(_photo, tile, kids: false),
-                ),
+                // On the TV: only a photo already there (synced from a computer).
+                if (Device.canPickFiles || _photo != null)
+                  _AvatarChoice(
+                    tooltip: _photo == null ? 'Importer une photo' : 'Ta photo',
+                    selected: _photo != null && _avatar == _photo,
+                    onTap: _importing ? null : (_photo == null ? _importPhoto : () => _choose(_photo)),
+                    child: _importing
+                        ? const SizedBox(
+                            width: tile,
+                            height: tile,
+                            child: Center(
+                              child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                            ),
+                          )
+                        : _photo == null
+                        ? Container(
+                            width: tile,
+                            height: tile,
+                            decoration: BoxDecoration(
+                              color: AppColors.surface3,
+                              borderRadius: BorderRadius.circular(tile * 0.23),
+                            ),
+                            child: Icon(Icons.add_photo_alternate_outlined, size: 22, color: AppColors.muted),
+                          )
+                        : _avatarOf(_photo, tile, kids: false),
+                  ),
               ],
             ),
             if (_avatar == null) ...[

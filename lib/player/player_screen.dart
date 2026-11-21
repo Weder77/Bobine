@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../core/device.dart';
 import '../cast/cast_device.dart';
 import '../cast/cast_service.dart';
 import '../cast/cast_session.dart';
@@ -15,11 +16,17 @@ import '../core/window.dart';
 import '../data/models.dart';
 import '../features/tmdb.dart';
 import '../services.dart';
+import '../tv/tv_cards.dart';
+import '../tv/tv_player_overlay.dart';
+import '../tv/tv_player_sheets.dart';
+import '../tv/tv_sheet.dart';
+import '../ui/back_rules.dart';
 import '../ui/multi_view_screen.dart';
 import '../ui/widgets/common.dart';
 import 'cast_view.dart';
 import 'play_items.dart';
 import 'player_chrome.dart';
+import 'player_keys.dart';
 import 'player_session.dart';
 import 'player_service.dart';
 import 'player_widgets.dart';
@@ -85,6 +92,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
   Source? _source;
 
   final _focus = FocusNode(debugLabel: 'player');
+
+  /// Play / pause: where OK of the remote puts the focus on the controls.
+  final _playButton = FocusNode(debugLabel: 'play');
   final _position = ValueNotifier<Duration>(Duration.zero);
   final _cache = ValueNotifier<CacheState>(const CacheState());
   final _decoder = ValueNotifier<String?>(null);
@@ -199,7 +209,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
         });
       }),
     );
-    _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
+    // Not on the TV: the tracks come as the file opens, while mpv sets up
+    // the decoder, and a property read then (a synchronous call on
+    // Android's main thread, which mpv needs too) froze the app until
+    // Android killed it. The TV reads them when its sheet opens.
+    if (!Device.isTv) _subs.add(_ps.player.stream.tracks.listen((_) => _refreshSelectedTracks()));
     _subs.add(
       _ps.player.stream.playing.listen((p) {
         if (!mounted) return;
@@ -252,6 +266,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     });
     _preview.dispose();
     _focus.dispose();
+    _playButton.dispose();
     _position.dispose();
     _cache.dispose();
     _decoder.dispose();
@@ -290,7 +305,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
       setState(() => _error = null);
     }
     if (_controls || _showStats || _casting || _item.kind == ContentKind.episode) _position.value = _pos;
-    if (_tickCount % 4 == 0 && !_casting) {
+    // Cache and decoder feed the computer's bar and stats; on the TV they
+    // were five synchronous reads of mpv a second on Android's main thread
+    // (see the tracks above), for nothing on screen.
+    if (_tickCount % 4 == 0 && !_casting && !Device.isTv) {
       if (_controls || _showStats) _cache.value = await _ps.cacheState();
       if (_controls && (_decoder.value == null || _tickCount % 40 == 0)) {
         final d = await _ps.decoderSummary();
@@ -337,7 +355,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else {
       _s.pip.show(session);
     }
-    if (mounted) Navigator.of(context).maybePop();
+    // Leaves whatever is open (a panel, the stats): the player goes on in
+    // the mini-player.
+    if (mounted) BackLayers.leave(context);
   }
 
   // ----------------------------------------------------------------- cast
@@ -397,12 +417,34 @@ class _PlayerScreenState extends State<PlayerScreen> {
     }
   }
 
+  PlayerBack get _backStep => playerBack(
+    panelOpen: _panel != _Panel.none,
+    statsShown: _showStats,
+    fullscreen: _fullscreen,
+    casting: _casting,
+    tv: Device.isTv,
+  );
+
+  /// Échap / Back of the remote: closes one layer at a time, then leaves.
+  void _back() {
+    switch (_backStep) {
+      case PlayerBack.closePanel:
+        _setPanel(_panel);
+      case PlayerBack.hideStats:
+        setState(() => _showStats = false);
+      case PlayerBack.leaveFullscreen:
+        _setFullscreen(false);
+      case PlayerBack.minimize || PlayerBack.leave:
+        _leave();
+    }
+  }
+
   /// Back: leaving while casting keeps the TV playing (mini-player).
   void _leave() {
     if (_casting) {
       _minimize();
     } else {
-      Navigator.of(context).maybePop();
+      BackLayers.leave(context);
     }
   }
 
@@ -424,10 +466,29 @@ class _PlayerScreenState extends State<PlayerScreen> {
     if (!_controls) setState(() => _controls = true);
     _hideTimer?.cancel();
     if (sticky) return;
-    _hideTimer = Timer(const Duration(milliseconds: 3500), () {
+    // A TV is read from the sofa: a little longer.
+    _hideTimer = Timer(Duration(milliseconds: Device.isTv ? 5000 : 3500), () {
       if (!mounted || _overControls || _panel != _Panel.none) return;
       if (!_ps.player.state.playing) return;
+      // The buttons fade out: the arrows go back to seeking and zapping.
+      // Not when a sheet is over the player (TV): it keeps the remote.
+      if (_buttonFocused && (ModalRoute.of(context)?.isCurrent ?? true)) _focus.requestFocus();
       setState(() => _controls = false);
+    });
+  }
+
+  /// Something else than the player itself has the focus: a button of the
+  /// controls, or an item of an open panel.
+  bool get _buttonFocused {
+    final f = FocusManager.instance.primaryFocus;
+    return f != null && f != _focus;
+  }
+
+  /// OK of the remote, controls hidden: they appear, play / pause focused.
+  void _revealControls() {
+    _showControls();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _controls) _playButton.requestFocus();
     });
   }
 
@@ -734,6 +795,43 @@ class _PlayerScreenState extends State<PlayerScreen> {
     final step = _s.settings.seekStep * (shift ? 6 : 1);
     final repeat = e is KeyRepeatEvent;
 
+    if (Device.isTv) {
+      // No buttons on the TV: OK pauses (or retries, or plays the next episode).
+      if (isOkKey(k)) {
+        if (!repeat) _tvOk();
+        return KeyEventResult.handled;
+      }
+      switch (tvPlayerArrow(k, live: _isLive)) {
+        case TvPlayerArrow.seekBack:
+          _seekBy(-step);
+        case TvPlayerArrow.seekForward:
+          _seekBy(step);
+        case TvPlayerArrow.zapPrevious:
+          if (!repeat) _zap(-1);
+        case TvPlayerArrow.zapNext:
+          if (!repeat) _zap(1);
+        case TvPlayerArrow.channels:
+          if (!repeat) _tvChannels();
+        case TvPlayerArrow.options:
+          if (!repeat) _tvOptions();
+        case null:
+          break;
+      }
+      if (tvPlayerArrow(k, live: _isLive) != null) return KeyEventResult.handled;
+    } else {
+      // Remote on a computer: arrows and OK go to the controls' buttons once
+      // OK showed them.
+      switch (playerKeyRoute(k, controlsVisible: _visible, buttonFocused: _buttonFocused)) {
+        case PlayerKeyRoute.toFocusedButton:
+          _showControls();
+          return KeyEventResult.ignored;
+        case PlayerKeyRoute.revealControls:
+          if (!repeat) _revealControls();
+          return KeyEventResult.handled;
+        case PlayerKeyRoute.handle:
+      }
+    }
+
     if (k == LogicalKeyboardKey.space || k == LogicalKeyboardKey.keyK || k == LogicalKeyboardKey.mediaPlayPause) {
       if (!repeat) _togglePlay();
     } else if (k == LogicalKeyboardKey.arrowLeft || k == LogicalKeyboardKey.keyJ) {
@@ -755,15 +853,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
     } else if (k == LogicalKeyboardKey.keyF || k == LogicalKeyboardKey.f11 || k == LogicalKeyboardKey.contextMenu) {
       if (!repeat) _setFullscreen(!_fullscreen);
     } else if (k == LogicalKeyboardKey.escape) {
-      if (_panel != _Panel.none) {
-        _setPanel(_panel);
-      } else if (_showStats) {
-        setState(() => _showStats = false);
-      } else if (_fullscreen) {
-        _setFullscreen(false);
-      } else {
-        _leave();
-      }
+      _back();
     } else if (k == LogicalKeyboardKey.backspace) {
       _leave();
     } else if (k == LogicalKeyboardKey.keyM) {
@@ -772,9 +862,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
       if (!repeat) _minimize();
     } else if (k == LogicalKeyboardKey.keyO && AppWindow.canFloat && !_casting) {
       if (!repeat) _minimize(floating: true);
-    } else if (k == LogicalKeyboardKey.keyV && _isLive && !_casting) {
+    } else if (opensMultiView(k, live: _isLive, casting: _casting, tv: Device.isTv)) {
       if (!repeat) _openMultiView();
-    } else if (k == LogicalKeyboardKey.keyT) {
+    } else if (k == LogicalKeyboardKey.keyT && Device.canCast) {
       if (!repeat) _setPanel(_Panel.cast);
     } else if (k == LogicalKeyboardKey.keyI && !_casting) {
       if (!repeat) setState(() => _showStats = !_showStats);
@@ -800,6 +890,101 @@ class _PlayerScreenState extends State<PlayerScreen> {
       return KeyEventResult.ignored;
     }
     return KeyEventResult.handled;
+  }
+
+  void _tvOk() {
+    switch (tvPlayerOk(error: _failed, nextShown: _nextOffered != null)) {
+      case TvPlayerOk.retry:
+        _retry();
+      case TvPlayerOk.nextEpisode:
+        _playNextEpisode();
+      case TvPlayerOk.togglePause:
+        _togglePlay();
+    }
+  }
+
+  /// The TV's options: the channel (favourite), audio and subtitles.
+  Future<void> _tvOptions() async {
+    // Shown while the sheet is open, without taking the remote back from it.
+    _showControls(sticky: true);
+    // The tracks in use, read now that it plays (not as the file opens).
+    await _refreshSelectedTracks();
+    if (!mounted) return;
+    final ch = _currentChannel;
+    final audio = _ps.player.state.tracks.audio.where((t) => t.id != 'auto' && t.id != 'no').toList();
+    final subs = [SubtitleTrack.no(), ..._ps.player.state.tracks.subtitle.where((t) => t.id != 'auto' && t.id != 'no')];
+    final fav = ch != null && _s.repo.isFavorite(ch.sourceId, ContentKind.live, ch.extId);
+    await showTvSheet(
+      context,
+      title: _isLive ? 'Options' : 'Audio et sous-titres',
+      subtitle: _isLive && ch != null ? _s.channelName(ch) : null,
+      sections: [
+        if (_isLive && ch != null)
+          TvSheetSection('Chaîne', [
+            TvSheetOption(
+              fav ? 'Retirer des favoris' : 'Ajouter aux favoris',
+              icon: fav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+              onPick: () {
+                _s.toggleFavorite(ContentKind.live, ch.extId, ch.sourceId);
+                _flash(fav ? 'Retirée des favoris' : 'Ajoutée aux favoris');
+              },
+            ),
+          ]),
+        TvSheetSection(
+          'Audio',
+          audio.isEmpty
+              ? [TvSheetOption('Piste unique', selected: true, onPick: () {})]
+              : tvTrackOptions<AudioTrack>(
+                  audio,
+                  selectedId: _aid,
+                  id: (t) => t.id,
+                  label: audioTrackLabel,
+                  onPick: _selectAudio,
+                ),
+        ),
+        TvSheetSection(
+          'Sous-titres',
+          tvTrackOptions<SubtitleTrack>(
+            subs,
+            selectedId: _sid.isEmpty ? 'no' : _sid,
+            id: (t) => t.id,
+            label: (t, i) => subtitleTrackLabel(t, i - 1),
+            onPick: _selectSubtitle,
+          ),
+        ),
+      ],
+    );
+    if (mounted) _showControls();
+  }
+
+  /// The TV's list of channels (Left in live): the one on air checked.
+  Future<void> _tvChannels() async {
+    if (_channels.isEmpty) return;
+    _showControls(sticky: true);
+    await showTvSheet(
+      context,
+      title: 'Chaînes',
+      sections: [
+        TvSheetSection(null, [for (final (i, c) in _channels.indexed) _tvChannelOption(i, c)]),
+      ],
+    );
+    if (mounted) _showControls();
+  }
+
+  /// A line of the list of channels, worked out only when it is shown (there
+  /// may be thousands), its name once.
+  TvSheetOption _tvChannelOption(int i, Channel c) {
+    String? name;
+    String nameOf() => name ??= _s.channelName(c);
+    return TvSheetOption.lazy(
+      labelOf: () => '${c.number ?? i + 1}   ${nameOf()}',
+      detailOf: () => _s.epg.now(c)?.title,
+      leadingOf: () => TvChannelBadge(name: nameOf(), logo: c.logo, size: 56),
+      selected: i == _chIndex,
+      onPick: () {
+        if (i != _chIndex) _playChannel(i);
+      },
+    );
   }
 
   static String? _digitOf(LogicalKeyboardKey k) {
@@ -853,79 +1038,86 @@ class _PlayerScreenState extends State<PlayerScreen> {
       _Aspect.stretch => (BoxFit.fill, null),
     };
     final vis = _visible;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: Focus(
-        focusNode: _focus,
-        autofocus: true,
-        onKeyEvent: _onKey,
-        child: Listener(
-          onPointerSignal: (e) {
-            if (e is PointerScrollEvent && _panel == _Panel.none) _onWheel(e.scrollDelta);
-          },
-          child: MouseRegion(
-            cursor: vis ? SystemMouseCursors.basic : SystemMouseCursors.none,
-            onHover: (_) => _showControls(),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                GestureDetector(
-                  behavior: HitTestBehavior.opaque,
-                  onTap: () {
-                    _focus.requestFocus();
-                    if (_panel != _Panel.none) return _setPanel(_panel);
-                    _togglePlay();
-                  },
-                  onDoubleTap: () => _setFullscreen(!_fullscreen),
-                  child: _casting
-                      ? CastRemoteView(
-                          cast: _cast,
-                          image: _castImage(),
-                          onRetry: ({bool? viaRelay}) => _cast.retry(viaRelay: viaRelay),
-                          onStop: _stopCasting,
-                        )
-                      : Video(
-                          key: ValueKey(_aspect),
-                          controller: _ps.video,
-                          controls: NoVideoControls,
-                          fit: fit,
-                          aspectRatio: ratio,
-                          fill: Colors.black,
-                          filterQuality: FilterQuality.medium,
-                          subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
-                        ),
-                ),
-                // Shade at the top and bottom behind the bars.
-                IgnorePointer(
-                  child: AnimatedOpacity(
-                    opacity: vis ? 1 : 0,
-                    duration: const Duration(milliseconds: 300),
-                    child: const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [Color(0xBF000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
-                          stops: [0, 0.22, 0.5, 1],
+    // Back of the TV remote (Android's back) goes through _back too.
+    return BackLayers(
+      atLastLayer: _backStep == PlayerBack.leave,
+      onBack: _back,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: Focus(
+          focusNode: _focus,
+          autofocus: true,
+          // The whole screen: never a stop of the arrows between two buttons
+          // (its centre was often the nearest, so Right jumped to it).
+          skipTraversal: true,
+          onKeyEvent: _onKey,
+          child: Listener(
+            onPointerSignal: (e) {
+              if (e is PointerScrollEvent && _panel == _Panel.none) _onWheel(e.scrollDelta);
+            },
+            child: MouseRegion(
+              cursor: vis ? SystemMouseCursors.basic : SystemMouseCursors.none,
+              onHover: (_) => _showControls(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      _focus.requestFocus();
+                      if (_panel != _Panel.none) return _setPanel(_panel);
+                      _togglePlay();
+                    },
+                    onDoubleTap: () => _setFullscreen(!_fullscreen),
+                    child: _casting
+                        ? CastRemoteView(
+                            cast: _cast,
+                            image: _castImage(),
+                            onRetry: ({bool? viaRelay}) => _cast.retry(viaRelay: viaRelay),
+                            onStop: _stopCasting,
+                          )
+                        : Video(
+                            key: ValueKey(_aspect),
+                            controller: _ps.video,
+                            controls: NoVideoControls,
+                            fit: fit,
+                            aspectRatio: ratio,
+                            fill: Colors.black,
+                            filterQuality: FilterQuality.medium,
+                            subtitleViewConfiguration: const SubtitleViewConfiguration(visible: false),
+                          ),
+                  ),
+                  // Shade at the top and bottom behind the bars.
+                  if (!Device.isTv)
+                    IgnorePointer(
+                      child: AnimatedOpacity(
+                        opacity: vis ? 1 : 0,
+                        duration: const Duration(milliseconds: 300),
+                        child: const DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0xBF000000), Color(0x00000000), Color(0x00000000), Color(0xE6000000)],
+                              stops: [0, 0.22, 0.5, 1],
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
-                if (!_playing && _panel == _Panel.none && _error == null && !_casting)
-                  _isLive ? const LivePausedBadge() : _pauseInfo(),
-                if (!_casting && _error == null) _buildBuffering(),
-                if (_osd != null) _buildOsd(),
-                if (_digits.isNotEmpty) _buildDigits(),
-                if (!_casting) _buildError(),
-                if (_isLive && _panel == _Panel.guide) MiniGuide(programs: _miniGuide()),
-                _topBar(vis),
-                _bottomBar(vis),
-                ..._floating(vis),
-                if (_showStats && !_casting)
-                  StatsCard(stats: _stats, onClose: () => setState(() => _showStats = false)),
-                ..._panels(),
-              ],
+                  if (!Device.isTv && !_playing && _panel == _Panel.none && _error == null && !_casting)
+                    _isLive ? const LivePausedBadge() : _pauseInfo(),
+                  if (!_casting && _error == null) _buildBuffering(),
+                  if (_osd != null) _buildOsd(),
+                  if (_digits.isNotEmpty) _buildDigits(),
+                  if (!_casting) _buildError(),
+                  if (_isLive && _panel == _Panel.guide) MiniGuide(programs: _miniGuide()),
+                  if (Device.isTv) _tvOverlay(vis) else ...[_topBar(vis), _bottomBar(vis), ..._floating(vis)],
+                  if (_showStats && !_casting)
+                    StatsCard(stats: _stats, onClose: () => setState(() => _showStats = false)),
+                  ..._panels(),
+                ],
+              ),
             ),
           ),
         ),
@@ -999,6 +1191,23 @@ class _PlayerScreenState extends State<PlayerScreen> {
     ),
   );
 
+  /// "Lecture impossible" is shown (not "Reconnexion…", which retries by itself).
+  bool get _failed {
+    final status = _ps.status.value;
+    if ((status ?? _error) == null) return false;
+    return !(status != null && status.startsWith('Reconnexion'));
+  }
+
+  void _retry() {
+    setState(() => _error = null);
+    _ps.status.value = null;
+    // Nothing was read: back to where this film was to resume, not to its
+    // beginning.
+    final here = _ps.player.state.position;
+    final resume = _item.url == widget.session.item.url ? widget.session.start : null;
+    _ps.play(_item, force: true, start: _isLive ? null : (here > Duration.zero ? here : resume));
+  }
+
   Widget _buildError() {
     return ValueListenableBuilder<String?>(
       valueListenable: _ps.status,
@@ -1041,15 +1250,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                   ),
                   const SizedBox(height: 16),
                   FilledButton.icon(
-                    onPressed: () {
-                      setState(() => _error = null);
-                      _ps.status.value = null;
-                      // Nothing was read: back to where this film was to
-                      // resume, not to its beginning.
-                      final here = _ps.player.state.position;
-                      final resume = _item.url == widget.session.item.url ? widget.session.start : null;
-                      _ps.play(_item, force: true, start: _isLive ? null : (here > Duration.zero ? here : resume));
-                    },
+                    onPressed: _retry,
                     icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Réessayer'),
                   ),
@@ -1180,7 +1381,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
           opacity: vis ? 1 : 0,
           duration: const Duration(milliseconds: 300),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 28),
+            // On a TV, clear of the edges the set may crop (TvCanvas.safe).
+            padding: Device.isTv
+                ? const EdgeInsets.symmetric(horizontal: 64, vertical: 36)
+                : const EdgeInsets.symmetric(horizontal: 48, vertical: 28),
             child: Row(
               children: [
                 RoundGlassButton(
@@ -1192,8 +1396,10 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 Expanded(
                   child: Align(alignment: Alignment.centerLeft, child: title),
                 ),
-                CastButton(cast: _cast, onTap: () => _setPanel(_Panel.cast)),
-                const SizedBox(width: 6),
+                if (Device.canCast) ...[
+                  CastButton(cast: _cast, onTap: () => _setPanel(_Panel.cast)),
+                  const SizedBox(width: 6),
+                ],
                 if (_isLive && ch != null && !_casting) ...[
                   PlayerIconButton(
                     icon: Icons.grid_view_rounded,
@@ -1277,7 +1483,9 @@ class _PlayerScreenState extends State<PlayerScreen> {
               _showControls();
             },
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(48, 0, 48, 30),
+              padding: Device.isTv
+                  ? const EdgeInsets.fromLTRB(64, 0, 64, 36)
+                  : const EdgeInsets.fromLTRB(48, 0, 48, 30),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1319,6 +1527,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
                     children: [
                       PlayPauseButton(
                         player: _ps.player,
+                        focusNode: _playButton,
                         onTap: _togglePlay,
                         playing: _casting ? (_cast.playing || _cast.status.state == RemoteState.buffering) : null,
                       ),
@@ -1448,6 +1657,59 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 
   // ------------------------------------------------------------ floating
+
+  /// The next episode, offered in the last 20 seconds of this one.
+  Episode? get _nextOffered {
+    final next = _nextEpisode;
+    if (_item.kind != ContentKind.episode || _panel != _Panel.none || next == null) return null;
+    if (_nextDismissed == _item.extId || _dur.inSeconds <= 60 || (_dur - _pos).inSeconds > 20) return null;
+    return next;
+  }
+
+  /// The design's player on the TV: what plays and the remote's keys.
+  Widget _tvOverlay(bool vis) {
+    final TvPlayerInfo info;
+    if (_isLive) {
+      final ch = _currentChannel;
+      info = TvPlayerInfo.live(
+        channelName: ch == null ? _item.title : _s.channelName(ch),
+        channelNumber: ch?.number ?? _chIndex + 1,
+        logo: ch?.logo ?? _item.image,
+        program: ch == null ? null : _s.epg.now(ch),
+        next: ch == null ? null : _s.epg.next(ch),
+      );
+    } else if (_item.kind == ContentKind.episode) {
+      final ep = _episodes.where((e) => e.extId == _item.extId).firstOrNull;
+      info = TvPlayerInfo.vod(
+        kicker: ep?.code ?? 'Épisode',
+        title: displayTitle(widget.session.series?.name ?? _item.title),
+        meta: ep?.displayTitle ?? '',
+      );
+    } else {
+      final movie = _item.isReplay ? null : _s.repo.movieByExt(_item.sourceId, _item.extId);
+      info = TvPlayerInfo.vod(
+        kicker: _item.isReplay ? 'Replay' : 'Film',
+        title: displayTitle(movie?.name ?? _item.title),
+        // The subtitle of a film already is its year.
+        meta: _item.subtitle ?? (movie?.year != null ? '${movie!.year}' : ''),
+      );
+    }
+    return ValueListenableBuilder<Duration>(
+      valueListenable: _position,
+      builder: (context, pos, _) {
+        final next = _nextOffered;
+        return TvPlayerOverlay(
+          info: info,
+          visible: vis && !_failed,
+          paused: !_playing && !_failed,
+          position: pos,
+          duration: _dur,
+          seekStep: _s.settings.seekStep,
+          nextLabel: next == null ? null : '${next.code} · ${next.displayTitle}',
+        );
+      },
+    );
+  }
 
   List<Widget> _floating(bool vis) {
     if (_item.kind != ContentKind.episode || _panel != _Panel.none) return const [];

@@ -948,19 +948,24 @@ class _GridPosterState extends State<GridPoster> {
                     ),
                   ),
                 ),
-                child: FocusableActionDetector(
-                  mouseCursor: SystemMouseCursors.click,
-                  onShowHoverHighlight: (v) => setState(() => _update(base: v)),
-                  onShowFocusHighlight: (v) => setState(() => _update(focus: v)),
-                  actions: {
-                    ActivateIntent: CallbackAction<ActivateIntent>(
-                      onInvoke: (_) {
-                        m.onPlay();
-                        return null;
-                      },
-                    ),
-                  },
-                  child: _poster(m, lifted: false),
+                // Holding OK of the remote opens the menu of the poster.
+                child: RemoteOk(
+                  onActivate: m.onPlay,
+                  onMenu: m.onContextMenu,
+                  child: FocusableActionDetector(
+                    mouseCursor: SystemMouseCursors.click,
+                    onShowHoverHighlight: (v) => setState(() => _update(base: v)),
+                    onShowFocusHighlight: (v) => setState(() => _update(focus: v)),
+                    actions: {
+                      ActivateIntent: CallbackAction<ActivateIntent>(
+                        onInvoke: (_) {
+                          m.onPlay();
+                          return null;
+                        },
+                      ),
+                    },
+                    child: _poster(m, lifted: false),
+                  ),
                 ),
               ),
             ),

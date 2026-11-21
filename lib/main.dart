@@ -3,6 +3,7 @@ import 'package:media_kit/media_kit.dart';
 
 import 'app.dart';
 import 'core/app_log.dart';
+import 'core/device.dart';
 import 'core/version.dart';
 import 'services.dart';
 
@@ -24,6 +25,7 @@ Future<void> main() async {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       services.startRefreshing();
       services.sync.start();
+      services.pauseWhenHidden(tv: Device.isTv);
       // A little later: the update check must not slow the first screens.
       Future.delayed(const Duration(seconds: 8), services.updates.checkInBackground);
     });

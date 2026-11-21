@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
@@ -96,7 +97,7 @@ class _ProgramDialogState extends State<_ProgramDialog> {
           icon: Icon(reminded ? Icons.notifications_off_outlined : Icons.notifications_active_outlined, size: 22),
           label: reminded ? 'Ne plus me le rappeler' : 'Me le rappeler',
         ),
-      if (time != ProgramTime.past)
+      if (time != ProgramTime.past && Device.canRecord)
         OutlinedButton.icon(
           onPressed: recording
               ? null

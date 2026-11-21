@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../core/device.dart';
 import '../../core/theme.dart';
 import 'common.dart';
 import 'net_image.dart';
@@ -64,6 +65,9 @@ class DetailLayout extends StatelessWidget {
       },
       child: Focus(
         autofocus: true,
+        // The whole page: never a stop of the arrows (from its centre, Down
+        // jumped over the actions).
+        skipTraversal: true,
         child: Scaffold(
           body: Stack(
             children: [
@@ -154,11 +158,15 @@ class DetailLayout extends StatelessWidget {
                                       ],
                                     ),
                                     const SizedBox(height: 22),
-                                    Wrap(
-                                      spacing: 12,
-                                      runSpacing: 12,
-                                      crossAxisAlignment: WrapCrossAlignment.center,
-                                      children: actions,
+                                    // On the TV, "Lecture" is selected when the page opens.
+                                    FocusFirstChild(
+                                      enabled: Device.isTv,
+                                      child: Wrap(
+                                        spacing: 12,
+                                        runSpacing: 12,
+                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                        children: actions,
+                                      ),
                                     ),
                                     if (progress != null) ...[
                                       const SizedBox(height: 18),

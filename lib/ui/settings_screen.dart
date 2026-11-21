@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/theme.dart';
 import '../data/models.dart';
@@ -12,6 +13,7 @@ import 'settings_maintenance.dart';
 import 'settings_recordings.dart';
 import 'settings_tmdb.dart';
 import 'source_form.dart';
+import 'widgets/tv_canvas.dart';
 import 'widgets/brand.dart';
 import 'widgets/common.dart';
 import 'widgets/pin_dialog.dart';
@@ -355,12 +357,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'Le code est commun à tous les profils.',
         (context) => [ParentalSection(), CategoriesSection()],
       ),
-      _Page(
-        'enregistrements',
-        'Enregistrements',
-        'Les émissions enregistrées et le dossier où elles sont rangées.',
-        (context) => [RecordingsSection()],
-      ),
+      if (Device.canRecord)
+        _Page(
+          'enregistrements',
+          'Enregistrements',
+          'Les émissions enregistrées et le dossier où elles sont rangées.',
+          (context) => [RecordingsSection()],
+        ),
       _Page(
         'tmdb',
         'Fiches TMDB',
@@ -373,14 +376,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'Tes profils, favoris et réglages dans un fichier, et un diagnostic en cas de souci.',
         (context) => [BackupSection()],
       ),
-      _Page(
-        'raccourcis',
-        'Raccourcis',
-        'Clavier, télécommande et manette dans le lecteur.',
-        (context) => [
-          const SettingsSection(title: 'Raccourcis', children: [_Shortcuts()]),
-        ],
-      ),
+      // Keyboard and mouse: nothing to read on a TV.
+      if (!Device.isTv)
+        _Page(
+          'raccourcis',
+          'Raccourcis',
+          'Clavier, télécommande et manette dans le lecteur.',
+          (context) => [
+            const SettingsSection(title: 'Raccourcis', children: [_Shortcuts()]),
+          ],
+        ),
       _Page('apropos', 'À propos', 'Bobine, lecteur IPTV.', (context) => [AboutSection()]),
     ];
   }
@@ -400,13 +405,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         final narrow = width < 900;
         final nav = SizedBox(
           width: narrow ? null : 220,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text('PARAMÈTRES', style: posterStyle(44, height: 1)),
-              const SizedBox(height: 22),
-              for (final p in pages) _NavItem(label: p.title, selected: p.id == page.id, onTap: () => _open(p.id)),
-            ],
+          // Scrolls when the window (or the TV's 720-point stage) is too
+          // short for every page.
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text('PARAMÈTRES', style: posterStyle(44, height: 1)),
+                const SizedBox(height: 22),
+                for (final p in pages) _NavItem(label: p.title, selected: p.id == page.id, onTap: () => _open(p.id)),
+              ],
+            ),
           ),
         );
         final content = ListView(
@@ -419,21 +428,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 constraints: const BoxConstraints(maxWidth: 780),
                 child: SettingsPageScope(
                   title: page.title,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Text(page.title.toUpperCase(), style: posterStyle(56, height: 0.9)),
-                      const SizedBox(height: 10),
-                      Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
-                      const SizedBox(height: 30),
-                      // A kids profile with no code at all (made before the
-                      // editor asked for one): the page stays closed, it
-                      // showed the locked categories and let them be opened.
-                      if (_protected.contains(page.id) && s.profile.kids && _unlockedFor != s.profile.id)
-                        _ProtectedPage(onUnlock: s.settings.parentalEnabled ? _unlock : null)
-                      else
-                        ...page.build(context),
-                    ],
+                  // On the TV, Up / Down go through every option in order.
+                  child: TvFormNav(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(page.title.toUpperCase(), style: posterStyle(56, height: 0.9)),
+                        const SizedBox(height: 10),
+                        Text(page.lead, style: TextStyle(fontSize: 16, height: 1.5, color: AppColors.faint)),
+                        const SizedBox(height: 30),
+                        // A kids profile with no code at all (made before the
+                        // editor asked for one): the page stays closed, it
+                        // showed the locked categories and let them be opened.
+                        if (_protected.contains(page.id) && s.profile.kids && _unlockedFor != s.profile.id)
+                          _ProtectedPage(onUnlock: s.settings.parentalEnabled ? _unlock : null)
+                        else
+                          ...page.build(context),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -1172,7 +1184,7 @@ class _SourceTile extends StatelessWidget {
 class _Shortcuts extends StatelessWidget {
   const _Shortcuts();
 
-  static const _rows = [
+  static List<(String, String)> get _rows => [
     ('Espace / K', 'Lecture / pause'),
     ('← / →', 'Reculer / avancer (Maj = ×6)'),
     ('↑ / ↓', 'Chaîne précédente / suivante (direct), volume (films)'),
@@ -1188,8 +1200,8 @@ class _Shortcuts extends StatelessWidget {
     ('I', 'Statistiques (codec, décodage, cache, débit)'),
     ('P', 'Mini-lecteur (continuer à regarder en naviguant)'),
     ('O', 'Fenêtre flottante par-dessus les autres apps (Windows)'),
-    ('T', 'Caster sur la télé (Chromecast, Google TV, télés DLNA)'),
-    ('Clic droit / touche Menu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
+    if (Device.canCast) ('T', 'Caster sur la télé (Chromecast, Google TV, télés DLNA)'),
+    ('Clic droit / Menu / OK maintenu', 'Actions rapides sur une vignette (favori, saison, vu, bande-annonce…)'),
     (
       'Manette',
       'Croix / stick : se déplacer · A : valider · B : retour · X : pause · Y : actions rapides (plein écran dans le lecteur)',

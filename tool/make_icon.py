@@ -1,7 +1,9 @@
 """Draws the Bobine icon (a spool of vermilion thread on a dark rounded
 square, from assets/icon/bobine.svg) in every size the platforms need.
 Run from the repository root: python3 tool/make_icon.py"""
-from PIL import Image, ImageDraw
+import os
+
+from PIL import Image, ImageDraw, ImageFont
 
 # Colours and geometry of assets/icon/bobine.svg (viewBox 0 0 32 32).
 BG = (13, 12, 11)  # #0D0C0B
@@ -40,12 +42,46 @@ def icon(size: int) -> Image.Image:
         pts.append(p(x, y))
     w = 2.2 * k
     d.line(pts, fill=ACCENT, width=round(w), joint="curve")
-    for x, y in (pts[0], pts[-1]):
+    # A disc on every point: the segments of the line alone leave thin gaps
+    # at their joints, visible on large sizes.
+    for x, y in pts:
         d.ellipse((x - w / 2, y - w / 2, x + w / 2, y + w / 2), fill=ACCENT)
     return out.resize((size, size), Image.LANCZOS)
 
 
+def banner(w: int, h: int) -> Image.Image:
+    """Android TV home-screen banner (16:9): the icon on the left, the name
+    in Big Shoulders on the right, on the dark background."""
+    out = Image.new("RGB", (w, h), BG)
+    d = ImageDraw.Draw(out)
+    side = round(h * 0.5)
+    gap = round(h * 0.06)
+    font = ImageFont.truetype("assets/fonts/BigShouldersDisplay-Black.ttf", round(h * 0.3))
+    box = d.textbbox((0, 0), "BOBINE", font=font)
+    text_w, text_h = box[2] - box[0], box[3] - box[1]
+    x = (w - (side + gap + text_w)) // 2
+    mark = icon(side)
+    out.paste(mark, (x, (h - side) // 2), mark)
+    d.text((x + side + gap - box[0], (h - text_h) // 2 - box[1]), "BOBINE", font=font, fill=CREAM)
+    return out
+
+
+def android() -> None:
+    """Launcher icons, TV banner and the Play Store banner."""
+    for folder, n in (("mdpi", 48), ("hdpi", 72), ("xhdpi", 96), ("xxhdpi", 144), ("xxxhdpi", 192)):
+        icon(n).save(f"android/app/src/main/res/mipmap-{folder}/ic_launcher.png")
+    os.makedirs("android/app/src/main/res/drawable-xhdpi", exist_ok=True)
+    banner(320, 180).save("android/app/src/main/res/drawable-xhdpi/banner.png")
+    os.makedirs("docs/store", exist_ok=True)
+    banner(1280, 720).save("docs/store/banner-1280x720.png")
+    # Play Store icon: 512 × 512, no transparency.
+    flat = Image.new("RGB", (512, 512), BG)
+    flat.paste(icon(512), (0, 0), icon(512))
+    flat.save("docs/store/icon-512.png")
+
+
 if __name__ == "__main__":
+    android()
     base = icon(1024)
     for path in ("assets/icon/bobine.png", "docs/icon.png"):
         base.resize((256, 256), Image.LANCZOS).save(path)

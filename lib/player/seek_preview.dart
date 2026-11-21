@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../core/device.dart';
 import '../core/text.dart';
 import '../core/theme.dart';
 import 'player_service.dart';
@@ -21,7 +22,7 @@ bool isLocalMedia(String url) =>
 /// user's setting: 'auto' follows the subscription, 'always' ignores it,
 /// 'never' turns the picture off. A file on disk costs nothing.
 bool seekPreviewAllowed({required String mode, required bool local, int? maxConnections, int inUse = 1}) {
-  if (mode == 'never') return false;
+  if (mode == 'never' || !Device.seekPreview) return false;
   if (local || mode == 'always') return true;
   return maxConnections == null || maxConnections <= 0 || maxConnections > inUse;
 }

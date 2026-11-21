@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
@@ -42,6 +43,10 @@ class HoverBuilder extends StatefulWidget {
 
   /// Hovered or focused changed (to lift the card above its neighbours).
   final ValueChanged<bool>? onHighlight;
+
+  /// Holding OK this long opens the menu ([onContextMenu]): most TV remotes
+  /// have no menu key.
+  static const longPressDelay = Duration(milliseconds: 500);
 
   @override
   State<HoverBuilder> createState() => _HoverBuilderState();
@@ -89,7 +94,7 @@ class _HoverBuilderState extends State<HoverBuilder> {
         child: child,
       );
     }
-    return FocusableActionDetector(
+    final detector = FocusableActionDetector(
       autofocus: widget.autofocus,
       shortcuts: widget.onContextMenu == null
           ? null
@@ -121,11 +126,111 @@ class _HoverBuilderState extends State<HoverBuilder> {
       },
       child: child,
     );
+    return RemoteOk(onActivate: widget.onActivate!, onMenu: widget.onContextMenu, child: detector);
   }
+}
+
+/// OK of a TV remote (and Enter, gamepad A) on the focused [child]: a short
+/// press runs [onActivate] on release, holding it [HoverBuilder.longPressDelay]
+/// opens the menu ([onMenu], at the centre of [child]); most remotes have no
+/// menu key. Without [onMenu], [child] is returned as it is.
+///
+/// Put it around the widget that holds the focus: it handles the keys
+/// before the app's shortcuts, which would activate on the press already.
+class RemoteOk extends StatefulWidget {
+  const RemoteOk({super.key, required this.onActivate, required this.onMenu, required this.child});
+
+  final VoidCallback onActivate;
+  final ValueChanged<Offset>? onMenu;
+  final Widget child;
+
+  @override
+  State<RemoteOk> createState() => _RemoteOkState();
+}
+
+class _RemoteOkState extends State<RemoteOk> {
+  Timer? _held;
+  bool _menuShown = false;
+
+  static final _okKeys = {
+    LogicalKeyboardKey.select,
+    LogicalKeyboardKey.enter,
+    LogicalKeyboardKey.numpadEnter,
+    LogicalKeyboardKey.gameButtonA,
+  };
+
+  @override
+  void dispose() {
+    _held?.cancel();
+    super.dispose();
+  }
+
+  void _openMenu() {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box != null && box.attached) widget.onMenu?.call(box.localToGlobal(box.size.center(Offset.zero)));
+  }
+
+  KeyEventResult _onKey(FocusNode node, KeyEvent e) {
+    if (!_okKeys.contains(e.logicalKey)) return KeyEventResult.ignored;
+    if (e is KeyDownEvent) {
+      _held?.cancel();
+      _menuShown = false;
+      _held = Timer(HoverBuilder.longPressDelay, () {
+        _menuShown = true;
+        if (mounted) _openMenu();
+      });
+    } else if (e is KeyUpEvent) {
+      final wasHeld = _held != null;
+      _held?.cancel();
+      _held = null;
+      if (wasHeld && !_menuShown) widget.onActivate();
+      _menuShown = false;
+    }
+    return KeyEventResult.handled;
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.onMenu == null
+      ? widget.child
+      : Focus(canRequestFocus: false, skipTraversal: true, onKeyEvent: _onKey, child: widget.child);
 }
 
 class _ContextMenuIntent extends Intent {
   const _ContextMenuIntent();
+}
+
+/// Gives the focus to the first focusable widget of [child] when it
+/// appears (the main action of a page, for a TV remote). Unlike a focus
+/// scope, the arrows then leave it freely.
+class FocusFirstChild extends StatefulWidget {
+  const FocusFirstChild({super.key, required this.child, this.enabled = true});
+  final Widget child;
+  final bool enabled;
+
+  @override
+  State<FocusFirstChild> createState() => _FocusFirstChildState();
+}
+
+class _FocusFirstChildState extends State<FocusFirstChild> {
+  final _node = FocusNode(debugLabel: 'focus first', canRequestFocus: false, skipTraversal: true);
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.enabled) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _node.traversalDescendants.firstOrNull?.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _node.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Focus(focusNode: _node, child: widget.child);
 }
 
 /// White ring around [child] while something inside it has the keyboard /

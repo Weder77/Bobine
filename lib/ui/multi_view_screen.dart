@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/device.dart';
 import '../core/format.dart';
 import '../core/text.dart';
 import '../core/theme.dart';
@@ -17,6 +18,7 @@ import '../player/player_screen.dart';
 import '../player/player_session.dart';
 import '../services.dart';
 import 'live_catalog.dart';
+import 'back_rules.dart';
 import 'widgets/common.dart';
 
 /// "Multi-écran": two to four channels at once (sport), one of them heard.
@@ -214,7 +216,7 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
       } else if (_fullscreen && k == LogicalKeyboardKey.escape) {
         _setFullscreen(false);
       } else {
-        Navigator.of(context).maybePop();
+        BackLayers.leave(context);
       }
     } else if (k == LogicalKeyboardKey.arrowRight || k == LogicalKeyboardKey.arrowDown || k == LogicalKeyboardKey.tab) {
       _c.selectNext(1);
@@ -249,41 +251,55 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
   @override
   Widget build(BuildContext context) {
     final picking = _picking;
-    return Theme(
-      // Video surfaces stay dark whatever the theme.
-      data: buildTheme(AppPalette.dark),
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        body: Focus(
-          focusNode: _focus,
-          autofocus: true,
-          onKeyEvent: _onKey,
-          child: Listener(
-            onPointerSignal: (e) {
-              if (e is PointerScrollEvent && picking == null) _c.changeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
-            },
-            child: MouseRegion(
-              cursor: _chrome ? SystemMouseCursors.basic : SystemMouseCursors.none,
-              onHover: (_) => _showChrome(),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  LayoutBuilder(builder: (context, box) => _stage(MultiLayout.stage(box.biggest))),
-                  _topBar(),
-                  if (picking != null) ...[
-                    Positioned.fill(child: GestureDetector(onTap: _closePicker)),
-                    _ChannelPicker(
-                      key: ValueKey(picking),
-                      s: _s,
-                      source: _c.source,
-                      slot: picking,
-                      replacing: _c.slots[picking] != null,
-                      shown: {for (final c in _c.channels) c.extId},
-                      onPick: _picked,
-                      onClose: _closePicker,
-                    ),
+    // Back of the TV remote: the channel list, then the enlarged slot, first.
+    return BackLayers(
+      atLastLayer: picking == null && _c.solo == null,
+      onBack: () {
+        if (_picking != null) {
+          _closePicker();
+        } else if (_c.solo != null) {
+          _c.toggleSolo(_c.solo!);
+        }
+      },
+      child: Theme(
+        // Video surfaces stay dark whatever the theme.
+        data: buildTheme(AppPalette.dark),
+        child: Scaffold(
+          backgroundColor: Colors.black,
+          body: Focus(
+            focusNode: _focus,
+            autofocus: true,
+            // The whole screen: never a stop of the arrows between two buttons
+            // (its centre was often the nearest, so Right jumped to it).
+            skipTraversal: true,
+            onKeyEvent: _onKey,
+            child: Listener(
+              onPointerSignal: (e) {
+                if (e is PointerScrollEvent && picking == null) _c.changeVolume(e.scrollDelta.dy < 0 ? 5 : -5);
+              },
+              child: MouseRegion(
+                cursor: _chrome ? SystemMouseCursors.basic : SystemMouseCursors.none,
+                onHover: (_) => _showChrome(),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    LayoutBuilder(builder: (context, box) => _stage(MultiLayout.stage(box.biggest))),
+                    _topBar(),
+                    if (picking != null) ...[
+                      Positioned.fill(child: GestureDetector(onTap: _closePicker)),
+                      _ChannelPicker(
+                        key: ValueKey(picking),
+                        s: _s,
+                        source: _c.source,
+                        slot: picking,
+                        replacing: _c.slots[picking] != null,
+                        shown: {for (final c in _c.channels) c.extId},
+                        onPick: _picked,
+                        onClose: _closePicker,
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -373,7 +389,7 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
                 RoundGlassButton(
                   icon: Icons.arrow_back_rounded,
                   tooltip: 'Quitter le multi-écran (Échap)',
-                  onTap: () => Navigator.of(context).maybePop(),
+                  onTap: () => BackLayers.leave(context),
                 ),
                 const SizedBox(width: 18),
                 Expanded(
@@ -419,7 +435,7 @@ class _MultiViewScreenState extends State<MultiViewScreen> {
                     ],
                   ),
                 ),
-                for (final l in MultiLayout.values) ...[
+                for (final l in MultiLayout.available) ...[
                   _LayoutButton(layout: l, selected: l == _c.layout, onTap: () => _c.setLayout(l)),
                   const SizedBox(width: 4),
                 ],
@@ -947,7 +963,7 @@ class _ChannelPickerState extends State<_ChannelPicker> {
         decoration: const BoxDecoration(
           border: Border(top: BorderSide(color: Color(0x14FFFFFF))),
         ),
-        child: Text('Entrée : la première · Échap : fermer', style: darkMono(12, height: 1)),
+        child: Text('Entrée : la première · ${Device.backKey} : fermer', style: darkMono(12, height: 1)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -524,94 +524,99 @@ class _BlockState extends State<_Block> {
         : AppColors.border;
     if (_hover || _focus) bg = _brighten(bg);
     final dim = past && !widget.replay;
-    return FocusableActionDetector(
-      onShowHoverHighlight: (v) => setState(() => _hover = v),
-      onShowFocusHighlight: (v) {
-        setState(() => _focus = v);
-        if (v) widget.onFocus();
-      },
-      mouseCursor: SystemMouseCursors.click,
-      actions: {
-        ActivateIntent: CallbackAction<ActivateIntent>(
-          onInvoke: (_) {
-            (widget.onDoubleTap ?? widget.onTap)();
-            return null;
-          },
-        ),
-      },
-      child: GestureDetector(
-        onTap: widget.onTap,
-        onDoubleTap: widget.onDoubleTap,
-        onSecondaryTapUp: widget.onMenu == null ? null : (d) => widget.onMenu!(d.globalPosition),
-        onLongPressStart: widget.onMenu == null ? null : (d) => widget.onMenu!(d.globalPosition),
-        child: Container(
-          decoration: BoxDecoration(
-            color: bg,
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: _focus ? AppColors.text : border, width: _focus ? 1.5 : 1),
+    // Holding OK of the remote opens the menu of the programme.
+    return RemoteOk(
+      onActivate: widget.onDoubleTap ?? widget.onTap,
+      onMenu: widget.onMenu,
+      child: FocusableActionDetector(
+        onShowHoverHighlight: (v) => setState(() => _hover = v),
+        onShowFocusHighlight: (v) {
+          setState(() => _focus = v);
+          if (v) widget.onFocus();
+        },
+        mouseCursor: SystemMouseCursors.click,
+        actions: {
+          ActivateIntent: CallbackAction<ActivateIntent>(
+            onInvoke: (_) {
+              (widget.onDoubleTap ?? widget.onTap)();
+              return null;
+            },
           ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              if (widget.width >= 44)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          if (past && widget.replay) ...[
-                            Icon(Icons.replay_rounded, size: 13, color: AppColors.textSoft),
-                            const SizedBox(width: 5),
-                          ],
-                          if (widget.recording) ...[
-                            Icon(Icons.fiber_manual_record_rounded, size: 10, color: AppColors.accent),
-                            const SizedBox(width: 5),
-                          ],
-                          Expanded(
-                            child: Text(
-                              p.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                height: 1.2,
-                                color: dim ? AppColors.disabled : AppColors.text,
+        },
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onDoubleTap: widget.onDoubleTap,
+          onSecondaryTapUp: widget.onMenu == null ? null : (d) => widget.onMenu!(d.globalPosition),
+          onLongPressStart: widget.onMenu == null ? null : (d) => widget.onMenu!(d.globalPosition),
+          child: Container(
+            decoration: BoxDecoration(
+              color: bg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: _focus ? AppColors.text : border, width: _focus ? 1.5 : 1),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (widget.width >= 44)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            if (past && widget.replay) ...[
+                              Icon(Icons.replay_rounded, size: 13, color: AppColors.textSoft),
+                              const SizedBox(width: 5),
+                            ],
+                            if (widget.recording) ...[
+                              Icon(Icons.fiber_manual_record_rounded, size: 10, color: AppColors.accent),
+                              const SizedBox(width: 5),
+                            ],
+                            Expanded(
+                              child: Text(
+                                p.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.2,
+                                  color: dim ? AppColors.disabled : AppColors.text,
+                                ),
                               ),
                             ),
-                          ),
-                          if (widget.reminder) const SizedBox(width: 16),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${formatClock(p.start)} – ${formatClock(p.stop)}',
-                        maxLines: 1,
-                        overflow: TextOverflow.clip,
-                        style: monoStyle(12, color: dim ? AppColors.disabled2 : AppColors.faint, height: 1),
-                      ),
-                    ],
+                            if (widget.reminder) const SizedBox(width: 16),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          '${formatClock(p.start)} – ${formatClock(p.stop)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.clip,
+                          style: monoStyle(12, color: dim ? AppColors.disabled2 : AppColors.faint, height: 1),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              if (widget.reminder)
-                Positioned(
-                  right: 8,
-                  top: 8,
-                  child: Icon(Icons.notifications_rounded, size: 13, color: AppColors.accent),
-                ),
-              if (live)
-                Positioned(
-                  left: 0,
-                  bottom: 0,
-                  height: 3,
-                  width: widget.width * p.progressAt(widget.now),
-                  child: ColoredBox(color: AppColors.accent),
-                ),
-            ],
+                if (widget.reminder)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Icon(Icons.notifications_rounded, size: 13, color: AppColors.accent),
+                  ),
+                if (live)
+                  Positioned(
+                    left: 0,
+                    bottom: 0,
+                    height: 3,
+                    width: widget.width * p.progressAt(widget.now),
+                    child: ColoredBox(color: AppColors.accent),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

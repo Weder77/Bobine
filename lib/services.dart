@@ -249,6 +249,34 @@ class AppServices {
     _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) => refreshStaleSources());
   }
 
+  AppLifecycleListener? _lifecycle;
+
+  /// On the TV, Retour on Accueil (or Home) puts Bobine behind, often for
+  /// days: what runs by itself (synchronisation, reminders, refreshes)
+  /// waits until it is shown again. The computer is left as it is.
+  void pauseWhenHidden({required bool tv}) {
+    if (!tv) return;
+    _lifecycle ??= AppLifecycleListener(onHide: _onHide, onShow: _onShow);
+  }
+
+  void _onHide() {
+    try {
+      tracker.flush();
+    } catch (_) {}
+    _refreshTimer?.cancel();
+    _refreshTimer = null;
+    reminders.pause();
+    sync.pause();
+  }
+
+  void _onShow() {
+    startRefreshing();
+    reminders
+      ..resume()
+      ..check();
+    sync.start();
+  }
+
   /// The app is closing: the position of what plays is saved, recordings
   /// are stopped with their files kept, the log is written out.
   Future<void> prepareExit() async {

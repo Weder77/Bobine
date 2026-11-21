@@ -25,9 +25,10 @@ Database openAppDatabase(String path) {
 
 /// Outside Windows the secrets are not encrypted in the file (see
 /// [Secrets]): it is made readable by this user account only. SQLite gives
-/// its -wal and -shm files the same rights.
+/// its -wal and -shm files the same rights. On Android the app's folder is
+/// already private to the app.
 void _ownerOnly(String path) {
-  if (Platform.isWindows || !File(path).existsSync()) return;
+  if (Platform.isWindows || Platform.isAndroid || !File(path).existsSync()) return;
   try {
     Process.runSync('chmod', ['600', path]);
   } catch (_) {}

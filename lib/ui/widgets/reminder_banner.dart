@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../core/device.dart';
 import '../../core/format.dart';
 import '../../core/theme.dart';
 import '../../player/mini_player.dart';
 import '../../services.dart';
+import '../../tv/tv_reminder.dart';
 import '../launch.dart';
 
 /// "It starts now" card for a programme the user asked to be reminded of.
@@ -12,6 +14,9 @@ class ReminderBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The remote cannot reach a card's buttons over the TV screens: there,
+    // the card takes the remote ([TvReminderPrompt]).
+    if (Device.isTv) return const TvReminderPrompt();
     final s = AppScope.of(context);
     return ValueListenableBuilder(
       valueListenable: s.reminders.due,

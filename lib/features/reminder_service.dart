@@ -12,7 +12,7 @@ class ReminderService {
   ReminderService(this._repo, this._settings, {bool Function()? ready, bool Function(Reminder r)? hidden})
     : _ready = ready ?? (() => true),
       _hidden = hidden ?? ((_) => false) {
-    _timer = Timer.periodic(const Duration(seconds: 20), (_) => check());
+    resume();
   }
 
   final Repository _repo;
@@ -55,5 +55,17 @@ class ReminderService {
     check();
   }
 
-  void dispose() => _timer?.cancel();
+  /// Bobine is behind (TV): no checks until [resume].
+  void pause() {
+    _timer?.cancel();
+    _timer = null;
+  }
+
+  /// Checks every 20 seconds (and now, when Bobine comes back).
+  void resume() {
+    if (_timer != null) return;
+    _timer = Timer.periodic(const Duration(seconds: 20), (_) => check());
+  }
+
+  void dispose() => pause();
 }
