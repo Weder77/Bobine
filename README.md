@@ -344,6 +344,7 @@ lib/
 test/                Tests (analyseurs, import complet avec faux serveur, « Reprendre », lecteur, images, synchro, clés du compte)
 tool/                Faux serveur Xtream, générateur de vidéos de test, dessin de l'icône et des avatars, vecteurs de clés
 supabase/migrations/ Table de synchro, règles d'accès et fonctions du serveur
+supabase/templates/  E-mails du compte (codes, notifications), copie de ceux du tableau de bord
 docs/                Captures d'écran, signature des mises à jour, politique de confidentialité
 site/                Site vitrine et espace compte (état, mot de passe, suppression) : voir site/README.md
 ```
